@@ -1,0 +1,571 @@
+import React, { useState, useEffect } from 'react'
+import { Plus, TrendingUp, Loader2, Trash2, Search, X } from 'lucide-react'
+import { saleAPI, stockAPI, warehouseAPI, clientAPI } from '../lib/api'
+import { formatCurrency, formatDate } from '../lib/utils'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
+import { Button } from '../components/ui/button'
+import { Input } from '../components/ui/input'
+import { Label } from '../components/ui/label'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
+import { Alert, AlertDescription } from '../components/ui/alert'
+import { useToast } from '../hooks/use-toast'
+
+const Sales = () => {
+  const [sales, setSales] = useState([])
+  const [stockItems, setStockItems] = useState([])
+  const [warehouses, setWarehouses] = useState([])
+  const [clients, setClients] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+  const [totalRevenue, setTotalRevenue] = useState(0)
+  const [clientSearch, setClientSearch] = useState('')
+  const [showClientDropdown, setShowClientDropdown] = useState(false)
+  const { toast } = useToast()
+
+  const [form, setForm] = useState({
+    clientName: '',
+    clientPhone: '',
+    clientEmail: '',
+    items: []
+  })
+
+  const [currentItem, setCurrentItem] = useState({
+    stockItemId: '',
+    warehouseId: '',
+    quantity: '',
+    unitPrice: ''
+  })
+
+  useEffect(() => {
+    fetchData()
+  }, [])
+
+  const fetchData = async () => {
+    try {
+      setLoading(true)
+      const [salesResponse, stockResponse, warehousesResponse, clientsResponse] = await Promise.all([
+        saleAPI.getAll({ page: 1, limit: 100 }),
+        stockAPI.getAll(),
+        warehouseAPI.getAll(),
+        clientAPI.getAll()
+      ])
+
+      setSales(salesResponse.data.sales || [])
+      setStockItems(stockResponse.data.stockItems || [])
+      setWarehouses(warehousesResponse.data.warehouses || [])
+      setClients(clientsResponse.data.clients || [])
+
+      // Calculate total revenue
+      const revenue = (salesResponse.data.sales || []).reduce((sum, sale) => sum + (sale.totalAmount || 0), 0)
+      setTotalRevenue(revenue)
+    } catch (error) {
+      console.error('Failed to fetch data:', error)
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to load data',
+        variant: 'destructive'
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleStockItemChange = (itemId) => {
+    const selectedItem = stockItems.find(item => item._id === itemId)
+    setCurrentItem({
+      ...currentItem,
+      stockItemId: itemId,  // Use stockItemId for form state
+      itemName: selectedItem?.itemName || '',
+      unitPrice: selectedItem ? selectedItem.sellingPrice.toString() : ''
+    })
+  }
+
+  const calculateItemTotal = () => {
+    const quantity = parseFloat(currentItem.quantity) || 0
+    const unitPrice = parseFloat(currentItem.unitPrice) || 0
+    return quantity * unitPrice
+  }
+
+  const calculateSaleTotal = () => {
+    return form.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0)
+  }
+
+  const addItemToSale = () => {
+    if (!currentItem.stockItemId || !currentItem.warehouseId || !currentItem.quantity || !currentItem.unitPrice) {
+      setError('Please fill all item details including warehouse')
+      return
+    }
+
+    const selectedStock = stockItems.find(item => item._id === currentItem.stockItemId)
+    if (!selectedStock) {
+      setError('Selected stock item not found')
+      return
+    }
+
+    const selectedWarehouse = warehouses.find(wh => wh._id === currentItem.warehouseId)
+    if (!selectedWarehouse) {
+      setError('Selected warehouse not found')
+      return
+    }
+
+    // Check if there's enough stock - each stock item belongs to one warehouse
+    if (selectedStock.warehouseId._id !== currentItem.warehouseId && selectedStock.warehouseId !== currentItem.warehouseId) {
+      setError('This item is not available in the selected warehouse')
+      return
+    }
+
+    if (parseInt(currentItem.quantity) > selectedStock.quantity) {
+      setError(`Insufficient stock quantity. Available: ${selectedStock.quantity} bags`)
+      return
+    }
+
+    // Check if item already exists in the sale
+    const existingItemIndex = form.items.findIndex(item => item.stockItemId === currentItem.stockItemId)
+
+    if (existingItemIndex >= 0) {
+      // Update existing item
+      const updatedItems = [...form.items]
+      updatedItems[existingItemIndex] = {
+        ...updatedItems[existingItemIndex],
+        quantity: parseInt(currentItem.quantity),
+        unitPrice: parseFloat(currentItem.unitPrice),
+        total: parseInt(currentItem.quantity) * parseFloat(currentItem.unitPrice)
+      }
+      setForm({ ...form, items: updatedItems })
+    } else {
+      // Add new item
+      const newItem = {
+        itemId: currentItem.stockItemId,  // Use itemId to match backend
+        itemName: selectedStock.itemName,
+        quantity: parseInt(currentItem.quantity),
+        unitPrice: parseFloat(currentItem.unitPrice),  // Use unitPrice to match backend
+        warehouseId: currentItem.warehouseId,
+        warehouseName: selectedWarehouse.name
+      }
+      setForm({ ...form, items: [...form.items, newItem] })
+    }
+
+    // Reset current item
+    setCurrentItem({
+      stockItemId: '',
+      warehouseId: '',
+      quantity: '',
+      unitPrice: ''
+    })
+    setError('')
+  }
+
+  const removeItemFromSale = (index) => {
+    const updatedItems = form.items.filter((_, i) => i !== index)
+    setForm({ ...form, items: updatedItems })
+  }
+
+  const handleClientSelect = (clientName) => {
+    setForm({ ...form, clientName })
+    setClientSearch(clientName)
+    setShowClientDropdown(false)
+  }
+
+  const filteredClients = clients.filter(client =>
+    client.name.toLowerCase().includes(clientSearch.toLowerCase())
+  )
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setSubmitting(true)
+    setError('')
+
+    try {
+      if (!form.clientName.trim()) {
+        setError('Client name is required')
+        setSubmitting(false)
+        return
+      }
+
+      if (form.items.length === 0) {
+        setError('Please add at least one item to the sale')
+        setSubmitting(false)
+        return
+      }
+
+      // Prepare sale data for MongoDB - match backend expectations
+      const saleData = {
+        clientName: form.clientName,
+        clientPhone: form.clientPhone,
+        clientEmail: form.clientEmail,
+        items: form.items.map(item => ({
+          itemId: item.itemId,
+          itemName: item.itemName,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice  // Backend expects unitPrice, not sellingPrice
+        })),
+        totalAmount: calculateSaleTotal(),
+        paymentStatus: 'pending',
+        paymentMethod: 'cash'
+      }
+
+      await saleAPI.create(saleData)
+
+      toast({
+        title: 'Success',
+        description: 'Sale created successfully'
+      })
+
+      // Reset form
+      setForm({
+        clientName: '',
+        clientPhone: '',
+        clientEmail: '',
+        items: []
+      })
+      setCurrentItem({
+        itemId: '',
+        itemName: '',
+        quantity: '',
+        sellingPrice: ''
+      })
+      setClientSearch('')
+      setDialogOpen(false)
+      fetchData() // Refresh data
+    } catch (error) {
+      const errorMsg = error.response?.data?.message || 'Failed to create sale'
+      setError(errorMsg)
+      toast({
+        title: 'Error',
+        description: errorMsg,
+        variant: 'destructive'
+      })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Sales</h1>
+          <p className="text-muted-foreground mt-1">
+            Record sales transactions and manage customer orders
+          </p>
+        </div>
+
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogTrigger asChild>
+            <Button disabled={stockItems.length === 0}>
+              <Plus className="mr-2 h-4 w-4" />
+              New Sale
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Create New Sale</DialogTitle>
+              <DialogDescription>
+                Add multiple items to create a comprehensive sale transaction.
+              </DialogDescription>
+            </DialogHeader>
+
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Client Selection */}
+              <div className="space-y-2">
+                <Label htmlFor="client">Client Name *</Label>
+                <div className="relative">
+                  <div className="relative">
+                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="client"
+                      placeholder="Search or enter client name..."
+                      value={clientSearch}
+                      onChange={(e) => {
+                        setClientSearch(e.target.value)
+                        setForm({ ...form, clientName: e.target.value })
+                        setShowClientDropdown(true)
+                      }}
+                      onFocus={() => setShowClientDropdown(true)}
+                      className="pl-8"
+                    />
+                  </div>
+
+                  {showClientDropdown && clientSearch && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border rounded-md shadow-lg max-h-40 overflow-y-auto">
+                      {filteredClients.length > 0 ? (
+                        filteredClients.map((client) => (
+                          <div
+                            key={client._id}
+                            className="px-3 py-2 cursor-pointer hover:bg-muted"
+                            onClick={() => handleClientSelect(client.name)}
+                          >
+                            {client.name}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="px-3 py-2 text-muted-foreground">
+                          No existing clients found. Type to create new client.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Add Item Section */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Add Item to Sale</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="warehouse">Warehouse</Label>
+                      <Select value={currentItem.warehouseId} onValueChange={(value) => setCurrentItem({ ...currentItem, warehouseId: value, stockItemId: '' })}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select warehouse" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {warehouses.map((warehouse) => (
+                            <SelectItem key={warehouse._id} value={warehouse._id}>
+                              {warehouse.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="stock-item">Stock Item</Label>
+                      <Select
+                        value={currentItem.stockItemId}
+                        onValueChange={handleStockItemChange}
+                        disabled={!currentItem.warehouseId}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select item" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {stockItems
+                            .filter(item =>
+                              item.quantity > 0 &&
+                              (!currentItem.warehouseId || item.warehouseId._id === currentItem.warehouseId)
+                            )
+                            .map((item) => (
+                              <SelectItem key={item._id} value={item._id}>
+                                {item.itemName} (Available: {item.quantity})
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="quantity">Quantity</Label>
+                      <Input
+                        id="quantity"
+                        type="number"
+                        min="1"
+                        placeholder="10"
+                        value={currentItem.quantity}
+                        onChange={(e) => setCurrentItem({ ...currentItem, quantity: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="unit-price">Unit Price (₹)</Label>
+                      <Input
+                        id="unit-price"
+                        type="number"
+                        step="0.01"
+                        placeholder="1800"
+                        value={currentItem.unitPrice}
+                        onChange={(e) => setCurrentItem({ ...currentItem, unitPrice: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Item Total</Label>
+                      <div className="flex items-center h-10 px-3 py-2 border rounded-md bg-muted">
+                        <span className="font-mono font-medium">
+                          {formatCurrency(calculateItemTotal())}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <Button
+                    type="button"
+                    onClick={addItemToSale}
+                    disabled={!currentItem.warehouseId || !currentItem.stockItemId || !currentItem.quantity || !currentItem.unitPrice}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Item
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* Items in Sale */}
+              {form.items.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Items in Sale</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Item</TableHead>
+                          <TableHead>Warehouse</TableHead>
+                          <TableHead>Quantity</TableHead>
+                          <TableHead>Unit Price</TableHead>
+                          <TableHead>Total</TableHead>
+                          <TableHead>Action</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {form.items.map((item, index) => (
+                          <TableRow key={index}>
+                            <TableCell className="font-medium">{item.itemName}</TableCell>
+                            <TableCell className="text-sm">{item.warehouseName}</TableCell>
+                            <TableCell className="font-mono">{item.quantity} bags</TableCell>
+                            <TableCell className="font-mono">{formatCurrency(item.unitPrice)}</TableCell>
+                            <TableCell className="font-mono font-medium">{formatCurrency(item.total)}</TableCell>
+                            <TableCell>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => removeItemFromSale(index)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        <TableRow>
+                          <TableCell colSpan={3} className="font-medium">Total Sale Amount</TableCell>
+                          <TableCell className="font-mono font-bold text-lg">
+                            {formatCurrency(calculateSaleTotal())}
+                          </TableCell>
+                          <TableCell></TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              )}
+
+              <div className="flex gap-3 pt-4">
+                <Button
+                  type="submit"
+                  disabled={submitting || form.items.length === 0}
+                  className="flex-1"
+                >
+                  {submitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Creating Sale...
+                    </>
+                  ) : (
+                    `Create Sale - ${formatCurrency(calculateSaleTotal())}`
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setDialogOpen(false)}
+                  disabled={submitting}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* Revenue Summary */}
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="h-8 w-8 text-primary" />
+            <div>
+              <p className="text-sm text-muted-foreground">Total Revenue</p>
+              <p className="text-3xl font-bold">{formatCurrency(totalRevenue)}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* No Stock Alert */}
+      {stockItems.length === 0 && (
+        <Alert>
+          <AlertDescription>
+            No stock items available. Please add stock items first to create sales.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Sales Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent Sales</CardTitle>
+          <CardDescription>
+            Latest sales transactions and customer orders
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {sales.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8">
+              <TrendingUp className="h-12 w-12 text-muted-foreground mb-2" />
+              <p className="text-muted-foreground">No sales recorded yet</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Client</TableHead>
+                  <TableHead>Item</TableHead>
+                  <TableHead>Quantity</TableHead>
+                  <TableHead>Unit Price</TableHead>
+                  <TableHead>Total Amount</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sales.map((sale) => (
+                  <TableRow key={sale._id}>
+                    <TableCell>{formatDate(sale.createdAt)}</TableCell>
+                    <TableCell className="font-medium">{sale.clientName}</TableCell>
+                    <TableCell>{sale.items?.[0]?.itemName || 'Unknown Item'}</TableCell>
+                    <TableCell className="font-mono">{sale.items?.[0]?.quantity || 0} bags</TableCell>
+                    <TableCell className="font-mono">{formatCurrency(sale.items?.[0]?.unitPrice || 0)}</TableCell>
+                    <TableCell className="font-mono font-medium">{formatCurrency(sale.totalAmount)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+export default Sales

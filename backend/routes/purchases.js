@@ -1,0 +1,163 @@
+import express from 'express';
+import { body, validationResult } from 'express-validator';
+import Purchase from '../models/Purchase.js';
+import StockItem from '../models/StockItem.js';
+import StockTransaction from '../models/StockTransaction.js';
+import { authenticate } from '../middleware/auth.js';
+
+const router = express.Router();
+
+// Get all purchases with pagination
+router.get('/', authenticate, async (req, res) => {
+    try {
+        const companyId = req.user.companyId?._id || req.user.companyId;
+
+        if (!companyId) {
+            return res.status(400).json({ message: 'No company associated with user' });
+        }
+
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 50;
+        const skip = (page - 1) * limit;
+
+        const query = { companyId };
+        if (req.query.supplierId) {
+            query.supplierId = req.query.supplierId;
+        }
+
+        const [purchases, total] = await Promise.all([
+            Purchase.find(query)
+                .sort({ purchaseDate: -1 })
+                .skip(skip)
+                .limit(limit)
+                .lean(),
+            Purchase.countDocuments(query)
+        ]);
+
+        res.json({
+            purchases,
+            totalPages: Math.ceil(total / limit),
+            currentPage: page,
+            totalCount: total
+        });
+    } catch (error) {
+        console.error('Get purchases error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// Create purchase
+router.post('/', authenticate, [
+    body('supplierId').notEmpty().withMessage('Supplier is required'),
+    body('warehouseId').notEmpty().withMessage('Warehouse is required'),
+    body('items').isArray({ min: 1 }).withMessage('At least one item is required'),
+    body('totalAmount').isNumeric().withMessage('Total amount must be a number')
+], async (req, res) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
+
+        const companyId = req.user.companyId?._id || req.user.companyId;
+
+        if (!companyId) {
+            return res.status(400).json({ message: 'No company associated with user' });
+        }
+
+        const { supplierId, supplierName, warehouseId, warehouseName, invoiceNumber, items, totalAmount, paymentStatus, paymentMethod, notes, purchaseDate } = req.body;
+
+        // Create purchase
+        const purchase = new Purchase({
+            companyId,
+            supplierId,
+            supplierName,
+            warehouseId,
+            warehouseName,
+            invoiceNumber,
+            items,
+            totalAmount,
+            paymentStatus: paymentStatus || 'pending',
+            paymentMethod: paymentMethod || 'cash',
+            notes,
+            purchaseDate: purchaseDate || new Date()
+        });
+
+        await purchase.save();
+
+        // Update stock quantities and create transactions
+        for (const item of items) {
+            const stockItem = await StockItem.findById(item.itemId);
+
+            if (stockItem) {
+                // Add stock
+                stockItem.quantity += item.quantity;
+                await stockItem.save();
+
+                // Create transaction record
+                const transaction = new StockTransaction({
+                    companyId,
+                    type: 'purchase',
+                    itemId: item.itemId,
+                    itemName: item.itemName,
+                    warehouseId,
+                    warehouseName,
+                    quantity: item.quantity,
+                    referenceId: purchase._id,
+                    referenceModel: 'Purchase',
+                    reason: `Purchase from ${supplierName}`,
+                    transactionDate: purchaseDate || new Date(),
+                    performedBy: req.user._id
+                });
+                await transaction.save();
+            }
+        }
+
+        res.status(201).json({
+            message: 'Purchase created successfully',
+            purchase
+        });
+    } catch (error) {
+        console.error('Create purchase error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// Delete purchase
+router.delete('/:id', authenticate, async (req, res) => {
+    try {
+        const companyId = req.user.companyId?._id || req.user.companyId;
+
+        const purchase = await Purchase.findOneAndDelete({
+            _id: req.params.id,
+            companyId
+        });
+
+        if (!purchase) {
+            return res.status(404).json({ message: 'Purchase not found' });
+        }
+
+        // Restore stock quantities and delete associated transactions
+        for (const item of purchase.items) {
+            const stockItem = await StockItem.findById(item.itemId);
+            if (stockItem) {
+                // Deduct the purchased quantity (reverse the purchase)
+                stockItem.quantity = Math.max(0, stockItem.quantity - item.quantity);
+                await stockItem.save();
+            }
+        }
+
+        // Delete associated stock transactions
+        await StockTransaction.deleteMany({
+            referenceId: purchase._id,
+            referenceModel: 'Purchase'
+        });
+
+        res.json({ message: 'Purchase deleted successfully' });
+    } catch (error) {
+        console.error('Delete purchase error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+export default router;

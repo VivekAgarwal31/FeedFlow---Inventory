@@ -1,0 +1,75 @@
+import React from 'react'
+import { Routes, Route, Navigate } from 'react-router-dom'
+import { useAuth } from './contexts/AuthContext'
+import AuthPage from './pages/AuthPage'
+import CompanySetupPage from './pages/CompanySetupPage'
+import DashboardLayout from './components/layout/DashboardLayout'
+import Dashboard from './pages/Dashboard'
+import Warehouses from './pages/Warehouses'
+import StockList from './pages/StockList'
+import StockIn from './pages/StockIn'
+import StockOut from './pages/StockOut'
+import StockAdjust from './pages/StockAdjust'
+import StockMove from './pages/StockMove'
+import StockTransactions from './pages/StockTransactions'
+import Sales from './pages/Sales'
+import Purchases from './pages/Purchases'
+import Clients from './pages/Clients'
+import Suppliers from './pages/Suppliers'
+import Settings from './pages/Settings'
+
+function App() {
+  const { user, loading } = useAuth()
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    )
+  }
+
+  // Not authenticated
+  if (!user) {
+    return (
+      <Routes>
+        <Route path="/auth" element={<AuthPage />} />
+        <Route path="*" element={<Navigate to="/auth" replace />} />
+      </Routes>
+    )
+  }
+
+  // Authenticated but no company
+  if (!user.companyId) {
+    return (
+      <Routes>
+        <Route path="/company-setup" element={<CompanySetupPage />} />
+        <Route path="*" element={<Navigate to="/company-setup" replace />} />
+      </Routes>
+    )
+  }
+
+  // Authenticated with company
+  return (
+    <DashboardLayout>
+      <Routes>
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/warehouses" element={<Warehouses />} />
+        <Route path="/stock" element={<StockList />} />
+        <Route path="/stock-in" element={<StockIn />} />
+        <Route path="/stock-out" element={<StockOut />} />
+        <Route path="/stock-adjust" element={<StockAdjust />} />
+        <Route path="/stock-move" element={<StockMove />} />
+        <Route path="/stock-transactions" element={<StockTransactions />} />
+        <Route path="/sales" element={<Sales />} />
+        <Route path="/purchases" element={<Purchases />} />
+        <Route path="/clients" element={<Clients />} />
+        <Route path="/suppliers" element={<Suppliers />} />
+        <Route path="/settings" element={<Settings />} />
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
+    </DashboardLayout>
+  )
+}
+
+export default App

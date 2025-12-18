@@ -1,0 +1,804 @@
+import React, { useState, useEffect } from 'react'
+import { Plus, Users, Phone, Mail, MapPin, Loader2, ArrowLeft, Calendar, Filter, Eye, Download, Search } from 'lucide-react'
+import { clientAPI, saleAPI } from '../lib/api'
+import { formatCurrency, formatDate } from '../lib/utils'
+import { exportClientToExcel, exportClientToPDF } from '../lib/exportUtils'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
+import { Button } from '../components/ui/button'
+import { Input } from '../components/ui/input'
+import { Label } from '../components/ui/label'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
+import { Alert, AlertDescription } from '../components/ui/alert'
+import { useToast } from '../hooks/use-toast'
+
+const Clients = () => {
+  const [clients, setClients] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+  const [selectedClient, setSelectedClient] = useState(null)
+  const [clientTransactions, setClientTransactions] = useState([])
+  const [filteredTransactions, setFilteredTransactions] = useState([])
+  const [dateFilter, setDateFilter] = useState('all')
+  const [searchTerm, setSearchTerm] = useState('')
+  const { toast } = useToast()
+
+  // Export dialog state
+  const [exportDialogOpen, setExportDialogOpen] = useState(false)
+  const [exportForm, setExportForm] = useState({
+    clientName: '',
+    fromDate: '',
+    toDate: '',
+    format: 'excel'
+  })
+  const [exportClients, setExportClients] = useState([])
+  const [clientSearch, setClientSearch] = useState('')
+  const [showClientDropdown, setShowClientDropdown] = useState(false)
+  const [exporting, setExporting] = useState(false)
+
+  const [form, setForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    address: '',
+    gstNumber: '',
+    creditLimit: ''
+  })
+
+  useEffect(() => {
+    fetchClients()
+    fetchExportClients()
+  }, [])
+
+  useEffect(() => {
+    if (selectedClient) {
+      fetchClientTransactions(selectedClient._id)
+    }
+  }, [selectedClient])
+
+  useEffect(() => {
+    filterTransactions()
+  }, [clientTransactions, dateFilter, searchTerm])
+
+  const fetchClients = async () => {
+    try {
+      setLoading(true)
+      const response = await clientAPI.getAll()
+      setClients(response.data.clients || [])
+    } catch (error) {
+      console.error('Failed to fetch clients:', error)
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to load clients',
+        variant: 'destructive'
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchClientTransactions = async (clientId) => {
+    try {
+      const response = await saleAPI.getAll({ clientId })
+      setClientTransactions(response.data.sales || [])
+    } catch (error) {
+      console.error('Failed to fetch client transactions:', error)
+    }
+  }
+
+  const filterTransactions = () => {
+    let filtered = clientTransactions
+
+    // Filter by search term
+    if (searchTerm) {
+      filtered = filtered.filter(transaction =>
+        transaction.items?.some(item =>
+          item.itemName?.toLowerCase().includes(searchTerm.toLowerCase())
+        ) ||
+        transaction._id.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    }
+
+    // Filter by date
+    if (dateFilter !== 'all') {
+      const now = new Date()
+      let filterDate = new Date()
+
+      switch (dateFilter) {
+        case 'today':
+          filterDate.setHours(0, 0, 0, 0)
+          break
+        case 'week':
+          filterDate.setDate(now.getDate() - 7)
+          break
+        case 'month':
+          filterDate.setMonth(now.getMonth() - 1)
+          break
+        case '3months':
+          filterDate.setMonth(now.getMonth() - 3)
+          break
+        default:
+          filterDate = null
+      }
+
+      if (filterDate) {
+        filtered = filtered.filter(transaction =>
+          new Date(transaction.saleDate || transaction.createdAt) >= filterDate
+        )
+      }
+    }
+
+    setFilteredTransactions(filtered)
+  }
+
+  const handleClientClick = (client) => {
+    setSelectedClient(client)
+    setDateFilter('all')
+    setSearchTerm('')
+  }
+
+  const handleBackToClients = () => {
+    setSelectedClient(null)
+    setClientTransactions([])
+    setFilteredTransactions([])
+    setDateFilter('all')
+    setSearchTerm('')
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setSubmitting(true)
+    setError('')
+
+    try {
+      // In a real app, this would be a clients API call
+      const newClient = {
+        _id: Date.now().toString(),
+        ...form,
+        totalPurchases: 0,
+        salesCount: 0,
+        lastPurchase: null,
+        createdAt: new Date().toISOString()
+      }
+
+      setClients(prev => [newClient, ...prev])
+
+      setForm({
+        name: '',
+        email: '',
+        phone: '',
+        address: '',
+        gstNumber: '',
+        creditLimit: ''
+      })
+      setDialogOpen(false)
+    } catch (error) {
+      setError(error.response?.data?.message || 'Failed to add client')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  // Export functionality
+  const fetchExportClients = async () => {
+    try {
+      const response = await clientAPI.getAll()
+      setExportClients(response.data.clients || [])
+    } catch (error) {
+      console.error('Failed to fetch export clients:', error)
+    }
+  }
+
+  const handleClientSelect = (clientName) => {
+    setExportForm({ ...exportForm, clientName })
+    setClientSearch(clientName)
+    setShowClientDropdown(false)
+  }
+
+  const filteredExportClients = exportClients.filter(client =>
+    client.name.toLowerCase().includes(clientSearch.toLowerCase())
+  )
+
+  const handleExport = async () => {
+    if (!exportForm.clientName || !exportForm.fromDate || !exportForm.toDate) {
+      setError('Please fill all export fields')
+      return
+    }
+
+    setExporting(true)
+    setError('')
+
+    try {
+      // Find the client by name
+      const client = clients.find(c =>
+        c.name.toLowerCase() === exportForm.clientName.toLowerCase()
+      )
+
+      if (!client) {
+        setError('Client not found')
+        return
+      }
+
+      // Get sales data from MongoDB API
+      const response = await saleAPI.getAll({
+        clientId: client._id,
+        page: 1,
+        limit: 1000
+      })
+
+      const allSales = response.data.sales || []
+
+      // Filter by date range
+      const fromDate = new Date(exportForm.fromDate)
+      const toDate = new Date(exportForm.toDate)
+      toDate.setHours(23, 59, 59, 999) // Include the entire end date
+
+      const filteredSales = allSales.filter(sale => {
+        const saleDate = new Date(sale.saleDate || sale.createdAt)
+        return saleDate >= fromDate && saleDate <= toDate
+      })
+
+      if (filteredSales.length === 0) {
+        setError('No transactions found for the selected client and date range')
+        return
+      }
+
+      // Prepare transaction data
+      const transactions = filteredSales.map(sale => ({
+        _id: sale._id,
+        createdAt: sale.createdAt,
+        reference: `SALE-${sale._id.slice(-6)}`,
+        itemName: sale.stockItemId?.itemName || 'Unknown Item',
+        quantity: sale.quantity,
+        unitPrice: sale.unitPrice,
+        totalAmount: sale.totalAmount,
+        notes: `Sale to ${sale.clientName}`
+      }))
+
+      const dateRange = {
+        from: exportForm.fromDate,
+        to: exportForm.toDate
+      }
+
+      // Export based on format
+      if (exportForm.format === 'excel') {
+        await exportClientToExcel(exportForm.clientName, transactions, dateRange)
+      } else {
+        exportClientToPDF(exportForm.clientName, transactions, dateRange)
+      }
+
+      setExportDialogOpen(false)
+      setExportForm({
+        clientName: '',
+        fromDate: '',
+        toDate: '',
+        format: 'excel'
+      })
+      setClientSearch('')
+    } catch (error) {
+      setError(error.response?.data?.message || 'Failed to export data')
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    )
+  }
+
+  // Show client details view if a client is selected
+  if (selectedClient) {
+    return (
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Button variant="outline" onClick={handleBackToClients}>
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Clients
+            </Button>
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">{selectedClient.name}</h1>
+              <p className="text-muted-foreground mt-1">
+                Transaction history and details
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Client Summary */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <Users className="h-5 w-5 text-primary" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Total Purchases</p>
+                  <p className="text-2xl font-bold">{formatCurrency(selectedClient.totalPurchases)}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-primary" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Total Orders</p>
+                  <p className="text-2xl font-bold">{selectedClient.salesCount}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-primary" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Last Purchase</p>
+                  <p className="text-lg font-semibold">
+                    {selectedClient.lastPurchase ? formatDate(selectedClient.lastPurchase) : 'Never'}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <Filter className="h-5 w-5 text-primary" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Filtered Results</p>
+                  <p className="text-2xl font-bold">{filteredTransactions.length}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Filters */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Filter className="h-5 w-5" />
+              Transaction Filters
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="search">Search Transactions</Label>
+                <Input
+                  id="search"
+                  placeholder="Search by item name or ID..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="date-filter">Date Range</Label>
+                <Select value={dateFilter} onValueChange={setDateFilter}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Time</SelectItem>
+                    <SelectItem value="today">Today</SelectItem>
+                    <SelectItem value="week">Last 7 Days</SelectItem>
+                    <SelectItem value="month">Last 30 Days</SelectItem>
+                    <SelectItem value="3months">Last 3 Months</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Total Filtered Amount</Label>
+                <div className="flex items-center h-10 px-3 py-2 border rounded-md bg-muted">
+                  <span className="text-sm font-medium">
+                    {formatCurrency(filteredTransactions.reduce((sum, t) => sum + t.totalAmount, 0))}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Transactions Table */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Transaction History</CardTitle>
+            <CardDescription>
+              All sales transactions with {selectedClient.name}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {filteredTransactions.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8">
+                <Calendar className="h-12 w-12 text-muted-foreground mb-2" />
+                <p className="text-muted-foreground">
+                  {clientTransactions.length === 0
+                    ? 'No transactions found for this client'
+                    : 'No transactions match your current filters'
+                  }
+                </p>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Item</TableHead>
+                    <TableHead>Quantity</TableHead>
+                    <TableHead>Unit Price</TableHead>
+                    <TableHead>Total Amount</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredTransactions.map((transaction) => (
+                    <TableRow key={transaction._id}>
+                      <TableCell>{formatDate(transaction.createdAt)}</TableCell>
+                      <TableCell className="font-medium">
+                        {transaction.stockItemId?.itemName || 'Unknown Item'}
+                      </TableCell>
+                      <TableCell className="font-mono">{transaction.quantity} bags</TableCell>
+                      <TableCell className="font-mono">{formatCurrency(transaction.unitPrice)}</TableCell>
+                      <TableCell className="font-mono font-medium">{formatCurrency(transaction.totalAmount)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Clients</h1>
+          <p className="text-muted-foreground mt-1">
+            Manage your customer database and relationships
+          </p>
+        </div>
+
+        <div className="flex gap-3">
+          <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Download className="mr-2 h-4 w-4" />
+                Export Client Data
+              </Button>
+            </DialogTrigger>
+          </Dialog>
+
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Client
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add New Client</DialogTitle>
+                <DialogDescription>
+                  Add a new client to your customer database.
+                </DialogDescription>
+              </DialogHeader>
+
+              {error && (
+                <Alert variant="destructive">
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="client-name">Client Name *</Label>
+                  <Input
+                    id="client-name"
+                    type="text"
+                    placeholder="ABC Dairy Farm"
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="contact@abcdairy.com"
+                      value={form.email}
+                      onChange={(e) => setForm({ ...form, email: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Phone</Label>
+                    <Input
+                      id="phone"
+                      type="tel"
+                      placeholder="+91 9876543210"
+                      value={form.phone}
+                      onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="address">Address</Label>
+                  <Input
+                    id="address"
+                    type="text"
+                    placeholder="123 Farm Road, Village, District"
+                    value={form.address}
+                    onChange={(e) => setForm({ ...form, address: e.target.value })}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="gst">GST Number</Label>
+                    <Input
+                      id="gst"
+                      type="text"
+                      placeholder="22AAAAA0000A1Z5"
+                      value={form.gstNumber}
+                      onChange={(e) => setForm({ ...form, gstNumber: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="credit-limit">Credit Limit (₹)</Label>
+                    <Input
+                      id="credit-limit"
+                      type="number"
+                      step="0.01"
+                      placeholder="50000"
+                      value={form.creditLimit}
+                      onChange={(e) => setForm({ ...form, creditLimit: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <Button type="submit" disabled={submitting} className="flex-1">
+                    {submitting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Adding...
+                      </>
+                    ) : (
+                      'Add Client'
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setDialogOpen(false)}
+                    disabled={submitting}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
+
+        {/* Export Dialog */}
+        <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Export Client Data</DialogTitle>
+              <DialogDescription>
+                Export transaction data for a specific client within a date range.
+              </DialogDescription>
+            </DialogHeader>
+
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="export-client">Client Name *</Label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                  <Input
+                    id="export-client"
+                    type="text"
+                    placeholder="Search or type client name"
+                    value={clientSearch}
+                    onChange={(e) => {
+                      setClientSearch(e.target.value)
+                      setExportForm({ ...exportForm, clientName: e.target.value })
+                    }}
+                    onFocus={() => setShowClientDropdown(true)}
+                    onBlur={() => setTimeout(() => setShowClientDropdown(false), 200)}
+                    className="pl-8"
+                    required
+                  />
+                  {showClientDropdown && (
+                    <div className="absolute z-10 w-full mt-1 bg-background border rounded-md shadow-lg max-h-60 overflow-auto">
+                      {filteredExportClients.length > 0 ? (
+                        filteredExportClients.map((client) => (
+                          <div
+                            key={client._id}
+                            className="px-3 py-2 cursor-pointer hover:bg-muted"
+                            onClick={() => handleClientSelect(client.name)}
+                          >
+                            {client.name}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="px-3 py-2 text-muted-foreground">
+                          No clients found. Type to search.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="from-date">From Date *</Label>
+                  <Input
+                    id="from-date"
+                    type="date"
+                    value={exportForm.fromDate}
+                    onChange={(e) => setExportForm({ ...exportForm, fromDate: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="to-date">To Date *</Label>
+                  <Input
+                    id="to-date"
+                    type="date"
+                    value={exportForm.toDate}
+                    onChange={(e) => setExportForm({ ...exportForm, toDate: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="export-format">Export Format *</Label>
+                <Select value={exportForm.format} onValueChange={(value) => setExportForm({ ...exportForm, format: value })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select format" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="excel">Excel (.xlsx)</SelectItem>
+                    <SelectItem value="pdf">PDF (.pdf)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <Button onClick={handleExport} disabled={exporting} className="flex-1">
+                  {exporting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Exporting...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="mr-2 h-4 w-4" />
+                      Export Data
+                    </>
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setExportDialogOpen(false)
+                    setError('')
+                    setClientSearch('')
+                  }}
+                  disabled={exporting}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* Clients Table */}
+      {clients.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-16">
+            <Users className="h-16 w-16 text-muted-foreground mb-4" />
+            <CardTitle className="text-xl mb-2">No clients yet</CardTitle>
+            <CardDescription className="text-center mb-4">
+              Add your first client or make a sale to populate this list
+            </CardDescription>
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Client
+                </Button>
+              </DialogTrigger>
+            </Dialog>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Client Name</TableHead>
+                <TableHead>Total Purchases</TableHead>
+                <TableHead>Sales Count</TableHead>
+                <TableHead>Last Purchase</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {clients.map((client) => (
+                <TableRow key={client._id} className="cursor-pointer hover:bg-muted/50" onClick={() => handleClientClick(client)}>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Users className="h-4 w-4 text-primary" />
+                      <span className="font-medium">{client.name}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <span className="font-mono">{formatCurrency(client.totalPurchases)}</span>
+                  </TableCell>
+                  <TableCell>
+                    <span className="font-mono">{client.salesCount}</span>
+                  </TableCell>
+                  <TableCell>
+                    {client.lastPurchase ? (
+                      formatDate(client.lastPurchase)
+                    ) : (
+                      <span className="text-muted-foreground">Never</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Button variant="outline" size="sm" onClick={(e) => {
+                      e.stopPropagation()
+                      handleClientClick(client)
+                    }}>
+                      <Eye className="mr-2 h-4 w-4" />
+                      View Details
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      )}
+    </div>
+  )
+}
+
+export default Clients
