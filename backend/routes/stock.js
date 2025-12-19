@@ -241,13 +241,22 @@ router.post('/move', authenticate, [
         fromStock.quantity -= quantity;
         await fromStock.save();
 
-        // Find or create stock in destination warehouse
-        let toStock = await StockItem.findOne({ companyId, warehouseId: toWarehouseId, itemName: fromStock.itemName });
+        // Find existing stock in destination warehouse by matching item properties
+        // This prevents creating duplicate items with the same name
+        let toStock = await StockItem.findOne({
+            companyId,
+            warehouseId: toWarehouseId,
+            itemName: fromStock.itemName,
+            bagSize: fromStock.bagSize,
+            category: fromStock.category
+        });
 
         if (toStock) {
+            // Update existing stock in destination warehouse
             toStock.quantity += quantity;
             await toStock.save();
         } else {
+            // Create new stock item in destination warehouse
             toStock = new StockItem({
                 companyId,
                 warehouseId: toWarehouseId,

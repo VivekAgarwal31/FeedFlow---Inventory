@@ -144,34 +144,49 @@ router.post('/', authenticate, [
 
         // Update stock quantities and create transactions
         for (const item of items) {
-            const stockItem = await StockItem.findById(item.itemId);
+            // Find stock item and verify it exists
+            const stockItem = await StockItem.findOne({
+                _id: item.itemId,
+                companyId
+            });
 
-            if (stockItem) {
-                // Fetch warehouse name from database
-                const warehouse = await Warehouse.findById(stockItem.warehouseId);
-                const warehouseName = warehouse?.name || 'Unknown Warehouse';
-
-                // Deduct stock
-                stockItem.quantity = Math.max(0, stockItem.quantity - item.quantity);
-                await stockItem.save();
-
-                // Create transaction record
-                const transaction = new StockTransaction({
-                    companyId,
-                    type: 'sale',
-                    itemId: item.itemId,
-                    itemName: item.itemName,
-                    warehouseId: stockItem.warehouseId,
-                    warehouseName,
-                    quantity: -item.quantity,
-                    referenceId: sale._id,
-                    referenceModel: 'Sale',
-                    reason: `Sale to ${clientName}`,
-                    transactionDate: saleDate || new Date(),
-                    performedBy: req.user._id
+            if (!stockItem) {
+                return res.status(404).json({
+                    message: `Stock item "${item.itemName}" not found`
                 });
-                await transaction.save();
             }
+
+            // Check if sufficient stock is available
+            if (stockItem.quantity < item.quantity) {
+                return res.status(400).json({
+                    message: `Insufficient stock for "${item.itemName}". Available: ${stockItem.quantity}, Required: ${item.quantity}`
+                });
+            }
+
+            // Fetch warehouse name from database
+            const warehouse = await Warehouse.findById(stockItem.warehouseId);
+            const warehouseName = warehouse?.name || 'Unknown Warehouse';
+
+            // Deduct stock
+            stockItem.quantity -= item.quantity;
+            await stockItem.save();
+
+            // Create transaction record
+            const transaction = new StockTransaction({
+                companyId,
+                type: 'sale',
+                itemId: item.itemId,
+                itemName: item.itemName,
+                warehouseId: stockItem.warehouseId,
+                warehouseName,
+                quantity: -item.quantity,
+                referenceId: sale._id,
+                referenceModel: 'Sale',
+                reason: `Sale to ${clientName}`,
+                transactionDate: saleDate || new Date(),
+                performedBy: req.user._id
+            });
+            await transaction.save();
         }
 
         res.status(201).json({
@@ -196,6 +211,16 @@ router.delete('/:id', authenticate, async (req, res) => {
 
         if (!sale) {
             return res.status(404).json({ message: 'Sale not found' });
+        }
+
+        // Update client statistics
+        if (sale.clientId) {
+            const client = await Client.findById(sale.clientId);
+            if (client) {
+                client.totalPurchases = Math.max(0, client.totalPurchases - 1);
+                client.totalRevenue = Math.max(0, client.totalRevenue - sale.totalAmount);
+                await client.save();
+            }
         }
 
         // Restore stock quantities and delete associated transactions

@@ -87,30 +87,52 @@ router.post('/', authenticate, [
 
         // Update stock quantities and create transactions
         for (const item of items) {
-            const stockItem = await StockItem.findById(item.itemId);
+            // Find stock item in the purchase warehouse, not just by itemId
+            // This ensures we add stock to the correct warehouse
+            let stockItem = await StockItem.findOne({
+                companyId,
+                warehouseId: warehouseId,
+                itemName: item.itemName,
+                bagSize: item.bagSize
+            });
 
-            if (stockItem) {
-                // Add stock
-                stockItem.quantity += item.quantity;
-                await stockItem.save();
-
-                // Create transaction record
-                const transaction = new StockTransaction({
+            if (!stockItem) {
+                // Create new stock item in this warehouse if it doesn't exist
+                stockItem = new StockItem({
                     companyId,
-                    type: 'purchase',
-                    itemId: item.itemId,
-                    itemName: item.itemName,
                     warehouseId,
-                    warehouseName,
+                    itemName: item.itemName,
+                    category: item.category || 'raw_material',
+                    itemCategory: item.itemCategory || '',
+                    bagSize: item.bagSize,
                     quantity: item.quantity,
-                    referenceId: purchase._id,
-                    referenceModel: 'Purchase',
-                    reason: `Purchase from ${supplierName}`,
-                    transactionDate: purchaseDate || new Date(),
-                    performedBy: req.user._id
+                    costPrice: item.unitPrice || 0,
+                    sellingPrice: 0,
+                    lowStockAlert: 10
                 });
-                await transaction.save();
+            } else {
+                // Update existing stock in this warehouse
+                stockItem.quantity += item.quantity;
             }
+
+            await stockItem.save();
+
+            // Create transaction record
+            const transaction = new StockTransaction({
+                companyId,
+                type: 'purchase',
+                itemId: stockItem._id,
+                itemName: item.itemName,
+                warehouseId,
+                warehouseName,
+                quantity: item.quantity,
+                referenceId: purchase._id,
+                referenceModel: 'Purchase',
+                reason: `Purchase from ${supplierName}`,
+                transactionDate: purchaseDate || new Date(),
+                performedBy: req.user._id
+            });
+            await transaction.save();
         }
 
         res.status(201).json({

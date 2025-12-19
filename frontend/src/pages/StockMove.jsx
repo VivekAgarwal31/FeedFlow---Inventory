@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Plus, ArrowLeftRight, Loader2 } from 'lucide-react'
-import { stockAPI, warehouseAPI } from '../lib/api'
+import { stockAPI, warehouseAPI, stockTransactionAPI } from '../lib/api'
 import { formatCurrency, formatDate } from '../lib/utils'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
@@ -33,6 +33,7 @@ const StockMove = () => {
 
   useEffect(() => {
     fetchData()
+    fetchMovements()
   }, [])
 
   const fetchData = async () => {
@@ -54,6 +55,19 @@ const StockMove = () => {
       })
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchMovements = async () => {
+    try {
+      const response = await stockTransactionAPI.getAll({
+        type: 'stock_move',
+        limit: 100
+      })
+      setMovements(response.data.transactions || [])
+    } catch (error) {
+      console.error('Failed to fetch movements:', error)
+      // Don't show error toast for movements, it's not critical
     }
   }
 
@@ -98,6 +112,7 @@ const StockMove = () => {
       })
       setDialogOpen(false)
       fetchData() // Refresh stock items
+      fetchMovements() // Refresh movement history
     } catch (error) {
       setError(error.response?.data?.message || 'Failed to move stock')
     } finally {
@@ -335,12 +350,12 @@ const StockMove = () => {
               <TableBody>
                 {movements.map((movement) => (
                   <TableRow key={movement._id}>
-                    <TableCell>{formatDate(movement.createdAt)}</TableCell>
+                    <TableCell>{formatDate(movement.transactionDate || movement.createdAt)}</TableCell>
                     <TableCell className="font-medium">
-                      {movement.stockItemId?.itemName || 'Unknown Item'}
+                      {movement.itemName || 'Unknown Item'}
                     </TableCell>
-                    <TableCell>{movement.fromWarehouse?.name || 'Unknown'}</TableCell>
-                    <TableCell>{movement.toWarehouse?.name || 'Unknown'}</TableCell>
+                    <TableCell>{movement.warehouseName || 'Unknown'}</TableCell>
+                    <TableCell>{movement.toWarehouseName || 'Unknown'}</TableCell>
                     <TableCell className="font-mono">{movement.quantity} bags</TableCell>
                     <TableCell className="text-muted-foreground">
                       {movement.notes || '-'}
