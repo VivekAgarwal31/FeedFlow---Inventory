@@ -209,17 +209,15 @@ const StockList = () => {
     setError('')
 
     try {
-      // Note: Backend doesn't have delete endpoint yet, so we'll just refresh the list
-      // In a full implementation, you'd call: await stockAPI.delete(itemToDelete._id)
+      // Call the delete API
+      await stockAPI.delete(itemToDelete._id)
 
-      // For now, just refresh the stock list
-      const stockResponse = await stockAPI.getAll()
-      setStockItems(stockResponse.data.stockItems || [])
+      // Remove from local state
+      setStockItems(prev => prev.filter(item => item._id !== itemToDelete._id))
 
       toast({
-        title: 'Info',
-        description: 'Stock item deletion is not yet implemented in the backend',
-        variant: 'default'
+        title: 'Success',
+        description: `Stock item "${itemToDelete.itemName}" deleted successfully`,
       })
 
       setDeleteDialogOpen(false)

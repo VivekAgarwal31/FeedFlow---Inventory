@@ -109,6 +109,7 @@ export const clientAPI = {
 export const stockAPI = {
   getAll: () => api.get('/stock'),
   create: (data) => api.post('/stock', data),
+  delete: (id) => api.delete(`/stock/${id}`),
   stockIn: (data) => api.post('/stock/in', data),
   stockOut: (data) => api.post('/stock/out', data),
   stockMove: (data) => api.post('/stock/move', data),

@@ -362,4 +362,47 @@ router.post('/adjust', authenticate, [
     }
 });
 
+// Delete stock item
+router.delete('/:id', authenticate, async (req, res) => {
+    try {
+        const companyId = req.user.companyId?._id || req.user.companyId;
+
+        // Find the stock item
+        const stockItem = await StockItem.findOne({
+            _id: req.params.id,
+            companyId
+        });
+
+        if (!stockItem) {
+            return res.status(404).json({ message: 'Stock item not found' });
+        }
+
+        // Prevent deletion if item has quantity
+        if (stockItem.quantity > 0) {
+            return res.status(400).json({
+                message: `Cannot delete item with ${stockItem.quantity} bags in stock. Please adjust quantity to 0 first.`
+            });
+        }
+
+        // Delete the stock item
+        await StockItem.findByIdAndDelete(req.params.id);
+
+        // Delete associated transactions
+        await StockTransaction.deleteMany({
+            itemId: req.params.id
+        });
+
+        res.json({
+            message: 'Stock item deleted successfully',
+            deletedItem: {
+                id: stockItem._id,
+                itemName: stockItem.itemName
+            }
+        });
+    } catch (error) {
+        console.error('Delete stock item error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
 export default router;
