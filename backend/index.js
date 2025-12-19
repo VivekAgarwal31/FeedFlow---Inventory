@@ -15,7 +15,8 @@ import stockRoutes from './routes/stock.js';
 import { startHttpPing } from './utils/keepAlive.js';
 import { startDbPing } from './utils/dbPing.js';
 
-dotenv.config({ path: '../.env' });
+// Load environment variables (works both locally and on Render)
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -27,6 +28,22 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Health and ping endpoints (MUST be before other routes)
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
+app.get('/api/ping', (req, res) => {
+  res.json({
+    status: 'alive',
+    timestamp: new Date().toISOString()
+  });
+});
 
 // MongoDB Connection
 mongoose.connect(process.env.MONGO_URI)
@@ -51,7 +68,7 @@ app.get('/ping-db', async (req, res) => {
   }
 });
 
-// Routes
+// API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/company', companyRoutes);
 app.use('/api/dashboard', dashboardRoutes);
@@ -62,16 +79,6 @@ app.use('/api/suppliers', supplierRoutes);
 app.use('/api/purchases', purchaseRoutes);
 app.use('/api/clients', clientRoutes);
 app.use('/api/stock', stockRoutes);
-
-// Health check
-app.get('/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
-});
-
-// Ping endpoint for keep-alive
-app.get('/api/ping', (req, res) => {
-  res.json({ status: 'alive', timestamp: new Date().toISOString() });
-});
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
