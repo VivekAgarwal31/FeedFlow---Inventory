@@ -9,10 +9,12 @@ export const startHttpPing = () => {
         console.log('🔄 Starting HTTP keep-alive ping...');
         console.log(`📍 Pinging ${RENDER_URL}/api/ping every 2 minutes`);
 
-        // Send initial ping immediately
-        axios.get(`${RENDER_URL}/api/ping`)
-            .then(() => console.log('✅ Initial HTTP ping successful'))
-            .catch(error => console.error('❌ Initial HTTP ping failed:', error.message));
+        // Wait 5 seconds before initial ping to ensure server is fully ready
+        setTimeout(() => {
+            axios.get(`${RENDER_URL}/api/ping`)
+                .then(() => console.log('✅ Initial HTTP ping successful'))
+                .catch(error => console.error('❌ Initial HTTP ping failed:', error.message));
+        }, 5000);
 
         // Then ping every 2 minutes
         setInterval(async () => {
