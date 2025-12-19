@@ -377,14 +377,7 @@ router.delete('/:id', authenticate, async (req, res) => {
             return res.status(404).json({ message: 'Stock item not found' });
         }
 
-        // Prevent deletion if item has quantity
-        if (stockItem.quantity > 0) {
-            return res.status(400).json({
-                message: `Cannot delete item with ${stockItem.quantity} bags in stock. Please adjust quantity to 0 first.`
-            });
-        }
-
-        // Delete the stock item
+        // Delete the stock item (no quantity check - user requested removal of safety feature)
         await StockItem.findByIdAndDelete(req.params.id);
 
         // Delete associated transactions

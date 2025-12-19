@@ -153,18 +153,24 @@ const StockIn = () => {
                 <Select
                   value={form.itemId}
                   onValueChange={(value) => setForm({ ...form, itemId: value })}
+                  disabled={!form.warehouseId}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select stock item" />
+                    <SelectValue placeholder={form.warehouseId ? "Select stock item" : "Select warehouse first"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {stockItems.map((item) => (
-                      <SelectItem key={item._id} value={item._id}>
-                        {item.itemName} (Bag Size: {item.bagSize}kg)
-                      </SelectItem>
-                    ))}
+                    {stockItems
+                      .filter(item => !form.warehouseId || item.warehouseId?._id === form.warehouseId || item.warehouseId === form.warehouseId)
+                      .map((item) => (
+                        <SelectItem key={item._id} value={item._id}>
+                          {item.itemName} (Current: {item.quantity} bags, Bag Size: {item.bagSize}kg)
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
+                {form.warehouseId && stockItems.filter(item => item.warehouseId?._id === form.warehouseId || item.warehouseId === form.warehouseId).length === 0 && (
+                  <p className="text-sm text-muted-foreground">No items in this warehouse</p>
+                )}
               </div>
 
               <div className="space-y-2">
