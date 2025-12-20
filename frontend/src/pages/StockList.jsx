@@ -107,18 +107,18 @@ const StockList = () => {
   }
 
   // Calculate stock distribution for a specific item across all warehouses
-  const getStockDistributionForItem = (itemId) => {
-    const item = stockItems.find(i => i._id === itemId)
-    if (!item) return []
-
-    // Each stock item belongs to one warehouse in the current schema
-    // Show all warehouses with quantity only for the item's warehouse
-    return warehouses.map(warehouse => ({
-      warehouse: warehouse,
-      quantity: warehouse._id === item.warehouseId?._id || warehouse._id === item.warehouseId
-        ? (item.quantity || 0)
-        : 0
-    }))
+  const getStockDistributionForItem = (consolidatedItem) => {
+    // consolidatedItem has a warehouses array with all the actual quantities
+    // We need to show ALL warehouses, with quantities from the warehouses array
+    return warehouses.map(warehouse => {
+      const warehouseData = consolidatedItem.warehouses.find(
+        wh => wh.id === warehouse._id
+      )
+      return {
+        warehouse: warehouse,
+        quantity: warehouseData ? warehouseData.quantity : 0
+      }
+    })
   }
 
   // Handle opening item detail dialog
@@ -787,7 +787,7 @@ const StockList = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {getStockDistributionForItem(selectedItemForDetail._id).map((dist, index) => (
+                      {getStockDistributionForItem(selectedItemForDetail).map((dist, index) => (
                         <TableRow key={index}>
                           <TableCell className="font-medium">{dist.warehouse.name}</TableCell>
                           <TableCell>{dist.warehouse.location || 'No location'}</TableCell>
