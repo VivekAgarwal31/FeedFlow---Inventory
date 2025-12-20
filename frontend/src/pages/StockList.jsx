@@ -231,20 +231,31 @@ const StockList = () => {
 
   const handleDeleteItem = async () => {
     if (!itemToDelete) return
-
     setDeleting(true)
     setError('')
 
     try {
-      // Call the delete API
-      await stockAPI.delete(itemToDelete._id)
+      // For consolidated items, delete all warehouse records
+      // itemToDelete.warehouses contains all the warehouse records for this item
+      if (itemToDelete.warehouses && itemToDelete.warehouses.length > 0) {
+        // Delete all warehouse records for this item
+        await Promise.all(
+          itemToDelete.warehouses.map(wh => stockAPI.delete(wh.itemId))
+        )
 
-      // Remove from local state
-      setStockItems(prev => prev.filter(item => item._id !== itemToDelete._id))
+        // Remove all warehouse records from local state
+        setStockItems(prev => prev.filter(item =>
+          !itemToDelete.warehouses.some(wh => wh.itemId === item._id)
+        ))
+      } else {
+        // Fallback for non-consolidated items (shouldn't happen in current flow)
+        await stockAPI.delete(itemToDelete._id)
+        setStockItems(prev => prev.filter(item => item._id !== itemToDelete._id))
+      }
 
       toast({
         title: 'Success',
-        description: `Stock item "${itemToDelete.itemName}" deleted successfully`,
+        description: `Stock item "${itemToDelete.itemName}" deleted from all warehouses`,
       })
 
       setDeleteDialogOpen(false)
@@ -283,7 +294,17 @@ const StockList = () => {
   }
 
   const getStatusBadge = (item) => {
-    const totalQuantity = item.quantity || 0
+    // Use totalQuantity for consolidated items, fallback to quantity for non-consolidated
+    const totalQuantity = item.totalQuantity !== undefined ? item.totalQuantity : (item.quantity || 0)
+
+    if (totalQuantity < 0) {
+      return (
+        <Badge variant="destructive" className="gap-1">
+          <AlertCircle className="h-3 w-3" />
+          Negative Stock
+        </Badge>
+      )
+    }
 
     if (totalQuantity === 0) {
       return (
@@ -680,7 +701,7 @@ const StockList = () => {
               Are you sure you want to delete <strong>{itemToDelete?.itemName}</strong>?
               <br />
               <br />
-              This will permanently remove the item from your inventory. This action cannot be undone.
+              This will permanently remove the item from <strong>all warehouses</strong> ({itemToDelete?.warehouses?.length || 0} warehouse{itemToDelete?.warehouses?.length !== 1 ? 's' : ''}). This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
 

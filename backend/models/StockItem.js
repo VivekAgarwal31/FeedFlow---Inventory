@@ -33,8 +33,7 @@ const stockItemSchema = new mongoose.Schema({
   },
   quantity: {
     type: Number,
-    default: 0,
-    min: 0
+    default: 0
   },
   costPrice: {
     type: Number,
@@ -56,7 +55,7 @@ const stockItemSchema = new mongoose.Schema({
 });
 
 // Virtual for stock status
-stockItemSchema.virtual('status').get(function() {
+stockItemSchema.virtual('status').get(function () {
   return this.quantity <= this.lowStockAlert ? 'low_stock' : 'in_stock';
 });
 

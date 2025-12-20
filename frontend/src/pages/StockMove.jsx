@@ -74,8 +74,7 @@ const StockMove = () => {
   const handleStockItemChange = (itemId) => {
     setForm({
       ...form,
-      itemId,
-      fromWarehouseId: ''
+      itemId
     })
   }
 
@@ -194,18 +193,23 @@ const StockMove = () => {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="stock-item">Stock Item *</Label>
-                <Select value={form.itemId} onValueChange={handleStockItemChange}>
+                <Select value={form.itemId} onValueChange={handleStockItemChange} disabled={!form.fromWarehouseId}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select stock item" />
+                    <SelectValue placeholder={form.fromWarehouseId ? "Select stock item" : "Select from warehouse first"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {stockItems.filter(item => item.quantity > 0).map((item) => (
-                      <SelectItem key={item._id} value={item._id}>
-                        {item.itemName} (Available: {item.quantity} bags)
-                      </SelectItem>
-                    ))}
+                    {stockItems
+                      .filter(item => !form.fromWarehouseId || item.warehouseId?._id === form.fromWarehouseId || item.warehouseId === form.fromWarehouseId)
+                      .map((item) => (
+                        <SelectItem key={item._id} value={item._id}>
+                          {item.itemName} (Available: {item.quantity} bags)
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
+                {form.fromWarehouseId && stockItems.filter(item => item.warehouseId?._id === form.fromWarehouseId || item.warehouseId === form.fromWarehouseId).length === 0 && (
+                  <p className="text-sm text-muted-foreground">No items in this warehouse</p>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
