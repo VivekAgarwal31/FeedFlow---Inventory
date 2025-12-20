@@ -171,11 +171,7 @@ router.post('/out', authenticate, [
             return res.status(404).json({ message: 'Stock item not found' });
         }
 
-        if (stockItem.quantity < quantity) {
-            return res.status(400).json({ message: 'Insufficient stock quantity' });
-        }
-
-        // Update stock
+        // Update stock (allow negative quantities)
         stockItem.quantity -= quantity;
         await stockItem.save();
 
@@ -233,11 +229,7 @@ router.post('/move', authenticate, [
             return res.status(404).json({ message: 'Stock item not found in source warehouse' });
         }
 
-        if (fromStock.quantity < quantity) {
-            return res.status(400).json({ message: 'Insufficient stock in source warehouse' });
-        }
-
-        // Update source warehouse stock
+        // Update source warehouse stock (allow negative quantities)
         fromStock.quantity -= quantity;
         await fromStock.save();
 

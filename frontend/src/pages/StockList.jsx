@@ -127,6 +127,33 @@ const StockList = () => {
     setItemDetailDialogOpen(true)
   }
 
+  // Consolidate stock items by name, showing warehouse distribution
+  const consolidateStockItems = (items) => {
+    const consolidated = {}
+
+    items.forEach(item => {
+      const key = `${item.itemName}_${item.bagSize}_${item.category}`
+
+      if (!consolidated[key]) {
+        consolidated[key] = {
+          ...item,
+          totalQuantity: 0,
+          warehouses: []
+        }
+      }
+
+      consolidated[key].totalQuantity += item.quantity || 0
+      consolidated[key].warehouses.push({
+        id: item.warehouseId?._id || item.warehouseId,
+        name: item.warehouseId?.name || 'Unknown',
+        quantity: item.quantity || 0,
+        itemId: item._id // Store the actual item ID for this warehouse
+      })
+    })
+
+    return Object.values(consolidated)
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setSubmitting(true)
@@ -569,15 +596,16 @@ const StockList = () => {
                 <TableHead>Item Name</TableHead>
                 <TableHead>Category</TableHead>
                 <TableHead>Item Category</TableHead>
-                <TableHead>Quantity</TableHead>
+                <TableHead>Total Quantity</TableHead>
                 <TableHead>Bag Size</TableHead>
+                <TableHead>Warehouses</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="w-[50px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredStockItems.map((item) => (
-                <TableRow key={item._id}>
+              {consolidateStockItems(filteredStockItems).map((item, index) => (
+                <TableRow key={index}>
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Package className="h-4 w-4 text-primary" />
@@ -595,10 +623,19 @@ const StockList = () => {
                     )}
                   </TableCell>
                   <TableCell>
-                    <span className="font-mono">{item.quantity || 0} bags</span>
+                    <span className="font-mono">{item.totalQuantity} bags</span>
                   </TableCell>
                   <TableCell>
                     <span className="font-mono">{item.bagSize} kg</span>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap gap-1">
+                      {item.warehouses.map((wh, idx) => (
+                        <Badge key={idx} variant="secondary" className="text-xs">
+                          {wh.name}: {wh.quantity}
+                        </Badge>
+                      ))}
+                    </div>
                   </TableCell>
                   <TableCell>
                     {getStatusBadge(item)}

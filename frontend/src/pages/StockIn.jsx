@@ -91,6 +91,33 @@ const StockIn = () => {
     }
   }
 
+  // Consolidate stock items by name, showing warehouse distribution
+  const consolidateStockItems = () => {
+    const consolidated = {}
+
+    stockItems.forEach(item => {
+      const key = `${item.itemName}_${item.bagSize}_${item.category}`
+
+      if (!consolidated[key]) {
+        consolidated[key] = {
+          ...item,
+          totalQuantity: 0,
+          warehouses: []
+        }
+      }
+
+      consolidated[key].totalQuantity += item.quantity || 0
+      consolidated[key].warehouses.push({
+        id: item.warehouseId?._id || item.warehouseId,
+        name: item.warehouseId?.name || 'Unknown',
+        quantity: item.quantity || 0,
+        itemId: item._id
+      })
+    })
+
+    return Object.values(consolidated)
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -274,19 +301,23 @@ const StockIn = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {stockItems.map((item) => (
-                  <TableRow key={item._id}>
+                {consolidateStockItems().map((item, index) => (
+                  <TableRow key={index}>
                     <TableCell className="font-medium">{item.itemName}</TableCell>
                     <TableCell>
                       <Badge variant="outline">
                         {item.category?.replace('_', ' ') || 'Unknown'}
                       </Badge>
                     </TableCell>
-                    <TableCell className="font-mono">{item.quantity || 0} bags</TableCell>
+                    <TableCell className="font-mono">{item.totalQuantity} bags</TableCell>
                     <TableCell>
-                      <Badge variant="secondary" className="text-xs">
-                        {item.warehouseId?.name || 'Unknown'}: {item.quantity || 0}
-                      </Badge>
+                      <div className="flex flex-wrap gap-1">
+                        {item.warehouses.map((wh, idx) => (
+                          <Badge key={idx} variant="secondary" className="text-xs">
+                            {wh.name}: {wh.quantity}
+                          </Badge>
+                        ))}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
