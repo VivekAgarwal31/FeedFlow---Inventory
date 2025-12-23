@@ -111,14 +111,16 @@ router.post('/', authenticate, [
                 name: clientName,
                 phone: clientPhone,
                 email: clientEmail,
-                totalPurchases: 1,
+                totalPurchases: totalAmount,  // Total amount spent
                 totalRevenue: totalAmount,
+                salesCount: 1,  // Number of sales
                 lastPurchaseDate: saleDate || new Date()
             });
             await client.save();
         } else {
-            client.totalPurchases += 1;
+            client.totalPurchases += totalAmount;  // Add amount
             client.totalRevenue += totalAmount;
+            client.salesCount += 1;  // Increment sale count
             client.lastPurchaseDate = saleDate || new Date();
             if (clientPhone && !client.phone) client.phone = clientPhone;
             if (clientEmail && !client.email) client.email = clientEmail;
@@ -143,6 +145,10 @@ router.post('/', authenticate, [
         await sale.save();
 
         // Update stock quantities and create transactions
+        let totalQuantity = 0;
+        const itemsForTransaction = [];
+        const warehouseSet = new Set();
+
         for (const item of items) {
             // Find stock item and verify it exists
             const stockItem = await StockItem.findOne({
@@ -163,23 +169,57 @@ router.post('/', authenticate, [
                 });
             }
 
-            // Fetch warehouse name from database
-            const warehouse = await Warehouse.findById(stockItem.warehouseId);
-            const warehouseName = warehouse?.name || 'Unknown Warehouse';
-
             // Deduct stock
             stockItem.quantity -= item.quantity;
             await stockItem.save();
 
-            // Create transaction record
+            // Track for consolidated transaction
+            totalQuantity += item.quantity;
+            itemsForTransaction.push({
+                itemId: item.itemId,
+                itemName: item.itemName,
+                quantity: item.quantity,
+                warehouseId: item.warehouseId,
+                warehouseName: item.warehouseName
+            });
+
+            // Track unique warehouses
+            if (item.warehouseId) {
+                warehouseSet.add(item.warehouseId.toString());
+            }
+        }
+
+        // Create single or consolidated transaction
+        if (items.length === 1) {
+            // Single item - create traditional transaction
             const transaction = new StockTransaction({
                 companyId,
                 type: 'sale',
-                itemId: item.itemId,
-                itemName: item.itemName,
-                warehouseId: stockItem.warehouseId,
-                warehouseName,
-                quantity: -item.quantity,
+                itemId: items[0].itemId,
+                itemName: itemsForTransaction[0].itemName,
+                warehouseId: items[0].warehouseId,
+                warehouseName: items[0].warehouseName,
+                quantity: -items[0].quantity,
+                referenceId: sale._id,
+                referenceModel: 'Sale',
+                reason: `Sale to ${clientName}`,
+                transactionDate: saleDate || new Date(),
+                performedBy: req.user._id
+            });
+            await transaction.save();
+        } else {
+            // Multiple items - create consolidated transaction
+            const transaction = new StockTransaction({
+                companyId,
+                type: 'sale',
+                itemId: items[0].itemId,
+                itemName: `${items.length} items`,
+                warehouseId: items[0].warehouseId,
+                warehouseName: warehouseSet.size > 1
+                    ? `${warehouseSet.size} warehouses`
+                    : items[0].warehouseName,
+                quantity: -totalQuantity,
+                items: itemsForTransaction,
                 referenceId: sale._id,
                 referenceModel: 'Sale',
                 reason: `Sale to ${clientName}`,
@@ -217,8 +257,9 @@ router.delete('/:id', authenticate, async (req, res) => {
         if (sale.clientId) {
             const client = await Client.findById(sale.clientId);
             if (client) {
-                client.totalPurchases = Math.max(0, client.totalPurchases - 1);
+                client.totalPurchases = Math.max(0, client.totalPurchases - sale.totalAmount);
                 client.totalRevenue = Math.max(0, client.totalRevenue - sale.totalAmount);
+                client.salesCount = Math.max(0, client.salesCount - 1);  // Decrement sale count
                 await client.save();
             }
         }

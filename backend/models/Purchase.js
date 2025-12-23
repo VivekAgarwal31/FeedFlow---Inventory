@@ -10,6 +10,15 @@ const purchaseItemSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    warehouseId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Warehouse',
+        required: true
+    },
+    warehouseName: {
+        type: String,
+        required: true
+    },
     quantity: {
         type: Number,
         required: true,
@@ -41,15 +50,6 @@ const purchaseSchema = new mongoose.Schema({
         index: true
     },
     supplierName: {
-        type: String,
-        required: true
-    },
-    warehouseId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Warehouse',
-        required: true
-    },
-    warehouseName: {
         type: String,
         required: true
     },

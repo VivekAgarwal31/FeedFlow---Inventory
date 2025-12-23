@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, Users, Phone, Mail, MapPin, Loader2, ArrowLeft, Calendar, Filter, Eye, Download, Search } from 'lucide-react'
+import { Plus, Users, Phone, Mail, MapPin, Loader2, ArrowLeft, Calendar, Filter, Eye, Download, Search, Trash2 } from 'lucide-react'
 import { clientAPI, saleAPI } from '../lib/api'
 import { formatCurrency, formatDate } from '../lib/utils'
 import { exportClientToExcel, exportClientToPDF } from '../lib/exportUtils'
@@ -11,7 +11,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { Alert, AlertDescription } from '../components/ui/alert'
+import { Badge } from '../components/ui/badge'
 import { useToast } from '../hooks/use-toast'
+import { Pagination } from '../components/ui/Pagination'
 
 const Clients = () => {
   const [clients, setClients] = useState([])
@@ -22,8 +24,10 @@ const Clients = () => {
   const [selectedClient, setSelectedClient] = useState(null)
   const [clientTransactions, setClientTransactions] = useState([])
   const [filteredTransactions, setFilteredTransactions] = useState([])
-  const [dateFilter, setDateFilter] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
+  const [selectedSale, setSelectedSale] = useState(null)
+  const [saleDetailsDialogOpen, setSaleDetailsDialogOpen] = useState(false)
+  const [dateFilter, setDateFilter] = useState('all')
   const { toast } = useToast()
 
   // Export dialog state
@@ -39,13 +43,17 @@ const Clients = () => {
   const [showClientDropdown, setShowClientDropdown] = useState(false)
   const [exporting, setExporting] = useState(false)
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 12
+
   const [form, setForm] = useState({
     name: '',
     email: '',
     phone: '',
     address: '',
     gstNumber: '',
-    creditLimit: ''
+    notes: ''
   })
 
   useEffect(() => {
@@ -82,7 +90,7 @@ const Clients = () => {
 
   const fetchClientTransactions = async (clientId) => {
     try {
-      const response = await saleAPI.getAll({ clientId })
+      const response = await clientAPI.getById(clientId)
       setClientTransactions(response.data.sales || [])
     } catch (error) {
       console.error('Failed to fetch client transactions:', error)
@@ -154,17 +162,12 @@ const Clients = () => {
     setError('')
 
     try {
-      // In a real app, this would be a clients API call
-      const newClient = {
-        _id: Date.now().toString(),
-        ...form,
-        totalPurchases: 0,
-        salesCount: 0,
-        lastPurchase: null,
-        createdAt: new Date().toISOString()
-      }
+      const response = await clientAPI.create(form)
 
-      setClients(prev => [newClient, ...prev])
+      toast({
+        title: 'Success',
+        description: 'Client created successfully'
+      })
 
       setForm({
         name: '',
@@ -172,13 +175,46 @@ const Clients = () => {
         phone: '',
         address: '',
         gstNumber: '',
-        creditLimit: ''
+        notes: ''
       })
       setDialogOpen(false)
+      fetchClients() // Refresh clients list
     } catch (error) {
-      setError(error.response?.data?.message || 'Failed to add client')
+      const errorMsg = error.response?.data?.message || 'Failed to add client'
+      setError(errorMsg)
+      toast({
+        title: 'Error',
+        description: errorMsg,
+        variant: 'destructive'
+      })
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const viewSaleDetails = (sale) => {
+    setSelectedSale(sale)
+    setSaleDetailsDialogOpen(true)
+  }
+
+  const handleDelete = async (clientId, clientName) => {
+    if (!window.confirm(`Are you sure you want to delete client "${clientName}"? This action cannot be undone.`)) {
+      return
+    }
+
+    try {
+      await clientAPI.delete(clientId)
+      toast({
+        title: 'Success',
+        description: 'Client deleted successfully'
+      })
+      fetchClients() // Refresh list
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to delete client',
+        variant: 'destructive'
+      })
     }
   }
 
@@ -284,6 +320,11 @@ const Clients = () => {
       setExporting(false)
     }
   }
+
+  // Calculate pagination
+  const totalPages = Math.ceil(clients.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const paginatedClients = clients.slice(startIndex, startIndex + itemsPerPage)
 
   if (loading) {
     return (
@@ -435,29 +476,130 @@ const Clients = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Date</TableHead>
-                    <TableHead>Item</TableHead>
+                    <TableHead>Items</TableHead>
+                    <TableHead>Warehouse</TableHead>
                     <TableHead>Quantity</TableHead>
-                    <TableHead>Unit Price</TableHead>
                     <TableHead>Total Amount</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredTransactions.map((transaction) => (
                     <TableRow key={transaction._id}>
                       <TableCell>{formatDate(transaction.createdAt)}</TableCell>
-                      <TableCell className="font-medium">
-                        {transaction.stockItemId?.itemName || 'Unknown Item'}
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {transaction.items && transaction.items.length > 0
+                            ? transaction.items.length === 1
+                              ? transaction.items[0].itemName
+                              : `${transaction.items[0].itemName}...`
+                            : 'Unknown'}
+                          {transaction.items && transaction.items.length > 1 && (
+                            <Badge variant="secondary" className="text-xs">
+                              {transaction.items.length} items
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
-                      <TableCell className="font-mono">{transaction.quantity} bags</TableCell>
-                      <TableCell className="font-mono">{formatCurrency(transaction.unitPrice)}</TableCell>
+                      <TableCell>
+                        {transaction.items && transaction.items.length > 0
+                          ? transaction.items.length === 1
+                            ? transaction.items[0].warehouseName || '-'
+                            : (() => {
+                              const warehouses = [...new Set(transaction.items.map(i => i.warehouseName).filter(Boolean))];
+                              return warehouses.length > 1
+                                ? `${warehouses.length} warehouses`
+                                : warehouses[0] || '-';
+                            })()
+                          : '-'}
+                      </TableCell>
+                      <TableCell className="font-mono">
+                        {transaction.items && transaction.items.length > 0
+                          ? `${transaction.items.reduce((sum, item) => sum + item.quantity, 0)} bags`
+                          : '0 bags'}
+                      </TableCell>
                       <TableCell className="font-mono font-medium">{formatCurrency(transaction.totalAmount)}</TableCell>
+                      <TableCell>
+                        {transaction.items && transaction.items.length > 1 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => viewSaleDetails(transaction)}
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            View Details
+                          </Button>
+                        )}
+                      </TableCell>
                     </TableRow>
                   ))}
+                  ```
                 </TableBody>
               </Table>
             )}
           </CardContent>
         </Card>
+
+        {/* Sale Details Dialog */}
+        <Dialog open={saleDetailsDialogOpen} onOpenChange={setSaleDetailsDialogOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Sale Details</DialogTitle>
+              <DialogDescription>
+                {selectedSale && (
+                  <>
+                    Sale on {formatDate(selectedSale.createdAt)}
+                  </>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+
+            {selectedSale && selectedSale.items && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Total Amount:</span>
+                    <p className="font-medium">{formatCurrency(selectedSale.totalAmount)}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Total Quantity:</span>
+                    <p className="font-medium">{selectedSale.items.reduce((sum, item) => sum + item.quantity, 0)} bags</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Items Count:</span>
+                    <p className="font-medium">{selectedSale.items.length} items</p>
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="font-semibold mb-3">Items Breakdown</h4>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Item Name</TableHead>
+                        <TableHead>Warehouse</TableHead>
+                        <TableHead>Quantity</TableHead>
+                        <TableHead>Unit Price</TableHead>
+                        <TableHead>Total</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {selectedSale.items.map((item, index) => (
+                        <TableRow key={index}>
+                          <TableCell className="font-medium">{item.itemName}</TableCell>
+                          <TableCell>{item.warehouseName || '-'}</TableCell>
+                          <TableCell className="font-mono">{item.quantity} bags</TableCell>
+                          <TableCell className="font-mono">{formatCurrency(item.sellingPrice)}</TableCell>
+                          <TableCell className="font-mono font-medium">{formatCurrency(item.total)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     )
   }
@@ -552,7 +694,7 @@ const Clients = () => {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1">
                   <div className="space-y-2">
                     <Label htmlFor="gst">GST Number</Label>
                     <Input
@@ -563,18 +705,17 @@ const Clients = () => {
                       onChange={(e) => setForm({ ...form, gstNumber: e.target.value })}
                     />
                   </div>
+                </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="credit-limit">Credit Limit (₹)</Label>
-                    <Input
-                      id="credit-limit"
-                      type="number"
-                      step="0.01"
-                      placeholder="50000"
-                      value={form.creditLimit}
-                      onChange={(e) => setForm({ ...form, creditLimit: e.target.value })}
-                    />
-                  </div>
+                <div className="space-y-2">
+                  <Label htmlFor="notes">Notes</Label>
+                  <Input
+                    id="notes"
+                    type="text"
+                    placeholder="Additional notes about the client"
+                    value={form.notes}
+                    onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                  />
                 </div>
 
                 <div className="flex gap-3 pt-4">
@@ -761,7 +902,7 @@ const Clients = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {clients.map((client) => (
+              {paginatedClients.map((client) => (
                 <TableRow key={client._id} className="cursor-pointer hover:bg-muted/50" onClick={() => handleClientClick(client)}>
                   <TableCell>
                     <div className="flex items-center gap-2">
@@ -783,18 +924,33 @@ const Clients = () => {
                     )}
                   </TableCell>
                   <TableCell>
-                    <Button variant="outline" size="sm" onClick={(e) => {
-                      e.stopPropagation()
-                      handleClientClick(client)
-                    }}>
-                      <Eye className="mr-2 h-4 w-4" />
-                      View Details
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={(e) => {
+                        e.stopPropagation()
+                        handleClientClick(client)
+                      }}>
+                        <Eye className="mr-2 h-4 w-4" />
+                        View Details
+                      </Button>
+                      <Button variant="destructive" size="sm" onClick={(e) => {
+                        e.stopPropagation()
+                        handleDelete(client._id, client.name)
+                      }}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            itemsPerPage={itemsPerPage}
+            totalItems={clients.length}
+          />
         </Card>
       )}
     </div>

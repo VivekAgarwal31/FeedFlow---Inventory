@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, TrendingUp, Loader2, Trash2, Search, X } from 'lucide-react'
+import { Plus, TrendingUp, Loader2, Trash2, Search, X, Eye } from 'lucide-react'
 import { saleAPI, stockAPI, warehouseAPI, clientAPI } from '../lib/api'
 import { formatCurrency, formatDate } from '../lib/utils'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
@@ -10,7 +10,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { Alert, AlertDescription } from '../components/ui/alert'
+import { Badge } from '../components/ui/badge'
 import { useToast } from '../hooks/use-toast'
+import { Pagination } from '../components/ui/Pagination'
 
 const Sales = () => {
   const [sales, setSales] = useState([])
@@ -24,6 +26,12 @@ const Sales = () => {
   const [totalRevenue, setTotalRevenue] = useState(0)
   const [clientSearch, setClientSearch] = useState('')
   const [showClientDropdown, setShowClientDropdown] = useState(false)
+  const [selectedSale, setSelectedSale] = useState(null)
+  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false)
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 12
   const { toast } = useToast()
 
   const [form, setForm] = useState({
@@ -200,8 +208,11 @@ const Sales = () => {
         items: form.items.map(item => ({
           itemId: item.itemId,
           itemName: item.itemName,
+          warehouseId: item.warehouseId,
+          warehouseName: item.warehouseName,
           quantity: item.quantity,
-          unitPrice: item.unitPrice  // Backend expects unitPrice, not sellingPrice
+          sellingPrice: item.unitPrice,  // Sale model expects sellingPrice
+          total: item.quantity * item.unitPrice  // Sale model expects total
         })),
         totalAmount: calculateSaleTotal(),
         paymentStatus: 'pending',
@@ -243,6 +254,16 @@ const Sales = () => {
       setSubmitting(false)
     }
   }
+
+  const viewSaleDetails = (sale) => {
+    setSelectedSale(sale)
+    setDetailsDialogOpen(true)
+  }
+
+  // Calculate pagination
+  const totalPages = Math.ceil(sales.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const paginatedSales = sales.slice(startIndex, startIndex + itemsPerPage)
 
   if (loading) {
     return (
@@ -537,33 +558,148 @@ const Sales = () => {
               <p className="text-muted-foreground">No sales recorded yet</p>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Client</TableHead>
-                  <TableHead>Item</TableHead>
-                  <TableHead>Quantity</TableHead>
-                  <TableHead>Unit Price</TableHead>
-                  <TableHead>Total Amount</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sales.map((sale) => (
-                  <TableRow key={sale._id}>
-                    <TableCell>{formatDate(sale.createdAt)}</TableCell>
-                    <TableCell className="font-medium">{sale.clientName}</TableCell>
-                    <TableCell>{sale.items?.[0]?.itemName || 'Unknown Item'}</TableCell>
-                    <TableCell className="font-mono">{sale.items?.[0]?.quantity || 0} bags</TableCell>
-                    <TableCell className="font-mono">{formatCurrency(sale.items?.[0]?.unitPrice || 0)}</TableCell>
-                    <TableCell className="font-mono font-medium">{formatCurrency(sale.totalAmount)}</TableCell>
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Client</TableHead>
+                    <TableHead>Items</TableHead>
+                    <TableHead>Warehouse</TableHead>
+                    <TableHead>Quantity</TableHead>
+                    <TableHead>Total Amount</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {paginatedSales.map((sale) => (
+                    <TableRow key={sale._id}>
+                      <TableCell>{formatDate(sale.createdAt)}</TableCell>
+                      <TableCell className="font-medium">{sale.clientName}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {sale.items && sale.items.length > 0
+                            ? sale.items.length === 1
+                              ? sale.items[0].itemName
+                              : `${sale.items[0].itemName}...`
+                            : 'Unknown'}
+                          {sale.items && sale.items.length > 1 && (
+                            <Badge variant="secondary" className="text-xs">
+                              {sale.items.length} items
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {sale.items && sale.items.length > 0
+                          ? sale.items.length === 1
+                            ? sale.items[0].warehouseName || '-'
+                            : (() => {
+                              const warehouses = [...new Set(sale.items.map(i => i.warehouseName).filter(Boolean))];
+                              return warehouses.length > 1
+                                ? `${warehouses.length} warehouses`
+                                : warehouses[0] || '-';
+                            })()
+                          : '-'}
+                      </TableCell>
+                      <TableCell className="font-mono">
+                        {sale.items && sale.items.length > 0
+                          ? `${sale.items.reduce((sum, item) => sum + item.quantity, 0)} bags`
+                          : '0 bags'}
+                      </TableCell>
+                      <TableCell className="font-mono font-medium">{formatCurrency(sale.totalAmount)}</TableCell>
+                      <TableCell>
+                        {sale.items && sale.items.length > 1 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => viewSaleDetails(sale)}
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            View Details
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+                itemsPerPage={itemsPerPage}
+                totalItems={sales.length}
+              />
+            </>
           )}
         </CardContent>
       </Card>
+
+      {/* Sale Details Dialog */}
+      <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Sale Details</DialogTitle>
+            <DialogDescription>
+              {selectedSale && (
+                <>
+                  Sale to {selectedSale.clientName} on {formatDate(selectedSale.createdAt)}
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedSale && selectedSale.items && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-muted-foreground">Client:</span>
+                  <p className="font-medium">{selectedSale.clientName}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Total Amount:</span>
+                  <p className="font-medium">{formatCurrency(selectedSale.totalAmount)}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Total Quantity:</span>
+                  <p className="font-medium">{selectedSale.items.reduce((sum, item) => sum + item.quantity, 0)} bags</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Items Count:</span>
+                  <p className="font-medium">{selectedSale.items.length} items</p>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="font-semibold mb-3">Items Breakdown</h4>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Item Name</TableHead>
+                      <TableHead>Warehouse</TableHead>
+                      <TableHead>Quantity</TableHead>
+                      <TableHead>Unit Price</TableHead>
+                      <TableHead>Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {selectedSale.items.map((item, index) => (
+                      <TableRow key={index}>
+                        <TableCell className="font-medium">{item.itemName}</TableCell>
+                        <TableCell>{item.warehouseName || '-'}</TableCell>
+                        <TableCell className="font-mono">{item.quantity} bags</TableCell>
+                        <TableCell className="font-mono">{formatCurrency(item.sellingPrice)}</TableCell>
+                        <TableCell className="font-mono font-medium">{formatCurrency(item.total)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

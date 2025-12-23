@@ -47,6 +47,17 @@ const supplierSchema = new mongoose.Schema({
         type: String,
         trim: true
     },
+    totalPurchases: {
+        type: Number,
+        default: 0
+    },
+    purchaseCount: {
+        type: Number,
+        default: 0
+    },
+    lastPurchaseDate: {
+        type: Date
+    },
     isActive: {
         type: Boolean,
         default: true
@@ -54,6 +65,15 @@ const supplierSchema = new mongoose.Schema({
 }, {
     timestamps: true
 });
+
+// Virtual field for frontend compatibility
+supplierSchema.virtual('lastPurchase').get(function () {
+    return this.lastPurchaseDate;
+});
+
+// Ensure virtuals are included in JSON
+supplierSchema.set('toJSON', { virtuals: true });
+supplierSchema.set('toObject', { virtuals: true });
 
 // Compound index for company-specific queries
 supplierSchema.index({ companyId: 1, isActive: 1 });

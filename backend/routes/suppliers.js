@@ -1,9 +1,31 @@
 import express from 'express';
 import { body, validationResult } from 'express-validator';
 import Supplier from '../models/Supplier.js';
+import Purchase from '../models/Purchase.js';
 import { authenticate } from '../middleware/auth.js';
 
 const router = express.Router();
+
+// Get supplier list for dropdowns
+router.get('/list', authenticate, async (req, res) => {
+    try {
+        const companyId = req.user.companyId?._id || req.user.companyId;
+
+        if (!companyId) {
+            return res.status(400).json({ message: 'No company associated with user' });
+        }
+
+        const suppliers = await Supplier.find({ companyId, isActive: true })
+            .select('_id name')
+            .sort({ name: 1 })
+            .lean();
+
+        res.json({ suppliers });
+    } catch (error) {
+        console.error('Get supplier list error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
 
 // Get all suppliers
 router.get('/', authenticate, async (req, res) => {
@@ -18,7 +40,32 @@ router.get('/', authenticate, async (req, res) => {
             .sort({ name: 1 })
             .lean();
 
-        res.json({ suppliers });
+        // Calculate purchase statistics for each supplier
+        const suppliersWithStats = await Promise.all(suppliers.map(async (supplier) => {
+            const purchases = await Purchase.find({
+                companyId,
+                supplierId: supplier._id
+            }).lean();
+
+            const totalPurchases = purchases.reduce((sum, p) => sum + (p.totalAmount || 0), 0);
+            const purchaseCount = purchases.length;
+            const lastPurchaseDate = purchases.length > 0
+                ? purchases.reduce((latest, p) => {
+                    const pDate = new Date(p.purchaseDate || p.createdAt);
+                    return pDate > latest ? pDate : latest;
+                }, new Date(0))
+                : null;
+
+            return {
+                ...supplier,
+                totalPurchases,
+                purchaseCount,
+                lastPurchaseDate,
+                lastPurchase: lastPurchaseDate
+            };
+        }));
+
+        res.json({ suppliers: suppliersWithStats });
     } catch (error) {
         console.error('Get suppliers error:', error);
         res.status(500).json({ message: 'Server error' });
@@ -29,16 +76,19 @@ router.get('/', authenticate, async (req, res) => {
 router.get('/:id', authenticate, async (req, res) => {
     try {
         const companyId = req.user.companyId?._id || req.user.companyId;
-        const supplier = await Supplier.findOne({
-            _id: req.params.id,
-            companyId
-        }).lean();
+
+        const [supplier, purchases] = await Promise.all([
+            Supplier.findOne({ _id: req.params.id, companyId }),
+            Purchase.find({ companyId, supplierId: req.params.id })
+                .sort({ purchaseDate: -1 })
+                .limit(50)
+        ]);
 
         if (!supplier) {
             return res.status(404).json({ message: 'Supplier not found' });
         }
 
-        res.json({ supplier });
+        res.json({ supplier, purchases });
     } catch (error) {
         console.error('Get supplier error:', error);
         res.status(500).json({ message: 'Server error' });
@@ -49,7 +99,7 @@ router.get('/:id', authenticate, async (req, res) => {
 router.post('/', authenticate, [
     body('name').trim().isLength({ min: 2 }).withMessage('Name must be at least 2 characters'),
     body('phone').optional().trim(),
-    body('email').optional().isEmail().withMessage('Invalid email')
+    body('email').optional({ checkFalsy: true }).isEmail().withMessage('Invalid email')
 ], async (req, res) => {
     try {
         const errors = validationResult(req);

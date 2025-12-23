@@ -16,6 +16,7 @@ import Sales from './pages/Sales'
 import Purchases from './pages/Purchases'
 import Clients from './pages/Clients'
 import Suppliers from './pages/Suppliers'
+import Staff from './pages/Staff'
 import Settings from './pages/Settings'
 
 function App() {
@@ -65,6 +66,7 @@ function App() {
         <Route path="/purchases" element={<Purchases />} />
         <Route path="/clients" element={<Clients />} />
         <Route path="/suppliers" element={<Suppliers />} />
+        <Route path="/staff" element={<Staff />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>

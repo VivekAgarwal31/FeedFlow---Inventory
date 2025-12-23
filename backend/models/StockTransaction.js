@@ -44,6 +44,25 @@ const stockTransactionSchema = new mongoose.Schema({
         type: Number,
         required: true
     },
+    // For multi-item transactions (stock in/out/move/adjust with multiple items)
+    items: [{
+        itemId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'StockItem'
+        },
+        itemName: String,
+        quantity: Number,
+        warehouseId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Warehouse'
+        },
+        warehouseName: String,
+        // For stock adjust - track adjustment type per item
+        adjustmentType: {
+            type: String,
+            enum: ['increase', 'decrease']
+        }
+    }],
     // Reference to related documents
     referenceId: {
         type: mongoose.Schema.Types.ObjectId,

@@ -29,23 +29,95 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['owner', 'admin', 'inventory', 'manager', 'viewer', 'new_joinee'],
+    enum: ['owner', 'admin', 'manager', 'staff', 'new_joinee'],
     default: 'new_joinee'
+  },
+  permissions: {
+    canManageStaff: { type: Boolean, default: false },
+    canManageInventory: { type: Boolean, default: false },
+    canManageSales: { type: Boolean, default: false },
+    canManagePurchases: { type: Boolean, default: false },
+    canManageClients: { type: Boolean, default: false },
+    canManageSuppliers: { type: Boolean, default: false },
+    canViewReports: { type: Boolean, default: false },
+    canManageSettings: { type: Boolean, default: false }
+  },
+  isActive: {
+    type: Boolean,
+    default: true
   }
 }, {
   timestamps: true
 });
 
 // Hash password before saving
-userSchema.pre('save', async function(next) {
+userSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();
   this.password = await bcrypt.hash(this.password, 12);
   next();
 });
 
 // Compare password method
-userSchema.methods.comparePassword = async function(candidatePassword) {
+userSchema.methods.comparePassword = async function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
+};
+
+// Set permissions based on role
+userSchema.methods.setRolePermissions = function () {
+  const rolePermissions = {
+    owner: {
+      canManageStaff: true,
+      canManageInventory: true,
+      canManageSales: true,
+      canManagePurchases: true,
+      canManageClients: true,
+      canManageSuppliers: true,
+      canViewReports: true,
+      canManageSettings: true
+    },
+    admin: {
+      canManageStaff: true,
+      canManageInventory: true,
+      canManageSales: true,
+      canManagePurchases: true,
+      canManageClients: true,
+      canManageSuppliers: true,
+      canViewReports: true,
+      canManageSettings: false
+    },
+    manager: {
+      canManageStaff: false,
+      canManageInventory: true,
+      canManageSales: true,
+      canManagePurchases: true,
+      canManageClients: true,
+      canManageSuppliers: true,
+      canViewReports: true,
+      canManageSettings: false
+    },
+    staff: {
+      canManageStaff: false,
+      canManageInventory: true,
+      canManageSales: true,
+      canManagePurchases: true,
+      canManageClients: false,
+      canManageSuppliers: false,
+      canViewReports: false,
+      canManageSettings: false
+    },
+    new_joinee: {
+      canManageStaff: false,
+      canManageInventory: false,
+      canManageSales: false,
+      canManagePurchases: false,
+      canManageClients: false,
+      canManageSuppliers: false,
+      canViewReports: false,
+      canManageSettings: false
+    }
+  };
+
+  this.permissions = rolePermissions[this.role] || rolePermissions.new_joinee;
 };
 
 export default mongoose.model('User', userSchema);

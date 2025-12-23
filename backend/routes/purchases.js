@@ -1,6 +1,7 @@
 import express from 'express';
 import { body, validationResult } from 'express-validator';
 import Purchase from '../models/Purchase.js';
+import Supplier from '../models/Supplier.js';
 import StockItem from '../models/StockItem.js';
 import StockTransaction from '../models/StockTransaction.js';
 import { authenticate } from '../middleware/auth.js';
@@ -49,7 +50,6 @@ router.get('/', authenticate, async (req, res) => {
 // Create purchase
 router.post('/', authenticate, [
     body('supplierId').notEmpty().withMessage('Supplier is required'),
-    body('warehouseId').notEmpty().withMessage('Warehouse is required'),
     body('items').isArray({ min: 1 }).withMessage('At least one item is required'),
     body('totalAmount').isNumeric().withMessage('Total amount must be a number')
 ], async (req, res) => {
@@ -65,15 +65,13 @@ router.post('/', authenticate, [
             return res.status(400).json({ message: 'No company associated with user' });
         }
 
-        const { supplierId, supplierName, warehouseId, warehouseName, invoiceNumber, items, totalAmount, paymentStatus, paymentMethod, notes, purchaseDate } = req.body;
+        const { supplierId, supplierName, invoiceNumber, items, totalAmount, paymentStatus, paymentMethod, notes, purchaseDate } = req.body;
 
         // Create purchase
         const purchase = new Purchase({
             companyId,
             supplierId,
             supplierName,
-            warehouseId,
-            warehouseName,
             invoiceNumber,
             items,
             totalAmount,
@@ -86,54 +84,107 @@ router.post('/', authenticate, [
         await purchase.save();
 
         // Update stock quantities and create transactions
+        let totalQuantity = 0;
+        const itemsForTransaction = [];
+
         for (const item of items) {
-            // Find stock item in the purchase warehouse, not just by itemId
-            // This ensures we add stock to the correct warehouse
+            // Find stock item by ID (frontend sends the actual stock item ID)
             let stockItem = await StockItem.findOne({
-                companyId,
-                warehouseId: warehouseId,
-                itemName: item.itemName,
-                bagSize: item.bagSize
+                _id: item.itemId,
+                companyId
             });
 
             if (!stockItem) {
-                // Create new stock item in this warehouse if it doesn't exist
-                stockItem = new StockItem({
-                    companyId,
-                    warehouseId,
-                    itemName: item.itemName,
-                    category: item.category || 'raw_material',
-                    itemCategory: item.itemCategory || '',
-                    bagSize: item.bagSize,
-                    quantity: item.quantity,
-                    costPrice: item.unitPrice || 0,
-                    sellingPrice: 0,
-                    lowStockAlert: 10
-                });
-            } else {
-                // Update existing stock in this warehouse
-                stockItem.quantity += item.quantity;
+                throw new Error(`Stock item not found: ${item.itemName}`);
+            }
+
+            // Update existing stock in this warehouse
+            stockItem.quantity += item.quantity;
+
+            // Update cost price if provided
+            if (item.costPrice) {
+                stockItem.costPrice = item.costPrice;
             }
 
             await stockItem.save();
 
-            // Create transaction record
-            const transaction = new StockTransaction({
-                companyId,
-                type: 'purchase',
+            // Track for consolidated transaction
+            totalQuantity += item.quantity;
+            itemsForTransaction.push({
                 itemId: stockItem._id,
                 itemName: item.itemName,
-                warehouseId,
-                warehouseName,
-                quantity: item.quantity,
-                referenceId: purchase._id,
-                referenceModel: 'Purchase',
-                reason: `Purchase from ${supplierName}`,
-                transactionDate: purchaseDate || new Date(),
-                performedBy: req.user._id
+                quantity: item.quantity
             });
-            await transaction.save();
         }
+
+        // Create transactions per warehouse
+        const warehouseTransactions = {};
+
+        for (const item of items) {
+            // Group items by warehouse
+            if (!warehouseTransactions[item.warehouseId]) {
+                warehouseTransactions[item.warehouseId] = {
+                    warehouseId: item.warehouseId,
+                    warehouseName: item.warehouseName,
+                    items: [],
+                    totalQuantity: 0
+                };
+            }
+
+            warehouseTransactions[item.warehouseId].items.push(itemsForTransaction.find(i => i.itemName === item.itemName));
+            warehouseTransactions[item.warehouseId].totalQuantity += item.quantity;
+        }
+
+        // Create transaction for each warehouse
+        for (const warehouseId in warehouseTransactions) {
+            const whData = warehouseTransactions[warehouseId];
+
+            if (whData.items.length === 1) {
+                // Single item in this warehouse
+                const transaction = new StockTransaction({
+                    companyId,
+                    type: 'purchase',
+                    itemId: whData.items[0].itemId,
+                    itemName: whData.items[0].itemName,
+                    warehouseId: whData.warehouseId,
+                    warehouseName: whData.warehouseName,
+                    quantity: whData.items[0].quantity,
+                    referenceId: purchase._id,
+                    referenceModel: 'Purchase',
+                    reason: `Purchase from ${supplierName}`,
+                    transactionDate: purchaseDate || new Date(),
+                    performedBy: req.user._id
+                });
+                await transaction.save();
+            } else {
+                // Multiple items in this warehouse
+                const transaction = new StockTransaction({
+                    companyId,
+                    type: 'purchase',
+                    itemId: whData.items[0].itemId,
+                    itemName: `${whData.items.length} items`,
+                    warehouseId: whData.warehouseId,
+                    warehouseName: whData.warehouseName,
+                    quantity: whData.totalQuantity,
+                    items: whData.items,
+                    referenceId: purchase._id,
+                    referenceModel: 'Purchase',
+                    reason: `Purchase from ${supplierName}`,
+                    transactionDate: purchaseDate || new Date(),
+                    performedBy: req.user._id
+                });
+                await transaction.save();
+            }
+        }
+
+        // Update supplier statistics
+        await Supplier.findByIdAndUpdate(supplierId, {
+            $inc: {
+                totalPurchases: totalAmount,
+                purchaseCount: 1
+            },
+            lastPurchaseDate: purchaseDate || new Date()
+        });
 
         res.status(201).json({
             message: 'Purchase created successfully',

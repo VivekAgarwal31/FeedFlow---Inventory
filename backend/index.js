@@ -12,6 +12,7 @@ import supplierRoutes from './routes/suppliers.js';
 import purchaseRoutes from './routes/purchases.js';
 import clientRoutes from './routes/clients.js';
 import stockRoutes from './routes/stock.js';
+import staffRoutes from './routes/staff.js';
 import { startHttpPing } from './utils/keepAlive.js';
 import { startDbPing } from './utils/dbPing.js';
 
@@ -79,6 +80,7 @@ app.use('/api/suppliers', supplierRoutes);
 app.use('/api/purchases', purchaseRoutes);
 app.use('/api/clients', clientRoutes);
 app.use('/api/stock', stockRoutes);
+app.use('/api/staff', staffRoutes);
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);

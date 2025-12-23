@@ -85,6 +85,7 @@ export const stockTransactionAPI = {
 // Supplier API
 export const supplierAPI = {
   getAll: () => api.get('/suppliers'),
+  getList: () => api.get('/suppliers/list'),
   getById: (id) => api.get(`/suppliers/${id}`),
   create: (data) => api.post('/suppliers', data),
   update: (id, data) => api.put(`/suppliers/${id}`, data),
@@ -101,8 +102,11 @@ export const purchaseAPI = {
 // Client API
 export const clientAPI = {
   getAll: () => api.get('/clients'),
+  getList: () => api.get('/clients/list'),
   getById: (id) => api.get(`/clients/${id}`),
-  update: (id, data) => api.put(`/clients/${id}`, data)
+  create: (data) => api.post('/clients', data),
+  update: (id, data) => api.put(`/clients/${id}`, data),
+  delete: (id) => api.delete(`/clients/${id}`)
 }
 
 // Stock Operations API
@@ -114,6 +118,15 @@ export const stockAPI = {
   stockOut: (data) => api.post('/stock/out', data),
   stockMove: (data) => api.post('/stock/move', data),
   stockAdjust: (data) => api.post('/stock/adjust', data)
+}
+
+// Staff API
+export const staffAPI = {
+  getAll: () => api.get('/staff'),
+  updateRole: (userId, role) => api.put(`/staff/${userId}/role`, { role }),
+  updatePermissions: (userId, permissions) => api.put(`/staff/${userId}/permissions`, { permissions }),
+  updateStatus: (userId, isActive) => api.put(`/staff/${userId}/status`, { isActive }),
+  remove: (userId) => api.delete(`/staff/${userId}`)
 }
 
 

@@ -34,6 +34,8 @@ router.post('/register', [
       phone
     });
 
+    // Set default permissions for new_joinee
+    user.setRolePermissions();
     await user.save();
 
     // Generate token
@@ -47,7 +49,8 @@ router.post('/register', [
         email: user.email,
         phone: user.phone,
         companyId: user.companyId,
-        role: user.role
+        role: user.role,
+        permissions: user.permissions
       }
     });
   } catch (error) {
@@ -81,6 +84,12 @@ router.post('/login', [
       return res.status(400).json({ message: 'Invalid credentials' });
     }
 
+    // Ensure permissions are set (for existing users)
+    if (!user.permissions || Object.keys(user.permissions).length === 0) {
+      user.setRolePermissions();
+      await user.save();
+    }
+
     // Generate token
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
@@ -92,7 +101,8 @@ router.post('/login', [
         email: user.email,
         phone: user.phone,
         companyId: user.companyId,
-        role: user.role
+        role: user.role,
+        permissions: user.permissions
       }
     });
   } catch (error) {
@@ -110,7 +120,8 @@ router.get('/me', authenticate, async (req, res) => {
       email: req.user.email,
       phone: req.user.phone,
       companyId: req.user.companyId,
-      role: req.user.role
+      role: req.user.role,
+      permissions: req.user.permissions
     }
   });
 });
@@ -166,7 +177,8 @@ router.put('/profile', authenticate, [
         email: user.email,
         phone: user.phone,
         companyId: user.companyId,
-        role: user.role
+        role: user.role,
+        permissions: user.permissions
       }
     });
   } catch (error) {

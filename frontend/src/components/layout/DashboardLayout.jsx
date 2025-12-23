@@ -84,6 +84,11 @@ const DashboardLayout = ({ children }) => {
         { title: 'Suppliers', icon: Truck, path: '/suppliers' }
       ]
     },
+    ...(user?.permissions?.canManageStaff ? [{
+      title: 'Staff Management',
+      icon: Users,
+      path: '/staff'
+    }] : []),
     {
       title: 'Settings',
       icon: Settings,

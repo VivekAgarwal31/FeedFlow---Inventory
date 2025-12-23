@@ -40,10 +40,11 @@ router.post('/create', authenticate, [
     await company.save();
 
     // Update user with company and role
-    await User.findByIdAndUpdate(req.user._id, {
-      companyId: company._id,
-      role: 'owner'
-    });
+    const user = await User.findById(req.user._id);
+    user.companyId = company._id;
+    user.role = 'owner';
+    user.setRolePermissions();
+    await user.save();
 
     res.status(201).json({
       company: {
@@ -63,7 +64,7 @@ router.post('/create', authenticate, [
       return res.status(409).json({ message: 'Company code conflict. Please try again.' })
     }
     console.error('Create company error:', error);
-    return res.status(500).json({ 
+    return res.status(500).json({
       message: 'Server error',
       ...(process.env.NODE_ENV !== 'production' ? { error: error.message } : {})
     });
@@ -93,11 +94,12 @@ router.post('/join', authenticate, [
       return res.status(404).json({ message: 'Company not found with this code' });
     }
 
-    // Update user with company
-    await User.findByIdAndUpdate(req.user._id, {
-      companyId: company._id,
-      role: 'new_joinee'
-    });
+    // Update user with company and role
+    const user = await User.findById(req.user._id);
+    user.companyId = company._id;
+    user.role = 'new_joinee';
+    user.setRolePermissions();
+    await user.save();
 
     res.json({
       company: {
@@ -124,7 +126,7 @@ router.get('/', authenticate, async (req, res) => {
     }
 
     const company = await Company.findById(req.user.companyId._id);
-    
+
     res.json({
       company: {
         id: company._id,
@@ -218,7 +220,7 @@ router.delete('/', authenticate, async (req, res) => {
     // Remove company association from all users in the company (but don't delete user accounts)
     await User.updateMany(
       { companyId: companyId },
-      { 
+      {
         $unset: { companyId: 1 },
         role: 'user' // Reset role to default
       }

@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Badge } from '../components/ui/badge'
 import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../components/ui/dropdown-menu'
+import { Pagination } from '../components/ui/Pagination'
 
 const StockList = () => {
   const [stockItems, setStockItems] = useState([])
@@ -31,6 +32,10 @@ const StockList = () => {
   const [deleting, setDeleting] = useState(false)
   const [itemDetailDialogOpen, setItemDetailDialogOpen] = useState(false)
   const [selectedItemForDetail, setSelectedItemForDetail] = useState(null)
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 12
 
   const [form, setForm] = useState({
     itemName: '',
@@ -96,6 +101,7 @@ const StockList = () => {
     }
 
     setFilteredStockItems(filtered)
+    setCurrentPage(1) // Reset to first page when filters change
   }
 
   // Get unique item categories for filter dropdown
@@ -330,6 +336,12 @@ const StockList = () => {
       </Badge>
     )
   }
+
+  // Calculate pagination
+  const consolidatedItems = consolidateStockItems(filteredStockItems)
+  const totalPages = Math.ceil(consolidatedItems.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const paginatedItems = consolidatedItems.slice(startIndex, startIndex + itemsPerPage)
 
   if (loading) {
     return (
@@ -625,7 +637,7 @@ const StockList = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {consolidateStockItems(filteredStockItems).map((item, index) => (
+              {paginatedItems.map((item, index) => (
                 <TableRow key={index}>
                   <TableCell>
                     <div className="flex items-center gap-2">
@@ -689,6 +701,13 @@ const StockList = () => {
               ))}
             </TableBody>
           </Table>
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            itemsPerPage={itemsPerPage}
+            totalItems={consolidatedItems.length}
+          />
         </Card>
       )}
 

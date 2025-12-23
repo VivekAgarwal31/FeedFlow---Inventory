@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, ArrowLeftRight, Loader2 } from 'lucide-react'
+import { Plus, ArrowLeftRight, Loader2, Trash2 } from 'lucide-react'
 import { stockAPI, warehouseAPI, stockTransactionAPI } from '../lib/api'
 import { formatCurrency, formatDate } from '../lib/utils'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
@@ -24,11 +24,10 @@ const StockMove = () => {
   const { toast } = useToast()
 
   const [form, setForm] = useState({
-    itemId: '',
     fromWarehouseId: '',
     toWarehouseId: '',
-    quantity: '',
-    notes: ''
+    notes: '',
+    items: [{ itemId: '', quantity: '' }]
   })
 
   useEffect(() => {
@@ -71,11 +70,24 @@ const StockMove = () => {
     }
   }
 
-  const handleStockItemChange = (itemId) => {
+  const addItemRow = () => {
     setForm({
       ...form,
-      itemId
+      items: [...form.items, { itemId: '', quantity: '' }]
     })
+  }
+
+  const removeItemRow = (index) => {
+    if (form.items.length > 1) {
+      const newItems = form.items.filter((_, i) => i !== index)
+      setForm({ ...form, items: newItems })
+    }
+  }
+
+  const updateItemRow = (index, field, value) => {
+    const newItems = [...form.items]
+    newItems[index][field] = value
+    setForm({ ...form, items: newItems })
   }
 
   const handleSubmit = async (e) => {
@@ -89,25 +101,33 @@ const StockMove = () => {
         return
       }
 
+      // Validate that all items have both itemId and quantity
+      const hasEmptyFields = form.items.some(item => !item.itemId || !item.quantity)
+      if (hasEmptyFields) {
+        setError('Please fill in all item and quantity fields')
+        return
+      }
+
       await stockAPI.stockMove({
-        itemId: form.itemId,
         fromWarehouseId: form.fromWarehouseId,
         toWarehouseId: form.toWarehouseId,
-        quantity: parseInt(form.quantity),
-        notes: form.notes
+        notes: form.notes,
+        items: form.items.map(item => ({
+          itemId: item.itemId,
+          quantity: parseInt(item.quantity)
+        }))
       })
 
       toast({
         title: 'Success',
-        description: 'Stock moved successfully'
+        description: `Stock moved successfully for ${form.items.length} item(s)`
       })
 
       setForm({
-        itemId: '',
         fromWarehouseId: '',
         toWarehouseId: '',
-        quantity: '',
-        notes: ''
+        notes: '',
+        items: [{ itemId: '', quantity: '' }]
       })
       setDialogOpen(false)
       fetchData() // Refresh stock items
@@ -191,30 +211,9 @@ const StockMove = () => {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="stock-item">Stock Item *</Label>
-                <Select value={form.itemId} onValueChange={handleStockItemChange} disabled={!form.fromWarehouseId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder={form.fromWarehouseId ? "Select stock item" : "Select from warehouse first"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {stockItems
-                      .filter(item => !form.fromWarehouseId || item.warehouseId?._id === form.fromWarehouseId || item.warehouseId === form.fromWarehouseId)
-                      .map((item) => (
-                        <SelectItem key={item._id} value={item._id}>
-                          {item.itemName} (Available: {item.quantity} bags)
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-                {form.fromWarehouseId && stockItems.filter(item => item.warehouseId?._id === form.fromWarehouseId || item.warehouseId === form.fromWarehouseId).length === 0 && (
-                  <p className="text-sm text-muted-foreground">No items in this warehouse</p>
-                )}
-              </div>
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="from-warehouse">From Warehouse</Label>
+                  <Label htmlFor="from-warehouse">From Warehouse *</Label>
                   <Select value={form.fromWarehouseId} onValueChange={(value) => setForm({ ...form, fromWarehouseId: value })}>
                     <SelectTrigger>
                       <SelectValue placeholder="Source warehouse" />
@@ -246,17 +245,72 @@ const StockMove = () => {
                 </div>
               </div>
 
+              {/* Items Section */}
               <div className="space-y-2">
-                <Label htmlFor="quantity">Quantity to Move *</Label>
-                <Input
-                  id="quantity"
-                  type="number"
-                  min="1"
-                  placeholder="25"
-                  value={form.quantity}
-                  onChange={(e) => setForm({ ...form, quantity: e.target.value })}
-                  required
-                />
+                <div className="flex items-center justify-between">
+                  <Label>Items *</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addItemRow}
+                    disabled={!form.fromWarehouseId}
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add Item
+                  </Button>
+                </div>
+
+                {form.items.map((item, index) => (
+                  <div key={index} className="flex gap-2 items-start">
+                    <div className="flex-1 space-y-2">
+                      <Select
+                        value={item.itemId}
+                        onValueChange={(value) => updateItemRow(index, 'itemId', value)}
+                        disabled={!form.fromWarehouseId}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder={form.fromWarehouseId ? "Select item" : "Select from warehouse first"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {stockItems
+                            .filter(stockItem => !form.fromWarehouseId || stockItem.warehouseId?._id === form.fromWarehouseId || stockItem.warehouseId === form.fromWarehouseId)
+                            .map((stockItem) => (
+                              <SelectItem key={stockItem._id} value={stockItem._id}>
+                                {stockItem.itemName} (Available: {stockItem.quantity} bags)
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="w-32 space-y-2">
+                      <Input
+                        type="number"
+                        min="1"
+                        placeholder="Qty"
+                        value={item.quantity}
+                        onChange={(e) => updateItemRow(index, 'quantity', e.target.value)}
+                        required
+                      />
+                    </div>
+
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeItemRow(index)}
+                      disabled={form.items.length === 1}
+                      className="mt-0"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+
+                {form.fromWarehouseId && stockItems.filter(item => item.warehouseId?._id === form.fromWarehouseId || item.warehouseId === form.fromWarehouseId).length === 0 && (
+                  <p className="text-sm text-muted-foreground">No items in this warehouse</p>
+                )}
               </div>
 
               <div className="space-y-2">

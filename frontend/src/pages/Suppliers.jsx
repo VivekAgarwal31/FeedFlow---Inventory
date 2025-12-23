@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, Truck, Phone, Mail, MapPin, Loader2, ArrowLeft, Calendar, Filter, Eye, Download, Search } from 'lucide-react'
+import { Plus, Truck, Phone, Mail, MapPin, Loader2, ArrowLeft, Calendar, Filter, Eye, Download, Search, Trash2 } from 'lucide-react'
 import { supplierAPI, purchaseAPI } from '../lib/api'
 import { formatCurrency, formatDate } from '../lib/utils'
 import { exportSupplierToExcel, exportSupplierToPDF } from '../lib/exportUtils'
@@ -11,7 +11,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { Alert, AlertDescription } from '../components/ui/alert'
+import { Badge } from '../components/ui/badge'
 import { useToast } from '../hooks/use-toast'
+import { Pagination } from '../components/ui/Pagination'
 
 const Suppliers = () => {
   const [suppliers, setSuppliers] = useState([])
@@ -24,6 +26,8 @@ const Suppliers = () => {
   const [filteredTransactions, setFilteredTransactions] = useState([])
   const [dateFilter, setDateFilter] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
+  const [selectedPurchase, setSelectedPurchase] = useState(null)
+  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false)
   const { toast } = useToast()
 
   // Export dialog state
@@ -38,6 +42,10 @@ const Suppliers = () => {
   const [supplierSearch, setSupplierSearch] = useState('')
   const [showSupplierDropdown, setShowSupplierDropdown] = useState(false)
   const [exporting, setExporting] = useState(false)
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 12
 
   const [form, setForm] = useState({
     name: '',
@@ -82,11 +90,16 @@ const Suppliers = () => {
 
   const fetchSupplierTransactions = async (supplierId) => {
     try {
-      const response = await purchaseAPI.getAll({ supplierId })
+      const response = await supplierAPI.getById(supplierId)
       setSupplierTransactions(response.data.purchases || [])
     } catch (error) {
       console.error('Failed to fetch supplier transactions:', error)
     }
+  }
+
+  const viewPurchaseDetails = (purchase) => {
+    setSelectedPurchase(purchase)
+    setDetailsDialogOpen(true)
   }
 
   const filterTransactions = () => {
@@ -138,6 +151,7 @@ const Suppliers = () => {
     setSelectedSupplier(supplier)
     setDateFilter('all')
     setSearchTerm('')
+    fetchSupplierTransactions(supplier._id)
   }
 
   const handleBackToSuppliers = () => {
@@ -197,6 +211,33 @@ const Suppliers = () => {
   const filteredExportSuppliers = exportSuppliers.filter(supplier =>
     supplier.name.toLowerCase().includes(supplierSearch.toLowerCase())
   )
+
+
+  const handleDeleteSupplier = async (supplierId, supplierName) => {
+    if (!window.confirm(`Are you sure you want to delete supplier "${supplierName}"? This action cannot be undone.`)) {
+      return
+    }
+
+    try {
+      await supplierAPI.delete(supplierId)
+      setSuppliers(prev => prev.filter(s => s._id !== supplierId))
+      toast({
+        title: 'Success',
+        description: 'Supplier deleted successfully'
+      })
+
+      // If we're viewing this supplier's details, go back to list
+      if (selectedSupplier?._id === supplierId) {
+        setSelectedSupplier(null)
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to delete supplier',
+        variant: 'destructive'
+      })
+    }
+  }
 
   const handleExport = async () => {
     if (!exportForm.supplierName || !exportForm.fromDate || !exportForm.toDate) {
@@ -280,6 +321,11 @@ const Suppliers = () => {
       setExporting(false)
     }
   }
+
+  // Calculate pagination
+  const totalPages = Math.ceil(suppliers.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const paginatedSuppliers = suppliers.slice(startIndex, startIndex + itemsPerPage)
 
   if (loading) {
     return (
@@ -431,24 +477,61 @@ const Suppliers = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Date</TableHead>
-                    <TableHead>Item</TableHead>
+                    <TableHead>Items</TableHead>
+                    <TableHead>Warehouse</TableHead>
                     <TableHead>Quantity</TableHead>
-                    <TableHead>Unit Price</TableHead>
                     <TableHead>Total Amount</TableHead>
-                    <TableHead>Reference</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredTransactions.map((transaction) => (
                     <TableRow key={transaction._id}>
                       <TableCell>{formatDate(transaction.createdAt)}</TableCell>
-                      <TableCell className="font-medium">
-                        {transaction.itemName || 'Unknown Item'}
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {transaction.items && transaction.items.length > 0
+                            ? transaction.items.length === 1
+                              ? transaction.items[0].itemName
+                              : `${transaction.items[0].itemName}...`
+                            : 'Unknown'}
+                          {transaction.items && transaction.items.length > 1 && (
+                            <Badge variant="secondary" className="text-xs">
+                              {transaction.items.length} items
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
-                      <TableCell className="font-mono">{transaction.quantity} bags</TableCell>
-                      <TableCell className="font-mono">{formatCurrency(transaction.unitPrice || 0)}</TableCell>
+                      <TableCell>
+                        {transaction.items && transaction.items.length > 0
+                          ? transaction.items.length === 1
+                            ? transaction.items[0].warehouseName || '-'
+                            : (() => {
+                              const warehouses = [...new Set(transaction.items.map(i => i.warehouseName).filter(Boolean))];
+                              return warehouses.length > 1
+                                ? `${warehouses.length} warehouses`
+                                : warehouses[0] || '-';
+                            })()
+                          : '-'}
+                      </TableCell>
+                      <TableCell className="font-mono">
+                        {transaction.items && transaction.items.length > 0
+                          ? `${transaction.items.reduce((sum, item) => sum + item.quantity, 0)} bags`
+                          : '0 bags'}
+                      </TableCell>
                       <TableCell className="font-mono font-medium">{formatCurrency(transaction.totalAmount || 0)}</TableCell>
-                      <TableCell className="text-sm">{transaction.reference || '-'}</TableCell>
+                      <TableCell>
+                        {transaction.items && transaction.items.length > 1 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => viewPurchaseDetails(transaction)}
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            View Details
+                          </Button>
+                        )}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -456,6 +539,68 @@ const Suppliers = () => {
             )}
           </CardContent>
         </Card>
+
+        {/* Purchase Details Dialog */}
+        <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Purchase Details</DialogTitle>
+              <DialogDescription>
+                {selectedPurchase && (
+                  <>
+                    Purchase on {formatDate(selectedPurchase.createdAt)}
+                  </>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+
+            {selectedPurchase && selectedPurchase.items && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Total Amount:</span>
+                    <p className="font-medium">{formatCurrency(selectedPurchase.totalAmount)}</p>
+                  </div>
+
+                  <div>
+                    <span className="text-muted-foreground">Total Quantity:</span>
+                    <p className="font-medium">{selectedPurchase.items.reduce((sum, item) => sum + item.quantity, 0)} bags</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Items Count:</span>
+                    <p className="font-medium">{selectedPurchase.items.length} items</p>
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="font-semibold mb-3">Items Breakdown</h4>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Item Name</TableHead>
+                        <TableHead>Warehouse</TableHead>
+                        <TableHead>Quantity</TableHead>
+                        <TableHead>Unit Price</TableHead>
+                        <TableHead>Total</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {selectedPurchase.items.map((item, index) => (
+                        <TableRow key={index}>
+                          <TableCell className="font-medium">{item.itemName}</TableCell>
+                          <TableCell className="font-mono">{item.warehouseName}</TableCell>
+                          <TableCell className="font-mono">{item.quantity} bags</TableCell>
+                          <TableCell className="font-mono">{formatCurrency(item.costPrice || 0)}</TableCell>
+                          <TableCell className="font-mono font-medium">{formatCurrency(item.quantity * (item.costPrice || 0))}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     )
   }
@@ -759,7 +904,7 @@ const Suppliers = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {suppliers.map((supplier) => (
+              {paginatedSuppliers.map((supplier) => (
                 <TableRow key={supplier._id} className="cursor-pointer hover:bg-muted/50" onClick={() => handleSupplierClick(supplier)}>
                   <TableCell>
                     <div className="flex items-center gap-2">
@@ -797,18 +942,37 @@ const Suppliers = () => {
                     )}
                   </TableCell>
                   <TableCell>
-                    <Button variant="outline" size="sm" onClick={(e) => {
-                      e.stopPropagation()
-                      handleSupplierClick(supplier)
-                    }}>
-                      <Eye className="mr-2 h-4 w-4" />
-                      View Details
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={(e) => {
+                        e.stopPropagation()
+                        handleSupplierClick(supplier)
+                      }}>
+                        <Eye className="mr-2 h-4 w-4" />
+                        View Details
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDeleteSupplier(supplier._id, supplier.name)
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            itemsPerPage={itemsPerPage}
+            totalItems={suppliers.length}
+          />
         </Card>
       )}
     </div>

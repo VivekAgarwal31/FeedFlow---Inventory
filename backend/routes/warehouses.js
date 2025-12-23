@@ -1,6 +1,7 @@
 import express from 'express';
 import { body, validationResult } from 'express-validator';
 import Warehouse from '../models/Warehouse.js';
+import StockItem from '../models/StockItem.js';
 import { authenticate } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -75,9 +76,44 @@ router.post('/', authenticate, [
 
         await warehouse.save();
 
+        // Get all unique stock items for this company (one per item name/category/bagSize combination)
+        const existingItems = await StockItem.find({ companyId }).lean();
+
+        // Create a map to track unique items by their identifying properties
+        const uniqueItemsMap = new Map();
+
+        for (const item of existingItems) {
+            const key = `${item.itemName}_${item.bagSize}_${item.category}`;
+            if (!uniqueItemsMap.has(key)) {
+                uniqueItemsMap.set(key, item);
+            }
+        }
+
+        // Create stock items for this new warehouse with 0 quantity
+        const stockItemsToCreate = [];
+        for (const [, item] of uniqueItemsMap) {
+            stockItemsToCreate.push({
+                companyId,
+                warehouseId: warehouse._id,
+                itemName: item.itemName,
+                category: item.category,
+                itemCategory: item.itemCategory,
+                bagSize: item.bagSize,
+                quantity: 0,
+                costPrice: item.costPrice || 0,
+                sellingPrice: item.sellingPrice || 0,
+                lowStockAlert: item.lowStockAlert || 10
+            });
+        }
+
+        if (stockItemsToCreate.length > 0) {
+            await StockItem.insertMany(stockItemsToCreate);
+        }
+
         res.status(201).json({
-            message: 'Warehouse created successfully',
-            warehouse
+            message: `Warehouse created successfully${stockItemsToCreate.length > 0 ? ` with ${stockItemsToCreate.length} stock item(s)` : ''}`,
+            warehouse,
+            stockItemsCreated: stockItemsToCreate.length
         });
     } catch (error) {
         if (error.code === 11000) {

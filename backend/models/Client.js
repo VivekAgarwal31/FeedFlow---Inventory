@@ -41,6 +41,11 @@ const clientSchema = new mongoose.Schema({
         default: 0,
         min: 0
     },
+    salesCount: {
+        type: Number,
+        default: 0,
+        min: 0
+    },
     lastPurchaseDate: {
         type: Date
     },
@@ -55,6 +60,15 @@ const clientSchema = new mongoose.Schema({
 }, {
     timestamps: true
 });
+
+// Virtual field for frontend compatibility
+clientSchema.virtual('lastPurchase').get(function () {
+    return this.lastPurchaseDate;
+});
+
+// Ensure virtuals are included in JSON
+clientSchema.set('toJSON', { virtuals: true });
+clientSchema.set('toObject', { virtuals: true });
 
 // Compound indexes for queries
 clientSchema.index({ companyId: 1, isActive: 1 });

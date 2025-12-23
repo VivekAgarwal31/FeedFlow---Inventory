@@ -10,6 +10,13 @@ const saleItemSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    warehouseId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Warehouse'
+    },
+    warehouseName: {
+        type: String
+    },
     quantity: {
         type: Number,
         required: true,

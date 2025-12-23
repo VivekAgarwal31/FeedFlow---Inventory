@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, Settings, Loader2 } from 'lucide-react'
+import { Plus, Settings, Loader2, Trash2 } from 'lucide-react'
 import { stockAPI, warehouseAPI } from '../lib/api'
 import { formatCurrency, formatDate } from '../lib/utils'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
@@ -24,11 +24,10 @@ const StockAdjust = () => {
   const { toast } = useToast()
 
   const [form, setForm] = useState({
-    itemId: '',
     warehouseId: '',
-    newQuantity: '',
     reason: 'audit',
-    notes: ''
+    notes: '',
+    items: [{ itemId: '', adjustmentType: 'increase', quantity: '' }]
   })
 
   useEffect(() => {
@@ -57,31 +56,60 @@ const StockAdjust = () => {
     }
   }
 
+  const addItemRow = () => {
+    setForm({
+      ...form,
+      items: [...form.items, { itemId: '', adjustmentType: 'increase', quantity: '' }]
+    })
+  }
+
+  const removeItemRow = (index) => {
+    if (form.items.length > 1) {
+      const newItems = form.items.filter((_, i) => i !== index)
+      setForm({ ...form, items: newItems })
+    }
+  }
+
+  const updateItemRow = (index, field, value) => {
+    const newItems = [...form.items]
+    newItems[index][field] = value
+    setForm({ ...form, items: newItems })
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setSubmitting(true)
     setError('')
 
     try {
+      // Validate that all items have all required fields
+      const hasEmptyFields = form.items.some(item => !item.itemId || !item.adjustmentType || !item.quantity)
+      if (hasEmptyFields) {
+        setError('Please fill in all item, adjustment type, and quantity fields')
+        return
+      }
+
       await stockAPI.stockAdjust({
-        itemId: form.itemId,
         warehouseId: form.warehouseId,
-        newQuantity: parseInt(form.newQuantity),
         reason: form.reason,
-        notes: form.notes
+        notes: form.notes,
+        items: form.items.map(item => ({
+          itemId: item.itemId,
+          adjustmentType: item.adjustmentType,
+          quantity: parseInt(item.quantity)
+        }))
       })
 
       toast({
         title: 'Success',
-        description: 'Stock adjusted successfully'
+        description: `Stock adjusted successfully for ${form.items.length} item(s)`
       })
 
       setForm({
-        itemId: '',
         warehouseId: '',
-        newQuantity: '',
         reason: 'audit',
-        notes: ''
+        notes: '',
+        items: [{ itemId: '', adjustmentType: 'increase', quantity: '' }]
       })
       setDialogOpen(false)
       fetchData() // Refresh stock items
@@ -174,7 +202,7 @@ const StockAdjust = () => {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="warehouse">Warehouse *</Label>
-                <Select value={form.warehouseId} onValueChange={(value) => setForm({ ...form, warehouseId: value, itemId: '' })}>
+                <Select value={form.warehouseId} onValueChange={(value) => setForm({ ...form, warehouseId: value })}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select warehouse" />
                   </SelectTrigger>
@@ -188,57 +216,87 @@ const StockAdjust = () => {
                 </Select>
               </div>
 
+              {/* Items Section */}
               <div className="space-y-2">
-                <Label htmlFor="stock-item">Stock Item *</Label>
-                <Select
-                  value={form.itemId}
-                  onValueChange={(value) => setForm({ ...form, itemId: value })}
-                  disabled={!form.warehouseId}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={form.warehouseId ? "Select stock item" : "Select warehouse first"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {stockItems
-                      .filter(item => !form.warehouseId || item.warehouseId?._id === form.warehouseId || item.warehouseId === form.warehouseId)
-                      .map((item) => (
-                        <SelectItem key={item._id} value={item._id}>
-                          {item.itemName} (Current: {item.quantity} bags)
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex items-center justify-between">
+                  <Label>Items *</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addItemRow}
+                    disabled={!form.warehouseId}
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add Item
+                  </Button>
+                </div>
+
+                {form.items.map((item, index) => (
+                  <div key={index} className="flex gap-2 items-start">
+                    <div className="flex-1 space-y-2">
+                      <Select
+                        value={item.itemId}
+                        onValueChange={(value) => updateItemRow(index, 'itemId', value)}
+                        disabled={!form.warehouseId}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder={form.warehouseId ? "Select item" : "Select warehouse first"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {stockItems
+                            .filter(stockItem => !form.warehouseId || stockItem.warehouseId?._id === form.warehouseId || stockItem.warehouseId === form.warehouseId)
+                            .map((stockItem) => (
+                              <SelectItem key={stockItem._id} value={stockItem._id}>
+                                {stockItem.itemName} (Current: {stockItem.quantity} bags)
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="w-32 space-y-2">
+                      <Select
+                        value={item.adjustmentType}
+                        onValueChange={(value) => updateItemRow(index, 'adjustmentType', value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="increase">+</SelectItem>
+                          <SelectItem value="decrease">-</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="w-24 space-y-2">
+                      <Input
+                        type="number"
+                        min="1"
+                        placeholder="Qty"
+                        value={item.quantity}
+                        onChange={(e) => updateItemRow(index, 'quantity', e.target.value)}
+                        required
+                      />
+                    </div>
+
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeItemRow(index)}
+                      disabled={form.items.length === 1}
+                      className="mt-0"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+
                 {form.warehouseId && stockItems.filter(item => item.warehouseId?._id === form.warehouseId || item.warehouseId === form.warehouseId).length === 0 && (
                   <p className="text-sm text-muted-foreground">No items in this warehouse</p>
                 )}
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="adjustment-type">Adjustment Type *</Label>
-                  <Select value={form.adjustmentType} onValueChange={(value) => setForm({ ...form, adjustmentType: value })}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="increase">Increase (+)</SelectItem>
-                      <SelectItem value="decrease">Decrease (-)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="quantity">Quantity *</Label>
-                  <Input
-                    id="quantity"
-                    type="number"
-                    min="1"
-                    placeholder="10"
-                    value={form.quantity}
-                    onChange={(e) => setForm({ ...form, quantity: e.target.value })}
-                    required
-                  />
-                </div>
               </div>
 
               <div className="space-y-2">
