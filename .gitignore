@@ -3,6 +3,7 @@ node_modules
 # Environment variables
 .env
 backend/.env
+frontend/.env
 
 # Database migration and admin scripts  
 backend/scripts/createSuperAdmin.js
@@ -16,3 +17,5 @@ backend/migrate-permissions.js
 
 # Test scripts (development only)
 backend/test-email.js
+
+test-api.js
