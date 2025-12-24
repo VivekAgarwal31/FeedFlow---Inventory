@@ -1,15 +1,15 @@
 import axios from 'axios';
 
-// Keep Render service alive by pinging it every 2 minutes
+// Keep Render service alive by pinging it every 10 minutes
 const RENDER_URL = (process.env.RENDER_URL || 'http://localhost:5000').replace(/\/$/, ''); // Remove trailing slash
-const PING_INTERVAL = 2 * 60 * 1000; // 2 minutes
+const PING_INTERVAL = 10 * 60 * 1000; // 10 minutes
 
 export const startHttpPing = () => {
     if (process.env.NODE_ENV === 'production' && process.env.RENDER_URL) {
         console.log('🔄 Starting HTTP keep-alive ping...');
         console.log(`📍 Target URL: ${RENDER_URL}`);
         console.log(`📍 Ping endpoint: ${RENDER_URL}/api/ping`);
-        console.log(`📍 Ping interval: every 2 minutes`);
+        console.log(`📍 Ping interval: every 10 minutes`);
 
         // Wait 5 seconds before initial ping to ensure server is fully ready
         setTimeout(() => {
@@ -29,7 +29,7 @@ export const startHttpPing = () => {
                 });
         }, 5000);
 
-        // Then ping every 2 minutes
+        // Then ping every 10 minutes
         setInterval(async () => {
             try {
                 const response = await axios.get(`${RENDER_URL}/api/ping`, { timeout: 10000 });

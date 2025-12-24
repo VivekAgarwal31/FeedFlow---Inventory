@@ -83,6 +83,11 @@ const StockTransactions = () => {
       )
     }
 
+    // Filter by type
+    if (typeFilter && typeFilter !== 'all') {
+      filtered = filtered.filter(transaction => transaction.type === typeFilter)
+    }
+
     // Filter by date
     if (dateFilter !== 'all') {
       const now = new Date()
@@ -419,6 +424,7 @@ const StockTransactions = () => {
                   <SelectItem value="stock_in">Stock In</SelectItem>
                   <SelectItem value="stock_out">Stock Out</SelectItem>
                   <SelectItem value="sale">Sales</SelectItem>
+                  <SelectItem value="purchase">Purchases</SelectItem>
                   <SelectItem value="stock_adjust">Adjustments</SelectItem>
                   <SelectItem value="stock_move">Stock Moves</SelectItem>
                 </SelectContent>
