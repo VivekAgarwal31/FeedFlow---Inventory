@@ -96,6 +96,8 @@ const StockIn = () => {
 
       await stockAPI.stockIn({
         warehouseId: form.warehouseId,
+        reason: form.reason,
+        supplierId: form.supplierId,
         supplierName: form.supplierName,
         referenceNumber: form.referenceNumber,
         notes: form.notes,

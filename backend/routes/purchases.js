@@ -5,6 +5,7 @@ import Supplier from '../models/Supplier.js';
 import StockItem from '../models/StockItem.js';
 import StockTransaction from '../models/StockTransaction.js';
 import { authenticate } from '../middleware/auth.js';
+import { requirePermission } from '../middleware/rbac.js';
 
 const router = express.Router();
 
@@ -48,7 +49,7 @@ router.get('/', authenticate, async (req, res) => {
 });
 
 // Create purchase
-router.post('/', authenticate, [
+router.post('/', authenticate, requirePermission('canManagePurchases'), [
     body('supplierId').notEmpty().withMessage('Supplier is required'),
     body('items').isArray({ min: 1 }).withMessage('At least one item is required'),
     body('totalAmount').isNumeric().withMessage('Total amount must be a number')
@@ -197,7 +198,7 @@ router.post('/', authenticate, [
 });
 
 // Delete purchase
-router.delete('/:id', authenticate, async (req, res) => {
+router.delete('/:id', authenticate, requirePermission('canManagePurchases'), async (req, res) => {
     try {
         const companyId = req.user.companyId?._id || req.user.companyId;
 

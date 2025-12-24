@@ -98,6 +98,8 @@ const StockOut = () => {
       await stockAPI.stockOut({
         warehouseId: form.warehouseId,
         reason: form.reason,
+        clientId: form.clientId,
+        clientName: form.clientName,
         recipientName: form.recipientName,
         referenceNumber: form.referenceNumber,
         notes: form.notes,

@@ -3,6 +3,7 @@ import { body, validationResult } from 'express-validator';
 import Client from '../models/Client.js';
 import Sale from '../models/Sale.js';
 import { authenticate } from '../middleware/auth.js';
+import { requirePermission } from '../middleware/rbac.js';
 
 const router = express.Router();
 
@@ -47,7 +48,7 @@ router.get('/', authenticate, async (req, res) => {
 });
 
 // Create new client
-router.post('/', authenticate, [
+router.post('/', authenticate, requirePermission('canManageClients'), [
     body('name').trim().isLength({ min: 2 }).withMessage('Client name is required'),
     body('phone').optional({ checkFalsy: true }).trim(),
     body('email').optional({ checkFalsy: true }).isEmail().withMessage('Invalid email'),
@@ -120,7 +121,7 @@ router.get('/:id', authenticate, async (req, res) => {
 });
 
 // Update client
-router.put('/:id', authenticate, async (req, res) => {
+router.put('/:id', authenticate, requirePermission('canManageClients'), async (req, res) => {
     try {
         const companyId = req.user.companyId?._id || req.user.companyId;
         const { name, phone, email, address, gstNumber, notes } = req.body;
@@ -146,7 +147,7 @@ router.put('/:id', authenticate, async (req, res) => {
 });
 
 // Delete client
-router.delete('/:id', authenticate, async (req, res) => {
+router.delete('/:id', authenticate, requirePermission('canManageClients'), async (req, res) => {
     try {
         const companyId = req.user.companyId?._id || req.user.companyId;
 

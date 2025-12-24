@@ -8,6 +8,7 @@ import Sale from '../models/Sale.js';
 import Supplier from '../models/Supplier.js';
 import Client from '../models/Client.js';
 import { authenticate } from '../middleware/auth.js';
+import { requirePermission } from '../middleware/rbac.js';
 
 const router = express.Router();
 
@@ -33,7 +34,7 @@ router.get('/', authenticate, async (req, res) => {
 });
 
 // Create new stock item
-router.post('/', authenticate, [
+router.post('/', authenticate, requirePermission('canManageInventory'), [
     body('itemName').trim().isLength({ min: 2 }).withMessage('Item name is required'),
     body('warehouseId').notEmpty().withMessage('Warehouse is required'),
     body('bagSize').isFloat({ min: 0.01 }).withMessage('Bag size must be greater than 0'),
@@ -123,7 +124,7 @@ router.post('/', authenticate, [
 });
 
 // Stock In operation
-router.post('/in', authenticate, [
+router.post('/in', authenticate, requirePermission('canManageInventory'), [
     body('items').isArray({ min: 1 }).withMessage('At least one item is required'),
     body('items.*.itemId').notEmpty().withMessage('Item is required'),
     body('items.*.quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
@@ -260,7 +261,7 @@ router.post('/in', authenticate, [
 });
 
 // Stock Out operation
-router.post('/out', authenticate, [
+router.post('/out', authenticate, requirePermission('canManageInventory'), [
     body('items').isArray({ min: 1 }).withMessage('At least one item is required'),
     body('items.*.itemId').notEmpty().withMessage('Item is required'),
     body('items.*.quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
@@ -325,6 +326,7 @@ router.post('/out', authenticate, [
                     warehouseName,
                     quantity: item.quantity,
                     unitPrice: 0, // Default to 0
+                    sellingPrice: 0, // Default to 0 - required by Sale model
                     total: 0
                 })),
                 totalAmount: 0,
@@ -397,7 +399,7 @@ router.post('/out', authenticate, [
 });
 
 // Stock Move operation
-router.post('/move', authenticate, [
+router.post('/move', authenticate, requirePermission('canManageInventory'), [
     body('items').isArray({ min: 1 }).withMessage('At least one item is required'),
     body('items.*.itemId').notEmpty().withMessage('Item is required'),
     body('items.*.quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
@@ -531,7 +533,7 @@ router.post('/move', authenticate, [
 });
 
 // Stock Adjust operation
-router.post('/adjust', authenticate, [
+router.post('/adjust', authenticate, requirePermission('canManageInventory'), [
     body('items').isArray({ min: 1 }).withMessage('At least one item is required'),
     body('items.*.itemId').notEmpty().withMessage('Item is required'),
     body('items.*.adjustmentType').isIn(['increase', 'decrease']).withMessage('Adjustment type must be increase or decrease'),

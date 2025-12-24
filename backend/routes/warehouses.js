@@ -3,6 +3,7 @@ import { body, validationResult } from 'express-validator';
 import Warehouse from '../models/Warehouse.js';
 import StockItem from '../models/StockItem.js';
 import { authenticate } from '../middleware/auth.js';
+import { requirePermission } from '../middleware/rbac.js';
 
 const router = express.Router();
 
@@ -47,7 +48,7 @@ router.get('/:id', authenticate, async (req, res) => {
 });
 
 // Create warehouse
-router.post('/', authenticate, [
+router.post('/', authenticate, requirePermission('canManageInventory'), [
     body('name').trim().isLength({ min: 2 }).withMessage('Name must be at least 2 characters'),
     body('location').optional().trim(),
     body('capacity').optional().isNumeric().withMessage('Capacity must be a number')
@@ -125,7 +126,7 @@ router.post('/', authenticate, [
 });
 
 // Update warehouse
-router.put('/:id', authenticate, [
+router.put('/:id', authenticate, requirePermission('canManageInventory'), [
     body('name').optional().trim().isLength({ min: 2 }).withMessage('Name must be at least 2 characters'),
     body('location').optional().trim(),
     body('capacity').optional().isNumeric().withMessage('Capacity must be a number')
@@ -163,7 +164,7 @@ router.put('/:id', authenticate, [
 });
 
 // Delete warehouse
-router.delete('/:id', authenticate, async (req, res) => {
+router.delete('/:id', authenticate, requirePermission('canManageInventory'), async (req, res) => {
     try {
         const companyId = req.user.companyId?._id || req.user.companyId;
 

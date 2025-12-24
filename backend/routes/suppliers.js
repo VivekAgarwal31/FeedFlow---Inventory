@@ -3,6 +3,7 @@ import { body, validationResult } from 'express-validator';
 import Supplier from '../models/Supplier.js';
 import Purchase from '../models/Purchase.js';
 import { authenticate } from '../middleware/auth.js';
+import { requirePermission } from '../middleware/rbac.js';
 
 const router = express.Router();
 
@@ -96,7 +97,7 @@ router.get('/:id', authenticate, async (req, res) => {
 });
 
 // Create supplier
-router.post('/', authenticate, [
+router.post('/', authenticate, requirePermission('canManageSuppliers'), [
     body('name').trim().isLength({ min: 2 }).withMessage('Name must be at least 2 characters'),
     body('phone').optional().trim(),
     body('email').optional({ checkFalsy: true }).isEmail().withMessage('Invalid email')
@@ -144,7 +145,7 @@ router.post('/', authenticate, [
 });
 
 // Update supplier
-router.put('/:id', authenticate, [
+router.put('/:id', authenticate, requirePermission('canManageSuppliers'), [
     body('name').optional().trim().isLength({ min: 2 }).withMessage('Name must be at least 2 characters'),
     body('email').optional().isEmail().withMessage('Invalid email')
 ], async (req, res) => {
@@ -181,7 +182,7 @@ router.put('/:id', authenticate, [
 });
 
 // Delete supplier
-router.delete('/:id', authenticate, async (req, res) => {
+router.delete('/:id', authenticate, requirePermission('canManageSuppliers'), async (req, res) => {
     try {
         const companyId = req.user.companyId?._id || req.user.companyId;
 

@@ -6,6 +6,7 @@ import StockItem from '../models/StockItem.js';
 import StockTransaction from '../models/StockTransaction.js';
 import Warehouse from '../models/Warehouse.js';
 import { authenticate } from '../middleware/auth.js';
+import { requirePermission } from '../middleware/rbac.js';
 
 const router = express.Router();
 
@@ -83,7 +84,7 @@ router.get('/revenue', authenticate, async (req, res) => {
 });
 
 // Create sale
-router.post('/', authenticate, [
+router.post('/', authenticate, requirePermission('canManageSales'), [
     body('clientName').trim().isLength({ min: 2 }).withMessage('Client name is required'),
     body('items').isArray({ min: 1 }).withMessage('At least one item is required'),
     body('totalAmount').isNumeric().withMessage('Total amount must be a number')
@@ -240,7 +241,7 @@ router.post('/', authenticate, [
 });
 
 // Delete sale
-router.delete('/:id', authenticate, async (req, res) => {
+router.delete('/:id', authenticate, requirePermission('canManageSales'), async (req, res) => {
     try {
         const companyId = req.user.companyId?._id || req.user.companyId;
 
