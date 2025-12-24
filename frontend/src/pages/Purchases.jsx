@@ -260,6 +260,33 @@ const Purchases = () => {
     setDetailsDialogOpen(true)
   }
 
+  const deletePurchase = async (purchaseId, supplierName) => {
+    if (!confirm(`Are you sure you want to delete this purchase from ${supplierName}? This will reverse the stock changes and cannot be undone.`)) {
+      return
+    }
+
+    try {
+      await purchaseAPI.delete(purchaseId)
+      toast({
+        title: 'Success',
+        description: 'Purchase deleted and stock reversed successfully'
+      })
+      // Refresh data
+      const [purchasesResponse, stockResponse] = await Promise.all([
+        purchaseAPI.getAll(),
+        stockAPI.getAll()
+      ])
+      setPurchases(purchasesResponse.data.purchases || [])
+      setStockItems(stockResponse.data.stockItems || [])
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to delete purchase',
+        variant: 'destructive'
+      })
+    }
+  }
+
   // Calculate pagination
   const totalPages = Math.ceil(filteredPurchases.length / itemsPerPage)
   const startIndex = (currentPage - 1) * itemsPerPage
@@ -645,16 +672,26 @@ const Purchases = () => {
                     </TableCell>
                     <TableCell className="text-sm text-gray-600">{purchase.staffName || 'Unknown'}</TableCell>
                     <TableCell>
-                      {purchase.items && purchase.items.length > 1 && (
+                      <div className="flex gap-2">
+                        {purchase.items && purchase.items.length > 1 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => viewPurchaseDetails(purchase)}
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            View Details
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => viewPurchaseDetails(purchase)}
+                          onClick={() => deletePurchase(purchase._id, purchase.supplierName)}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
                         >
-                          <Eye className="h-4 w-4 mr-1" />
-                          View Details
+                          <Trash2 className="h-4 w-4" />
                         </Button>
-                      )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

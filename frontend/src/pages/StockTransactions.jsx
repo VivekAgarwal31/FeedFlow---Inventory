@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { List, Calendar, Filter, Download, Search, ArrowUpFromLine, ArrowDownToLine, Settings, ArrowLeftRight, TrendingUp, Eye } from 'lucide-react'
+import { List, Calendar, Filter, Download, Search, ArrowUpFromLine, ArrowDownToLine, Settings, ArrowLeftRight, TrendingUp, Eye, Trash2 } from 'lucide-react'
 import { stockTransactionAPI } from '../lib/api'
 import { formatCurrency, formatDate } from '../lib/utils'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
@@ -331,6 +331,29 @@ const StockTransactions = () => {
     }
   }
 
+  const deleteTransaction = async (transactionId, transactionType) => {
+    if (!confirm(`Are you sure you want to delete this ${transactionType.replace('_', ' ')} transaction? This will reverse the stock changes and cannot be undone.`)) {
+      return
+    }
+
+    try {
+      await stockTransactionAPI.delete(transactionId)
+      toast({
+        title: 'Success',
+        description: 'Transaction deleted and stock reversed successfully'
+      })
+      // Refresh transactions
+      const response = await stockTransactionAPI.getAll()
+      setTransactions(response.data.transactions || [])
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to delete transaction',
+        variant: 'destructive'
+      })
+    }
+  }
+
   // Calculate pagination
   const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage)
   const startIndex = (currentPage - 1) * itemsPerPage
@@ -501,16 +524,26 @@ const StockTransactions = () => {
                       </TableCell>
                       <TableCell className="text-sm text-gray-600">{transaction.staffName || 'Unknown'}</TableCell>
                       <TableCell>
-                        {transaction.items && transaction.items.length > 0 && (
+                        <div className="flex gap-2">
+                          {transaction.items && transaction.items.length > 0 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => viewTransactionDetails(transaction)}
+                            >
+                              <Eye className="h-4 w-4 mr-1" />
+                              View Details
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => viewTransactionDetails(transaction)}
+                            onClick={() => deleteTransaction(transaction._id, transaction.type)}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
                           >
-                            <Eye className="h-4 w-4 mr-1" />
-                            View Details
+                            <Trash2 className="h-4 w-4" />
                           </Button>
-                        )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

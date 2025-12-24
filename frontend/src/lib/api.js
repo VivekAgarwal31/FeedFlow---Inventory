@@ -79,7 +79,8 @@ export const saleAPI = {
 // Stock Transaction API
 export const stockTransactionAPI = {
   getAll: (params) => api.get('/stock-transactions', { params }),
-  getById: (id) => api.get(`/stock-transactions/${id}`)
+  getById: (id) => api.get(`/stock-transactions/${id}`),
+  delete: (id) => api.delete(`/stock-transactions/${id}`)
 }
 
 // Supplier API

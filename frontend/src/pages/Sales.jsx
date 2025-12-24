@@ -260,6 +260,27 @@ const Sales = () => {
     setDetailsDialogOpen(true)
   }
 
+  const deleteSale = async (saleId, saleName) => {
+    if (!confirm(`Are you sure you want to delete this sale to ${saleName}? This will reverse the stock changes and cannot be undone.`)) {
+      return
+    }
+
+    try {
+      await saleAPI.delete(saleId)
+      toast({
+        title: 'Success',
+        description: 'Sale deleted and stock reversed successfully'
+      })
+      fetchData() // Refresh data
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to delete sale',
+        variant: 'destructive'
+      })
+    }
+  }
+
   // Calculate pagination
   const totalPages = Math.ceil(sales.length / itemsPerPage)
   const startIndex = (currentPage - 1) * itemsPerPage
@@ -611,16 +632,26 @@ const Sales = () => {
                       <TableCell className="font-mono font-medium">{formatCurrency(sale.totalAmount)}</TableCell>
                       <TableCell className="text-sm text-gray-600">{sale.staffName || 'Unknown'}</TableCell>
                       <TableCell>
-                        {sale.items && sale.items.length > 1 && (
+                        <div className="flex gap-2">
+                          {sale.items && sale.items.length > 1 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => viewSaleDetails(sale)}
+                            >
+                              <Eye className="h-4 w-4 mr-1" />
+                              View Details
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => viewSaleDetails(sale)}
+                            onClick={() => deleteSale(sale._id, sale.clientName)}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
                           >
-                            <Eye className="h-4 w-4 mr-1" />
-                            View Details
+                            <Trash2 className="h-4 w-4" />
                           </Button>
-                        )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
