@@ -1,4 +1,18 @@
 node_modules
-  
+
+# Environment variables
+.env
+backend/.env
+
 # Database migration and admin scripts  
-backend/scripts/*.js 
+backend/scripts/createSuperAdmin.js
+backend/scripts/updateSuperAdminRole.js
+backend/scripts/markCompaniesActive.js
+backend/scripts/migrateStaffNames.js
+
+# Migration scripts (one-time use)
+backend/migrate-email-verified.js
+backend/migrate-permissions.js
+
+# Test scripts (development only)
+backend/test-email.js

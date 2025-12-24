@@ -41,7 +41,9 @@ export const authAPI = {
   login: (credentials) => api.post('/auth/login', credentials),
   register: (userData) => api.post('/auth/register', userData),
   getMe: () => api.get('/auth/me'),
-  updateProfile: (profileData) => api.put('/auth/profile', profileData)
+  updateProfile: (profileData) => api.put('/auth/profile', profileData),
+  requestOTP: (data) => api.post('/auth/request-otp', data),
+  verifyOTP: (data) => api.post('/auth/verify-otp', data)
 }
 
 // Company API

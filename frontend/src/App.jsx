@@ -22,6 +22,7 @@ import AdminLayout from './layouts/AdminLayout'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import CompanyManagement from './pages/admin/CompanyManagement'
 import UserManagement from './pages/admin/UserManagement'
+import OTPVerification from './pages/OTPVerification'
 
 function App() {
   const { user, loading } = useAuth()
@@ -39,6 +40,7 @@ function App() {
     return (
       <Routes>
         <Route path="/auth" element={<AuthPage />} />
+        <Route path="/verify-otp" element={<OTPVerification />} />
         <Route path="*" element={<Navigate to="/auth" replace />} />
       </Routes>
     )

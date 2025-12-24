@@ -1,15 +1,21 @@
 import React, { useState } from 'react'
-import { Wheat, Loader2 } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Wheat, Loader2, Mail } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { authAPI } from '../lib/api'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Label } from '../components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
+import { useToast } from '../hooks/use-toast'
 
 const AuthPage = () => {
   const { login, register } = useAuth()
+  const navigate = useNavigate()
+  const { toast } = useToast()
   const [loading, setLoading] = useState(false)
+  const [otpLoading, setOtpLoading] = useState(false)
   const [error, setError] = useState('')
 
   const [loginForm, setLoginForm] = useState({
@@ -30,12 +36,44 @@ const AuthPage = () => {
     setError('')
 
     const result = await login(loginForm)
-    
+
     if (!result.success) {
-      setError(result.message)
+      // Check if verification is required
+      if (result.requiresVerification) {
+        toast({
+          title: 'Email Not Verified',
+          description: result.message
+        })
+        navigate('/verify-otp', { state: { email: result.email } })
+      } else {
+        setError(result.message)
+      }
     }
-    
+
     setLoading(false)
+  }
+
+  const handleEmailLogin = async () => {
+    if (!loginForm.email) {
+      setError('Please enter your email address')
+      return
+    }
+
+    setOtpLoading(true)
+    setError('')
+
+    try {
+      await authAPI.requestOTP({ email: loginForm.email })
+      toast({
+        title: 'Code Sent!',
+        description: 'Check your email for the verification code'
+      })
+      navigate('/verify-otp', { state: { email: loginForm.email } })
+    } catch (error) {
+      setError(error.response?.data?.message || 'Failed to send verification code')
+    } finally {
+      setOtpLoading(false)
+    }
   }
 
   const handleSignup = async (e) => {
@@ -50,11 +88,22 @@ const AuthPage = () => {
     }
 
     const result = await register(signupForm)
-    
+
     if (!result.success) {
       setError(result.message)
+      setLoading(false)
+      return
     }
-    
+
+    // If verification is required, redirect to OTP page
+    if (result.requiresVerification) {
+      toast({
+        title: 'Account Created!',
+        description: result.message || 'Please check your email for verification code'
+      })
+      navigate('/verify-otp', { state: { email: result.email } })
+    }
+
     setLoading(false)
   }
 
@@ -112,17 +161,50 @@ const AuthPage = () => {
                     required
                   />
                 </div>
-                <Button type="submit" className="w-full" disabled={loading}>
+                <Button type="submit" className="w-full" disabled={loading || otpLoading}>
                   {loading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Logging in...
                     </>
                   ) : (
-                    'Login'
+                    'Login with Password'
                   )}
                 </Button>
               </form>
+
+              {/* Divider */}
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">
+                    Or
+                  </span>
+                </div>
+              </div>
+
+              {/* Email Code Login */}
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={handleEmailLogin}
+                disabled={loading || otpLoading}
+              >
+                {otpLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Sending code...
+                  </>
+                ) : (
+                  <>
+                    <Mail className="mr-2 h-4 w-4" />
+                    Login with Email Code
+                  </>
+                )}
+              </Button>
             </TabsContent>
 
             <TabsContent value="signup" className="space-y-4 mt-4">

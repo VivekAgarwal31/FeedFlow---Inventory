@@ -2,7 +2,9 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import { body, validationResult } from 'express-validator';
 import User from '../models/User.js';
+import OTP from '../models/OTP.js';
 import { authenticate } from '../middleware/auth.js';
+import { generateOTP, sendOTPEmail } from '../utils/email.js';
 
 const router = express.Router();
 
@@ -38,20 +40,26 @@ router.post('/register', [
     user.setRolePermissions();
     await user.save();
 
-    // Generate token
-    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+    // Generate OTP for email verification
+    const otpCode = generateOTP();
+
+    // Delete any existing OTPs for this email
+    await OTP.deleteMany({ email: email.toLowerCase() });
+
+    // Create new OTP for verification
+    await OTP.create({
+      email: email.toLowerCase(),
+      otp: otpCode,
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+    });
+
+    // Send verification email
+    await sendOTPEmail(email, user.fullName, otpCode);
 
     res.status(201).json({
-      token,
-      user: {
-        id: user._id,
-        fullName: user.fullName,
-        email: user.email,
-        phone: user.phone,
-        companyId: user.companyId,
-        role: user.role,
-        permissions: user.permissions
-      }
+      message: 'Account created successfully! Please check your email to verify your account.',
+      email: user.email,
+      requiresVerification: true
     });
   } catch (error) {
     console.error('Register error:', error);
@@ -82,6 +90,32 @@ router.post('/login', [
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
       return res.status(400).json({ message: 'Invalid credentials' });
+    }
+
+    // Check if email is verified (only block if explicitly false)
+    // Existing users with undefined emailVerified are allowed (legacy support)
+    if (user.emailVerified === false) {
+      // Generate and send new OTP
+      const otpCode = generateOTP();
+
+      // Delete any existing OTPs for this email
+      await OTP.deleteMany({ email: email.toLowerCase() });
+
+      // Create new OTP for verification
+      await OTP.create({
+        email: email.toLowerCase(),
+        otp: otpCode,
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+      });
+
+      // Send verification email
+      await sendOTPEmail(email, user.fullName, otpCode);
+
+      return res.status(403).json({
+        message: 'Email not verified. A new verification code has been sent to your email.',
+        requiresVerification: true,
+        email: user.email
+      });
     }
 
     // Ensure permissions are set (for existing users)
@@ -184,6 +218,134 @@ router.put('/profile', authenticate, [
   } catch (error) {
     console.error('Profile update error:', error);
     res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Request OTP
+router.post('/request-otp', [
+  body('email').isEmail().withMessage('Please provide a valid email')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { email } = req.body;
+
+    // Check if user exists
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) {
+      return res.status(404).json({ message: 'No account found with this email' });
+    }
+
+    // Generate OTP
+    const otpCode = generateOTP();
+
+    // Delete any existing OTPs for this email
+    await OTP.deleteMany({ email: email.toLowerCase() });
+
+    // Create new OTP
+    await OTP.create({
+      email: email.toLowerCase(),
+      otp: otpCode,
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000) // 10 minutes
+    });
+
+    // Send email
+    await sendOTPEmail(email, user.fullName, otpCode);
+
+    res.json({ message: 'Verification code sent to your email' });
+  } catch (error) {
+    console.error('Request OTP error:', error);
+
+    // Check if it's a Resend restriction error
+    if (error.message && error.message.includes('You can only send testing emails')) {
+      return res.status(400).json({
+        message: 'Email service is in testing mode. Please use vivekagrawal6336@gmail.com to login, or contact support.'
+      });
+    }
+
+    res.status(500).json({ message: 'Failed to send verification code. Please try again.' });
+  }
+});
+
+// Verify OTP
+router.post('/verify-otp', [
+  body('email').isEmail().withMessage('Please provide a valid email'),
+  body('otp').isLength({ min: 6, max: 6 }).withMessage('OTP must be 6 digits')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { email, otp } = req.body;
+
+    // Find OTP
+    const otpRecord = await OTP.findOne({
+      email: email.toLowerCase(),
+      otp,
+      verified: false,
+      expiresAt: { $gt: new Date() }
+    });
+
+    if (!otpRecord) {
+      // Increment attempts for security
+      await OTP.updateOne(
+        { email: email.toLowerCase(), otp },
+        { $inc: { attempts: 1 } }
+      );
+      return res.status(400).json({ message: 'Invalid or expired verification code' });
+    }
+
+    // Check attempts (max 5)
+    if (otpRecord.attempts >= 5) {
+      return res.status(429).json({ message: 'Too many failed attempts. Please request a new code.' });
+    }
+
+    // Mark as verified
+    otpRecord.verified = true;
+    await otpRecord.save();
+
+    // Get user
+    const user = await User.findOne({ email: email.toLowerCase() })
+      .populate('companyId');
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Mark email as verified
+    if (!user.emailVerified) {
+      user.emailVerified = true;
+      await user.save();
+    }
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { userId: user._id },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({
+      token,
+      user: {
+        id: user._id,
+        fullName: user.fullName,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        companyId: user.companyId,
+        permissions: user.permissions,
+        emailVerified: user.emailVerified
+      }
+    });
+  } catch (error) {
+    console.error('Verify OTP error:', error);
+    res.status(500).json({ message: 'Failed to verify code. Please try again.' });
   }
 });
 

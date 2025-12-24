@@ -50,9 +50,12 @@ export const AuthProvider = ({ children }) => {
 
       return { success: true }
     } catch (error) {
+      const errorData = error.response?.data
       return {
         success: false,
-        message: error.response?.data?.message || 'Login failed'
+        message: errorData?.message || 'Login failed',
+        requiresVerification: errorData?.requiresVerification,
+        email: errorData?.email
       }
     }
   }
@@ -60,8 +63,19 @@ export const AuthProvider = ({ children }) => {
   const register = async (userData) => {
     try {
       const response = await authAPI.register(userData)
-      const { token, user } = response.data
 
+      // Check if verification is required
+      if (response.data.requiresVerification) {
+        return {
+          success: true,
+          requiresVerification: true,
+          email: response.data.email,
+          message: response.data.message
+        }
+      }
+
+      // Legacy support: if token is returned (old behavior)
+      const { token, user } = response.data
       localStorage.setItem('token', token)
       localStorage.setItem('user', JSON.stringify(user))
       setUser(user)
