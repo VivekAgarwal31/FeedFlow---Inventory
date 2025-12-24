@@ -29,7 +29,7 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['owner', 'admin', 'manager', 'staff', 'new_joinee'],
+    enum: ['owner', 'admin', 'manager', 'staff', 'new_joinee', 'super_admin'],
     default: 'new_joinee'
   },
   permissions: {
@@ -45,6 +45,9 @@ const userSchema = new mongoose.Schema({
   isActive: {
     type: Boolean,
     default: true
+  },
+  lastLoginAt: {
+    type: Date
   }
 }, {
   timestamps: true

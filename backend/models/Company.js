@@ -38,13 +38,23 @@ const companySchema = new mongoose.Schema({
     required: false,
     lowercase: true,
     trim: true
+  },
+  status: {
+    type: String,
+    enum: ['active', 'suspended', 'deleted'],
+    default: 'active'
+  },
+  metadata: {
+    userCount: { type: Number, default: 0 },
+    dataVolume: { type: Number, default: 0 },
+    lastActivityAt: { type: Date }
   }
 }, {
   timestamps: true
 });
 
 // Generate company code before validation so "required" passes
-companySchema.pre('validate', async function(next) {
+companySchema.pre('validate', async function (next) {
   try {
     if (!this.companyCode) {
       let code = ''

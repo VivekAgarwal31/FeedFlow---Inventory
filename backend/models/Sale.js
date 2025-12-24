@@ -79,6 +79,11 @@ const saleSchema = new mongoose.Schema({
         type: String,
         trim: true
     },
+    staffName: {
+        type: String,
+        required: true,
+        trim: true
+    },
     saleDate: {
         type: Date,
         default: Date.now,

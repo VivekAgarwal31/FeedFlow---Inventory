@@ -80,6 +80,11 @@ const stockTransactionSchema = new mongoose.Schema({
         type: String,
         trim: true
     },
+    staffName: {
+        type: String,
+        required: true,
+        trim: true
+    },
     transactionDate: {
         type: Date,
         default: Date.now,

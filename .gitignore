@@ -1,1 +1,4 @@
 node_modules
+  
+# Database migration and admin scripts  
+backend/scripts/*.js 

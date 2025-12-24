@@ -224,6 +224,7 @@ router.post('/in', authenticate, requirePermission('canManageInventory'), [
                 quantity: items[0].quantity,
                 reason: reason === 'purchase' ? `Purchase from ${supplierName}` : (supplierName || 'Stock added'),
                 notes: notes || (supplierName && reason !== 'purchase' ? `Supplier: ${supplierName}${referenceNumber ? `, Ref: ${referenceNumber}` : ''}` : ''),
+                staffName: req.user.fullName,
                 referenceId: purchaseId,
                 referenceModel: purchaseId ? 'Purchase' : undefined,
                 performedBy: req.user._id
@@ -242,6 +243,7 @@ router.post('/in', authenticate, requirePermission('canManageInventory'), [
                 items: itemsForTransaction,
                 reason: reason === 'purchase' ? `Purchase from ${supplierName}` : (supplierName || 'Stock added'),
                 notes: notes || (supplierName && reason !== 'purchase' ? `Supplier: ${supplierName}${referenceNumber ? `, Ref: ${referenceNumber}` : ''}` : ''),
+                staffName: req.user.fullName,
                 referenceId: purchaseId,
                 referenceModel: purchaseId ? 'Purchase' : undefined,
                 performedBy: req.user._id
@@ -331,6 +333,7 @@ router.post('/out', authenticate, requirePermission('canManageInventory'), [
                 })),
                 totalAmount: 0,
                 paymentStatus: 'pending',
+                staffName: req.user.fullName,
                 saleDate: new Date(),
                 notes: notes || `Stock Out${referenceNumber ? ` - Ref: ${referenceNumber}` : ''}`
             });
@@ -362,6 +365,7 @@ router.post('/out', authenticate, requirePermission('canManageInventory'), [
                 quantity: -items[0].quantity,
                 reason: reason === 'sale' ? `Sale to ${clientName}` : (reason || 'Stock removed'),
                 notes: notes || (recipientName && reason !== 'sale' ? `Recipient: ${recipientName}${referenceNumber ? `, Ref: ${referenceNumber}` : ''}` : ''),
+                staffName: req.user.fullName,
                 referenceId: saleId,
                 referenceModel: saleId ? 'Sale' : undefined,
                 performedBy: req.user._id
@@ -380,6 +384,7 @@ router.post('/out', authenticate, requirePermission('canManageInventory'), [
                 items: itemsForTransaction,
                 reason: reason === 'sale' ? `Sale to ${clientName}` : (reason || 'Stock removed'),
                 notes: notes || (recipientName && reason !== 'sale' ? `Recipient: ${recipientName}${referenceNumber ? `, Ref: ${referenceNumber}` : ''}` : ''),
+                staffName: req.user.fullName,
                 referenceId: saleId,
                 referenceModel: saleId ? 'Sale' : undefined,
                 performedBy: req.user._id
@@ -499,6 +504,7 @@ router.post('/move', authenticate, requirePermission('canManageInventory'), [
                 quantity: items[0].quantity,
                 reason: `Moved from ${fromWarehouseName} to ${toWarehouseName}`,
                 notes,
+                staffName: req.user.fullName,
                 performedBy: req.user._id
             });
             await transaction.save();
@@ -517,6 +523,7 @@ router.post('/move', authenticate, requirePermission('canManageInventory'), [
                 items: itemsForTransaction,
                 reason: `Moved from ${fromWarehouseName} to ${toWarehouseName}`,
                 notes,
+                staffName: req.user.fullName,
                 performedBy: req.user._id
             });
             await transaction.save();
@@ -603,6 +610,7 @@ router.post('/adjust', authenticate, requirePermission('canManageInventory'), [
                 quantity: difference,
                 reason: reason || 'Stock adjustment',
                 notes,
+                staffName: req.user.fullName,
                 performedBy: req.user._id
             });
             await transaction.save();
@@ -624,6 +632,7 @@ router.post('/adjust', authenticate, requirePermission('canManageInventory'), [
                 items: itemsForTransaction,
                 reason: reason || 'Stock adjustment',
                 notes,
+                staffName: req.user.fullName,
                 performedBy: req.user._id
             });
             await transaction.save();

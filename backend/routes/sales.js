@@ -140,6 +140,7 @@ router.post('/', authenticate, requirePermission('canManageSales'), [
             paymentStatus: paymentStatus || 'pending',
             paymentMethod: paymentMethod || 'cash',
             notes,
+            staffName: req.user.fullName,
             saleDate: saleDate || new Date()
         });
 

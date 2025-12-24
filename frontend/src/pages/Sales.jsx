@@ -568,6 +568,7 @@ const Sales = () => {
                     <TableHead>Warehouse</TableHead>
                     <TableHead>Quantity</TableHead>
                     <TableHead>Total Amount</TableHead>
+                    <TableHead>Staff</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -608,6 +609,7 @@ const Sales = () => {
                           : '0 bags'}
                       </TableCell>
                       <TableCell className="font-mono font-medium">{formatCurrency(sale.totalAmount)}</TableCell>
+                      <TableCell className="text-sm text-gray-600">{sale.staffName || 'Unknown'}</TableCell>
                       <TableCell>
                         {sale.items && sale.items.length > 1 && (
                           <Button

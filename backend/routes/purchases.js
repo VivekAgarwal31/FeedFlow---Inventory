@@ -79,6 +79,7 @@ router.post('/', authenticate, requirePermission('canManagePurchases'), [
             paymentStatus: paymentStatus || 'pending',
             paymentMethod: paymentMethod || 'cash',
             notes,
+            staffName: req.user.fullName,
             purchaseDate: purchaseDate || new Date()
         });
 

@@ -460,6 +460,7 @@ const StockTransactions = () => {
                     <TableHead>Warehouse</TableHead>
                     <TableHead>Quantity</TableHead>
                     <TableHead>Notes</TableHead>
+                    <TableHead>Staff</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -498,6 +499,7 @@ const StockTransactions = () => {
                       <TableCell className="text-muted-foreground max-w-xs truncate">
                         {transaction.reason || transaction.notes || '-'}
                       </TableCell>
+                      <TableCell className="text-sm text-gray-600">{transaction.staffName || 'Unknown'}</TableCell>
                       <TableCell>
                         {transaction.items && transaction.items.length > 0 && (
                           <Button

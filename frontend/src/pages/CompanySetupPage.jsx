@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
-import { Building2, Users, Upload, Wheat, Loader2 } from 'lucide-react'
+import { Building2, Users, Upload, Wheat, Loader2, LogOut } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { companyAPI } from '../lib/api'
 import { Button } from '../components/ui/button'
@@ -11,7 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Alert, AlertDescription } from '../components/ui/alert'
 
 const CompanySetupPage = () => {
-  const { updateUser } = useAuth()
+  const { updateUser, logout } = useAuth()
+  const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -38,12 +40,12 @@ const CompanySetupPage = () => {
 
       // Update user context with company
       updateUser(prev => ({ ...prev, companyId: company }))
-      
+
       window.location.href = '/dashboard'
     } catch (error) {
       setError(error.response?.data?.message || 'Failed to create company')
     }
-    
+
     setLoading(false)
   }
 
@@ -58,12 +60,12 @@ const CompanySetupPage = () => {
 
       // Update user context with company
       updateUser(prev => ({ ...prev, companyId: company }))
-      
+
       window.location.href = '/dashboard'
     } catch (error) {
       setError(error.response?.data?.message || 'Failed to join company')
     }
-    
+
     setLoading(false)
   }
 
@@ -79,13 +81,32 @@ const CompanySetupPage = () => {
     setLoading(false)
   }
 
+  const handleSignOut = () => {
+    logout()
+    window.location.href = '/auth'
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-accent/10 flex items-center justify-center p-4">
       <Card className="w-full max-w-2xl shadow-lg">
         <CardHeader className="text-center space-y-4">
-          <div className="flex justify-center">
-            <div className="h-14 w-14 bg-primary rounded-full flex items-center justify-center">
-              <Wheat className="h-7 w-7 text-primary-foreground" />
+          <div className="flex justify-between items-start">
+            <div className="flex-1" />
+            <div className="flex justify-center flex-1">
+              <div className="h-14 w-14 bg-primary rounded-full flex items-center justify-center">
+                <Wheat className="h-7 w-7 text-primary-foreground" />
+              </div>
+            </div>
+            <div className="flex-1 flex justify-end">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleSignOut}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Sign Out
+              </Button>
             </div>
           </div>
           <div>
@@ -135,8 +156,8 @@ const CompanySetupPage = () => {
 
                 <div className="space-y-2">
                   <Label htmlFor="business-type">Business Type</Label>
-                  <Select 
-                    value={createForm.type} 
+                  <Select
+                    value={createForm.type}
                     onValueChange={(value) => setCreateForm({ ...createForm, type: value })}
                   >
                     <SelectTrigger>

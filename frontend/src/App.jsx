@@ -18,6 +18,10 @@ import Clients from './pages/Clients'
 import Suppliers from './pages/Suppliers'
 import Staff from './pages/Staff'
 import Settings from './pages/Settings'
+import AdminLayout from './layouts/AdminLayout'
+import AdminDashboard from './pages/admin/AdminDashboard'
+import CompanyManagement from './pages/admin/CompanyManagement'
+import UserManagement from './pages/admin/UserManagement'
 
 function App() {
   const { user, loading } = useAuth()
@@ -42,6 +46,17 @@ function App() {
 
   // Authenticated but no company
   if (!user.companyId) {
+    // Super admins don't need a company - redirect to admin panel
+    if (user.role === 'super_admin') {
+      return (
+        <Routes>
+          <Route path="/admin/*" element={<AdminRoutes />} />
+          <Route path="*" element={<Navigate to="/admin" replace />} />
+        </Routes>
+      )
+    }
+
+    // Regular users need to set up company
     return (
       <Routes>
         <Route path="/company-setup" element={<CompanySetupPage />} />
@@ -74,4 +89,34 @@ function App() {
   )
 }
 
-export default App
+// Admin routes (outside main app, accessible to super_admin only)
+function AdminRoutes() {
+  return (
+    <Routes>
+      <Route path="/admin" element={<AdminLayout />}>
+        <Route index element={<AdminDashboard />} />
+        <Route path="companies" element={<CompanyManagement />} />
+        <Route path="users" element={<UserManagement />} />
+      </Route>
+      <Route path="*" element={<Navigate to="/admin" replace />} />
+    </Routes>
+  )
+}
+
+function AppWrapper() {
+  const { user } = useAuth()
+
+  // Super admin users should always go to admin panel
+  if (user && user.role === 'super_admin') {
+    return <AdminRoutes />
+  }
+
+  // Check if accessing admin routes
+  if (window.location.pathname.startsWith('/admin')) {
+    return <AdminRoutes />
+  }
+
+  return <App />
+}
+
+export default AppWrapper

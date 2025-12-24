@@ -77,6 +77,11 @@ const purchaseSchema = new mongoose.Schema({
         type: String,
         trim: true
     },
+    staffName: {
+        type: String,
+        required: true,
+        trim: true
+    },
     purchaseDate: {
         type: Date,
         default: Date.now,
