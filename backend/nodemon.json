@@ -1,0 +1,14 @@
+{
+    "ignore": [
+        "temp/**",
+        "*.log"
+    ],
+    "watch": [
+        "*.js",
+        "routes/**/*.js",
+        "models/**/*.js",
+        "utils/**/*.js",
+        "middleware/**/*.js"
+    ],
+    "ext": "js"
+}

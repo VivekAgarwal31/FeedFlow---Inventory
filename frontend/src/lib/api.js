@@ -132,6 +132,41 @@ export const staffAPI = {
   remove: (userId) => api.delete(`/staff/${userId}`)
 }
 
+// Data Management API
+export const dataManagementAPI = {
+  // Export/Import
+  exportData: (entity, format) => api.get(`/data-management/export/${entity}?format=${format}`, { responseType: 'blob' }),
+  downloadTemplate: (entity, format = 'excel') => api.get(`/data-management/template/${entity}?format=${format}`, { responseType: 'blob' }),
+  importData: (entity, file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post(`/data-management/import/${entity}`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+  },
+
+  // Backup
+  createBackup: () => api.post('/data-management/backup/create'),
+  listBackups: () => api.get('/data-management/backup/list'),
+  downloadBackup: (backupId) => api.get(`/data-management/backup/download/${backupId}`, { responseType: 'blob' }),
+  restoreBackup: (backupId) => api.post('/data-management/backup/restore', { backupId }),
+  deleteBackup: (backupId) => api.delete(`/data-management/backup/${backupId}`),
+
+  // Archive
+  archiveRecords: (entity, cutoffDate) => api.post('/data-management/archive/create', { entity, cutoffDate }),
+  getArchivedRecords: (entity, page = 1, limit = 50) => api.get(`/data-management/archive/${entity}?page=${page}&limit=${limit}`),
+  restoreFromArchive: (entity, recordIds) => api.post('/data-management/archive/restore', { entity, recordIds }),
+  restoreArchive: (entity, cutoffDate) => api.post('/data-management/archive/restore', { entity, cutoffDate }),
+  getArchiveStats: () => api.get('/data-management/archive/stats'),
+
+  // Cleanup
+  analyzeCleanup: () => api.get('/data-management/cleanup/analyze'),
+  executeCleanup: (dryRun = true) => api.post('/data-management/cleanup/execute', { dryRun }),
+  optimizeDatabase: () => api.post('/data-management/cleanup/optimize'),
+  getCleanupHistory: () => api.get('/data-management/cleanup/history')
+}
+
 
 
 export default api
+

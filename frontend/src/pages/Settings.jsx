@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { User, Building2, Shield, Bell, Trash2, Save, Loader2, AlertTriangle, LogOut } from 'lucide-react'
+import { User, Building2, Shield, Bell, Trash2, Save, Loader2, AlertTriangle, LogOut, Database } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { authAPI, companyAPI } from '../lib/api'
 import { clearCompanyData, clearGlobalBusinessData } from '../lib/storage'
@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Alert, AlertDescription } from '../components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Separator } from '../components/ui/separator'
+import DataManagementTab from '../components/DataManagementTab'
 
 const Settings = () => {
   const { user, logout } = useAuth()
@@ -205,7 +206,7 @@ const Settings = () => {
       )}
 
       <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5">
           <TabsTrigger value="profile" className="flex items-center gap-2">
             <User className="h-4 w-4" />
             <span className="hidden sm:inline">Profile</span>
@@ -213,6 +214,10 @@ const Settings = () => {
           <TabsTrigger value="company" className="flex items-center gap-2">
             <Building2 className="h-4 w-4" />
             <span className="hidden sm:inline">Company</span>
+          </TabsTrigger>
+          <TabsTrigger value="data" className="flex items-center gap-2">
+            <Database className="h-4 w-4" />
+            <span className="hidden sm:inline">Data</span>
           </TabsTrigger>
           <TabsTrigger value="security" className="flex items-center gap-2">
             <Shield className="h-4 w-4" />
@@ -553,6 +558,11 @@ const Settings = () => {
               </Card>
             )}
           </div>
+        </TabsContent>
+
+        {/* Data Management Tab */}
+        <TabsContent value="data">
+          <DataManagementTab user={user} />
         </TabsContent>
 
         {/* Security Tab */}

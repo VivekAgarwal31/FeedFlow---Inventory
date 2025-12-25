@@ -14,8 +14,23 @@ import clientRoutes from './routes/clients.js';
 import stockRoutes from './routes/stock.js';
 import staffRoutes from './routes/staff.js';
 import adminRoutes from './routes/admin.js';
+import dataManagementRoutes from './routes/dataManagement.js';
 import { startHttpPing } from './utils/keepAlive.js';
 import { startDbPing } from './utils/dbPing.js';
+
+// Import models to register them with Mongoose
+import './models/User.js';
+import './models/Company.js';
+import './models/Warehouse.js';
+import './models/StockItem.js';
+import './models/Client.js';
+import './models/Supplier.js';
+import './models/Sale.js';
+import './models/Purchase.js';
+import './models/StockTransaction.js';
+import './models/BackupMetadata.js';
+import './models/ArchiveMetadata.js';
+import './models/CleanupLog.js';
 
 // Load environment variables (works both locally and on Render)
 dotenv.config();
@@ -83,6 +98,7 @@ app.use('/api/clients', clientRoutes);
 app.use('/api/stock', stockRoutes);
 app.use('/api/staff', staffRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/data-management', dataManagementRoutes);
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
