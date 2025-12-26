@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, TrendingUp, Loader2, Trash2, Search, X, Eye } from 'lucide-react'
+import { Plus, TrendingUp, Loader2, Trash2, Search, X, Eye, Download, DollarSign } from 'lucide-react'
 import { saleAPI, stockAPI, warehouseAPI, clientAPI } from '../lib/api'
+import { downloadInvoiceBySale } from '../lib/paymentApi'
 import { formatCurrency, formatDate } from '../lib/utils'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
@@ -13,6 +14,7 @@ import { Alert, AlertDescription } from '../components/ui/alert'
 import { Badge } from '../components/ui/badge'
 import { useToast } from '../hooks/use-toast'
 import { Pagination } from '../components/ui/Pagination'
+import PaymentRecorder from '../components/PaymentRecorder'
 
 const Sales = () => {
   const [sales, setSales] = useState([])
@@ -28,6 +30,8 @@ const Sales = () => {
   const [showClientDropdown, setShowClientDropdown] = useState(false)
   const [selectedSale, setSelectedSale] = useState(null)
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false)
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
+  const [selectedSaleForPayment, setSelectedSaleForPayment] = useState(null)
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
@@ -36,9 +40,8 @@ const Sales = () => {
 
   const [form, setForm] = useState({
     clientName: '',
-    clientPhone: '',
-    clientEmail: '',
-    items: []
+    items: [],
+    wages: 0
   })
 
   const [currentItem, setCurrentItem] = useState({
@@ -99,7 +102,9 @@ const Sales = () => {
   }
 
   const calculateSaleTotal = () => {
-    return form.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0)
+    const itemsTotal = form.items.reduce((sum, item) => sum + item.total, 0)
+    const wages = parseFloat(form.wages) || 0
+    return itemsTotal + wages
   }
 
   const addItemToSale = () => {
@@ -152,7 +157,8 @@ const Sales = () => {
         quantity: parseInt(currentItem.quantity),
         unitPrice: parseFloat(currentItem.unitPrice),  // Use unitPrice to match backend
         warehouseId: currentItem.warehouseId,
-        warehouseName: selectedWarehouse.name
+        warehouseName: selectedWarehouse.name,
+        total: parseInt(currentItem.quantity) * parseFloat(currentItem.unitPrice)
       }
       setForm({ ...form, items: [...form.items, newItem] })
     }
@@ -201,10 +207,10 @@ const Sales = () => {
       }
 
       // Prepare sale data for MongoDB - match backend expectations
+      const totalAmount = calculateSaleTotal()
+
       const saleData = {
         clientName: form.clientName,
-        clientPhone: form.clientPhone,
-        clientEmail: form.clientEmail,
         items: form.items.map(item => ({
           itemId: item.itemId,
           itemName: item.itemName,
@@ -212,9 +218,10 @@ const Sales = () => {
           warehouseName: item.warehouseName,
           quantity: item.quantity,
           sellingPrice: item.unitPrice,  // Sale model expects sellingPrice
-          total: item.quantity * item.unitPrice  // Sale model expects total
+          total: item.total  // Sale model expects total
         })),
-        totalAmount: calculateSaleTotal(),
+        wages: parseFloat(form.wages) || 0,
+        totalAmount,
         paymentStatus: 'pending',
         paymentMethod: 'cash'
       }
@@ -229,9 +236,8 @@ const Sales = () => {
       // Reset form
       setForm({
         clientName: '',
-        clientPhone: '',
-        clientEmail: '',
-        items: []
+        items: [],
+        wages: 0
       })
       setCurrentItem({
         itemId: '',
@@ -279,6 +285,44 @@ const Sales = () => {
         variant: 'destructive'
       })
     }
+  }
+
+  const handleDownloadInvoice = async (sale) => {
+    try {
+      const blob = await downloadInvoiceBySale(sale._id)
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `Invoice-${sale.invoiceNumber || sale._id}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+
+      toast({
+        title: 'Success',
+        description: 'Invoice downloaded successfully'
+      })
+    } catch (error) {
+      console.error('Error downloading invoice:', error)
+      // Only show error if it's actually an error (not a blob response)
+      if (error.response && error.response.status !== 200) {
+        toast({
+          title: 'Error',
+          description: error.response?.data?.message || 'Failed to download invoice',
+          variant: 'destructive'
+        })
+      }
+    }
+  }
+
+  const handleRecordPayment = (sale) => {
+    setSelectedSaleForPayment(sale)
+    setPaymentDialogOpen(true)
+  }
+
+  const handlePaymentRecorded = () => {
+    fetchData() // Refresh sales data
   }
 
   // Calculate pagination
@@ -501,6 +545,28 @@ const Sales = () => {
                           </TableRow>
                         ))}
                         <TableRow>
+                          <TableCell colSpan={3} className="font-medium">Items Subtotal</TableCell>
+                          <TableCell className="font-mono font-bold">
+                            {formatCurrency(form.items.reduce((sum, item) => sum + item.total, 0))}
+                          </TableCell>
+                          <TableCell></TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell colSpan={3} className="font-medium">Wages</TableCell>
+                          <TableCell className="font-mono">
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              placeholder="0"
+                              value={form.wages}
+                              onChange={(e) => setForm({ ...form, wages: e.target.value })}
+                              className="w-32"
+                            />
+                          </TableCell>
+                          <TableCell></TableCell>
+                        </TableRow>
+                        <TableRow>
                           <TableCell colSpan={3} className="font-medium">Total Sale Amount</TableCell>
                           <TableCell className="font-mono font-bold text-lg">
                             {formatCurrency(calculateSaleTotal())}
@@ -589,6 +655,7 @@ const Sales = () => {
                     <TableHead>Warehouse</TableHead>
                     <TableHead>Quantity</TableHead>
                     <TableHead>Total Amount</TableHead>
+                    <TableHead>Payment</TableHead>
                     <TableHead>Staff</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
@@ -630,17 +697,46 @@ const Sales = () => {
                           : '0 bags'}
                       </TableCell>
                       <TableCell className="font-mono font-medium">{formatCurrency(sale.totalAmount)}</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            sale.paymentStatus === 'paid' ? 'default' :
+                              sale.paymentStatus === 'partial' ? 'secondary' :
+                                'destructive'
+                          }
+                          className="text-xs"
+                        >
+                          {sale.paymentStatus?.toUpperCase() || 'PENDING'}
+                        </Badge>
+                      </TableCell>
                       <TableCell className="text-sm text-gray-600">{sale.staffName || 'Unknown'}</TableCell>
                       <TableCell>
-                        <div className="flex gap-2">
+                        <div className="flex gap-1 flex-wrap">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDownloadInvoice(sale)}
+                            title="Download Invoice"
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                          {sale.paymentStatus !== 'paid' && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleRecordPayment(sale)}
+                              title="Record Payment"
+                            >
+                              <DollarSign className="h-4 w-4" />
+                            </Button>
+                          )}
                           {sale.items && sale.items.length > 1 && (
                             <Button
                               variant="ghost"
                               size="sm"
                               onClick={() => viewSaleDetails(sale)}
                             >
-                              <Eye className="h-4 w-4 mr-1" />
-                              View Details
+                              <Eye className="h-4 w-4" />
                             </Button>
                           )}
                           <Button
@@ -733,6 +829,20 @@ const Sales = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Payment Recorder Dialog */}
+      {selectedSaleForPayment && (
+        <PaymentRecorder
+          open={paymentDialogOpen}
+          onClose={() => {
+            setPaymentDialogOpen(false)
+            setSelectedSaleForPayment(null)
+          }}
+          transaction={selectedSaleForPayment}
+          transactionType="sale"
+          onPaymentRecorded={handlePaymentRecorded}
+        />
+      )}
     </div>
   )
 }

@@ -38,7 +38,34 @@ router.get('/', authenticate, async (req, res) => {
         }
 
         const clients = await Client.find({ companyId })
-            .sort({ name: 1 });
+            .sort({ name: 1 })
+            .lean();
+
+        // Calculate currentCredit for each client from unpaid sales
+        const Sale = (await import('../models/Sale.js')).default;
+
+        for (const client of clients) {
+            const unpaidSales = await Sale.find({
+                companyId,
+                clientId: client._id,
+                paymentStatus: { $in: ['pending', 'partial'] }
+            });
+
+            client.currentCredit = unpaidSales.reduce((sum, sale) => {
+                const amountDue = sale.amountDue || (sale.totalAmount - (sale.amountPaid || 0));
+                return sum + amountDue;
+            }, 0);
+
+            // Get most recent sale for lastPurchaseDate
+            const mostRecentSale = await Sale.findOne({
+                companyId,
+                clientId: client._id
+            }).sort({ saleDate: -1 }).select('saleDate');
+
+            if (mostRecentSale) {
+                client.lastPurchaseDate = mostRecentSale.saleDate;
+            }
+        }
 
         res.json({ clients });
     } catch (error) {
@@ -166,6 +193,85 @@ router.delete('/:id', authenticate, requirePermission('canManageClients'), async
         res.json({ message: 'Client deleted successfully' });
     } catch (error) {
         console.error('Delete client error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// Update client credit limit
+router.put('/:id/credit-limit', authenticate, requirePermission('canManageClients'), async (req, res) => {
+    try {
+        const companyId = req.user.companyId?._id || req.user.companyId;
+        const { creditLimit, paymentTerms, defaultDueDays } = req.body;
+
+        const client = await Client.findOne({ _id: req.params.id, companyId });
+
+        if (!client) {
+            return res.status(404).json({ message: 'Client not found' });
+        }
+
+        // Update credit settings
+        if (creditLimit !== undefined) client.creditLimit = creditLimit;
+        if (paymentTerms !== undefined) client.paymentTerms = paymentTerms;
+        if (defaultDueDays !== undefined) client.defaultDueDays = defaultDueDays;
+
+        // Update credit status
+        client.updateCreditStatus();
+
+        await client.save();
+
+        res.json({
+            message: 'Credit limit updated successfully',
+            client
+        });
+    } catch (error) {
+        console.error('Update credit limit error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// Get client credit status
+router.get('/:id/credit-status', authenticate, async (req, res) => {
+    try {
+        const companyId = req.user.companyId?._id || req.user.companyId;
+
+        const client = await Client.findOne({ _id: req.params.id, companyId });
+
+        if (!client) {
+            return res.status(404).json({ message: 'Client not found' });
+        }
+
+        res.json({
+            creditLimit: client.creditLimit,
+            currentCredit: client.currentCredit,
+            creditUsed: client.creditUsed,
+            available: Math.max(0, client.creditLimit - client.currentCredit),
+            creditStatus: client.creditStatus,
+            paymentTerms: client.paymentTerms,
+            overdueAmount: client.overdueAmount
+        });
+    } catch (error) {
+        console.error('Get credit status error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// Get client payment history
+router.get('/:id/payment-history', authenticate, async (req, res) => {
+    try {
+        const companyId = req.user.companyId?._id || req.user.companyId;
+        const Payment = (await import('../models/Payment.js')).default;
+
+        const payments = await Payment.find({
+            companyId,
+            partyId: req.params.id,
+            partyType: 'client'
+        })
+            .sort({ paymentDate: -1 })
+            .limit(50);
+
+        res.json({ payments });
+    } catch (error) {
+        console.error('Get payment history error:', error);
         res.status(500).json({ message: 'Server error' });
     }
 });

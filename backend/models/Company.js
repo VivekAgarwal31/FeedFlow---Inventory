@@ -24,6 +24,14 @@ const companySchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  proprietorName: {
+    type: String,
+    trim: true
+  },
+  phone: {
+    type: String,
+    trim: true
+  },
   gstNumber: {
     type: String,
     trim: true

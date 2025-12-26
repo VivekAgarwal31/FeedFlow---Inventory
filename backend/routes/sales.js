@@ -101,7 +101,7 @@ router.post('/', authenticate, requirePermission('canManageSales'), [
             return res.status(400).json({ message: 'No company associated with user' });
         }
 
-        const { clientName, clientPhone, clientEmail, items, totalAmount, paymentStatus, paymentMethod, notes, saleDate } = req.body;
+        const { clientName, clientPhone, clientEmail, items, wages, totalAmount, paymentStatus, paymentMethod, notes, saleDate } = req.body;
 
         // Create or update client
         let client = await Client.findOne({ companyId, name: clientName });
@@ -136,6 +136,7 @@ router.post('/', authenticate, requirePermission('canManageSales'), [
             clientPhone,
             clientEmail,
             items,
+            wages: wages || 0,
             totalAmount,
             paymentStatus: paymentStatus || 'pending',
             paymentMethod: paymentMethod || 'cash',

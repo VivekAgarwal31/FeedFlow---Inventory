@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, Users, Phone, Mail, MapPin, Loader2, ArrowLeft, Calendar, Filter, Eye, Download, Search, Trash2 } from 'lucide-react'
+import { Plus, Users, Phone, Mail, MapPin, Loader2, ArrowLeft, Calendar, Filter, Eye, Download, Search, Trash2, CreditCard, DollarSign, FileText } from 'lucide-react'
 import { clientAPI, saleAPI } from '../lib/api'
+import { downloadInvoiceBySale, getClientPayments, recordClientPayment } from '../lib/paymentApi'
 import { formatCurrency, formatDate } from '../lib/utils'
 import { exportClientToExcel, exportClientToPDF } from '../lib/exportUtils'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
@@ -28,6 +29,17 @@ const Clients = () => {
   const [selectedSale, setSelectedSale] = useState(null)
   const [saleDetailsDialogOpen, setSaleDetailsDialogOpen] = useState(false)
   const [dateFilter, setDateFilter] = useState('all')
+  const [financialDialogOpen, setFinancialDialogOpen] = useState(false)
+  const [clientPayments, setClientPayments] = useState([])
+  const [clientPaymentDialogOpen, setClientPaymentDialogOpen] = useState(false)
+  const [paymentForm, setPaymentForm] = useState({
+    amount: '',
+    paymentMode: 'cash',
+    paymentDate: new Date().toISOString().split('T')[0],
+    referenceNumber: '',
+    notes: ''
+  })
+  const [submittingPayment, setSubmittingPayment] = useState(false)
   const { toast } = useToast()
 
   // Export dialog state
@@ -197,6 +209,114 @@ const Clients = () => {
     setSaleDetailsDialogOpen(true)
   }
 
+  const handleDownloadInvoice = async (sale) => {
+    try {
+      const blob = await downloadInvoiceBySale(sale._id)
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `Invoice-${sale.invoiceNumber || sale._id}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+
+      toast({
+        title: 'Success',
+        description: 'Invoice downloaded successfully'
+      })
+    } catch (error) {
+      console.error('Error downloading invoice:', error)
+      // Only show error if it's actually an error (not a blob response)
+      if (error.response && error.response.status !== 200) {
+        toast({
+          title: 'Error',
+          description: error.response?.data?.message || 'Failed to download invoice',
+          variant: 'destructive'
+        })
+      }
+    }
+  }
+
+  const handleViewFinancials = async () => {
+    try {
+      const response = await getClientPayments(selectedClient._id)
+      setClientPayments(response.payments || [])
+      setFinancialDialogOpen(true)
+    } catch (error) {
+      console.error('Error fetching client payments:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to load payment history',
+        variant: 'destructive'
+      })
+    }
+  }
+
+  const handleOpenClientPayment = () => {
+    setPaymentForm({
+      amount: '',
+      paymentMode: 'cash',
+      paymentDate: new Date().toISOString().split('T')[0],
+      referenceNumber: '',
+      notes: ''
+    })
+    setClientPaymentDialogOpen(true)
+  }
+
+  const handleSubmitClientPayment = async (e) => {
+    e.preventDefault()
+
+    setSubmittingPayment(true)
+
+    try {
+      const response = await recordClientPayment({
+        clientId: selectedClient._id,
+        amount: parseFloat(paymentForm.amount),
+        paymentMode: paymentForm.paymentMode,
+        paymentDate: paymentForm.paymentDate,
+        referenceNumber: paymentForm.referenceNumber,
+        notes: paymentForm.notes
+      })
+
+      // Show success toast immediately
+      toast({
+        title: 'Success',
+        description: `Payment recorded! ${response.salesUpdated.length} bill(s) updated.${response.overpaidAmount > 0 ? ` Overpaid: ${formatCurrency(response.overpaidAmount)}` : ''}`
+      })
+
+      setClientPaymentDialogOpen(false)
+      setSubmittingPayment(false)
+
+      // Refresh client data (don't let this fail the whole operation)
+      try {
+        await fetchClients()
+
+        // Refresh client transactions
+        const salesResponse = await saleAPI.getClientSales(selectedClient._id)
+        setClientTransactions(salesResponse.sales || [])
+
+        // Update selected client with new data
+        const updatedClientsResponse = await clientAPI.getClients()
+        const updatedClient = updatedClientsResponse.clients.find(c => c._id === selectedClient._id)
+        if (updatedClient) {
+          setSelectedClient(updatedClient)
+        }
+      } catch (refreshError) {
+        console.error('Error refreshing client data:', refreshError)
+        // Silently fail - payment was successful
+      }
+    } catch (error) {
+      console.error('Error recording payment:', error)
+      setSubmittingPayment(false)
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to record payment',
+        variant: 'destructive'
+      })
+    }
+  }
+
   const handleDelete = async (clientId, clientName) => {
     if (!window.confirm(`Are you sure you want to delete client "${clientName}"? This action cannot be undone.`)) {
       return
@@ -352,10 +472,14 @@ const Clients = () => {
               </p>
             </div>
           </div>
+          <Button onClick={handleOpenClientPayment}>
+            <DollarSign className="mr-2 h-4 w-4" />
+            Record Payment
+          </Button>
         </div>
 
         {/* Client Summary */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
@@ -381,16 +505,46 @@ const Clients = () => {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-primary" />
+                <CreditCard className="h-5 w-5 text-primary" />
                 <div>
-                  <p className="text-sm text-muted-foreground">Last Purchase</p>
-                  <p className="text-lg font-semibold">
-                    {selectedClient.lastPurchase ? formatDate(selectedClient.lastPurchase) : 'Never'}
-                  </p>
+                  <p className="text-sm text-muted-foreground">Credit Limit</p>
+                  <p className="text-2xl font-bold">{formatCurrency(selectedClient.creditLimit || 0)}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <DollarSign className="h-5 w-5 text-orange-500" />
+                <div className="flex-1">
+                  <p className="text-sm text-muted-foreground">Total Receivable</p>
+                  <p className="text-2xl font-bold text-orange-600">{formatCurrency(selectedClient.currentCredit || 0)}</p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleViewFinancials}
+                  title="View Financial Details"
+                >
+                  <Eye className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+          {selectedClient.overpaidAmount > 0 && (
+            <Card className="border-green-200 bg-green-50">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <CreditCard className="h-5 w-5 text-green-600" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">Overpaid (Credit)</p>
+                    <p className="text-2xl font-bold text-green-600">{formatCurrency(selectedClient.overpaidAmount)}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
@@ -520,16 +674,25 @@ const Clients = () => {
                       </TableCell>
                       <TableCell className="font-mono font-medium">{formatCurrency(transaction.totalAmount)}</TableCell>
                       <TableCell>
-                        {transaction.items && transaction.items.length > 1 && (
+                        <div className="flex gap-1">
                           <Button
-                            variant="ghost"
+                            variant="outline"
                             size="sm"
-                            onClick={() => viewSaleDetails(transaction)}
+                            onClick={() => handleDownloadInvoice(transaction)}
+                            title="Download Invoice"
                           >
-                            <Eye className="h-4 w-4 mr-1" />
-                            View Details
+                            <Download className="h-4 w-4" />
                           </Button>
-                        )}
+                          {transaction.items && transaction.items.length > 1 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => viewSaleDetails(transaction)}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -598,6 +761,213 @@ const Clients = () => {
                 </div>
               </div>
             )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Financial Details Dialog */}
+        <Dialog open={financialDialogOpen} onOpenChange={setFinancialDialogOpen}>
+          <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Financial Details - {selectedClient.name}</DialogTitle>
+              <DialogDescription>
+                Complete payment and billing history
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Left: Payments */}
+              <div>
+                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                  <DollarSign className="h-5 w-5 text-green-600" />
+                  PAYMENTS
+                </h3>
+                <div className="space-y-3 max-h-[500px] overflow-y-auto">
+                  {clientPayments.length > 0 ? (
+                    clientPayments.map((payment) => (
+                      <Card key={payment._id} className="p-4">
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-start">
+                            <span className="text-sm text-muted-foreground">
+                              {formatDate(payment.paymentDate)}
+                            </span>
+                            <span className="text-lg font-bold text-green-600">
+                              {formatCurrency(payment.amount)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="font-medium">{payment.paymentMode || 'Cash'}</span>
+                            {payment.referenceNumber && (
+                              <span className="text-muted-foreground">
+                                REF: {payment.referenceNumber}
+                              </span>
+                            )}
+                          </div>
+                          {payment.notes && (
+                            <p className="text-xs text-muted-foreground">{payment.notes}</p>
+                          )}
+                        </div>
+                      </Card>
+                    ))
+                  ) : (
+                    <p className="text-muted-foreground text-center py-8">No payments recorded</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Right: Bills/Sales */}
+              <div>
+                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-blue-600" />
+                  BILLS
+                </h3>
+                <div className="space-y-3 max-h-[500px] overflow-y-auto">
+                  {clientTransactions.length > 0 ? (
+                    clientTransactions.map((sale) => (
+                      <Card key={sale._id} className="p-4">
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-start">
+                            <span className="text-sm text-muted-foreground">
+                              {formatDate(sale.createdAt)}
+                            </span>
+                            <span className="text-lg font-bold text-blue-600">
+                              {formatCurrency(sale.totalAmount)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="font-medium">
+                              Invoice #{sale.invoiceNumber || sale._id.slice(-6)}
+                            </span>
+                            <Badge
+                              variant={
+                                sale.paymentStatus === 'paid' ? 'default' :
+                                  sale.paymentStatus === 'partial' ? 'secondary' :
+                                    'destructive'
+                              }
+                              className="text-xs"
+                            >
+                              {sale.paymentStatus?.toUpperCase() || 'PENDING'}
+                            </Badge>
+                          </div>
+                        </div>
+                      </Card>
+                    ))
+                  ) : (
+                    <p className="text-muted-foreground text-center py-8">No bills found</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Client Payment Dialog */}
+        <Dialog open={clientPaymentDialogOpen} onOpenChange={setClientPaymentDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Record Payment - {selectedClient.name}</DialogTitle>
+              <DialogDescription>
+                Record a payment for this client. Payment will be automatically allocated across unpaid bills.
+              </DialogDescription>
+            </DialogHeader>
+
+            <form onSubmit={handleSubmitClientPayment} className="space-y-4">
+              {/* Summary Info */}
+              <div className="bg-muted p-3 rounded-md space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Total Receivable:</span>
+                  <span className="font-semibold text-orange-600">{formatCurrency(selectedClient.currentCredit || 0)}</span>
+                </div>
+                {selectedClient.overpaidAmount > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Current Overpaid:</span>
+                    <span className="font-semibold text-green-600">{formatCurrency(selectedClient.overpaidAmount)}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Amount */}
+              <div className="space-y-2">
+                <Label htmlFor="payment-amount">Amount (₹) *</Label>
+                <Input
+                  id="payment-amount"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  placeholder="Enter amount"
+                  value={paymentForm.amount}
+                  onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
+                  onWheel={(e) => e.target.blur()}
+                  required
+                />
+              </div>
+
+              {/* Payment Mode */}
+              <div className="space-y-2">
+                <Label htmlFor="payment-mode">Payment Mode *</Label>
+                <Select value={paymentForm.paymentMode} onValueChange={(value) => setPaymentForm({ ...paymentForm, paymentMode: value })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cash">Cash</SelectItem>
+                    <SelectItem value="bank">Bank Transfer</SelectItem>
+                    <SelectItem value="upi">UPI</SelectItem>
+                    <SelectItem value="cheque">Cheque</SelectItem>
+                    <SelectItem value="card">Card</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Payment Date */}
+              <div className="space-y-2">
+                <Label htmlFor="payment-date">Payment Date *</Label>
+                <Input
+                  id="payment-date"
+                  type="date"
+                  value={paymentForm.paymentDate}
+                  onChange={(e) => setPaymentForm({ ...paymentForm, paymentDate: e.target.value })}
+                  required
+                />
+              </div>
+
+              {/* Reference Number */}
+              <div className="space-y-2">
+                <Label htmlFor="reference-number">Reference Number</Label>
+                <Input
+                  id="reference-number"
+                  placeholder="Transaction ID, Cheque No, etc."
+                  value={paymentForm.referenceNumber}
+                  onChange={(e) => setPaymentForm({ ...paymentForm, referenceNumber: e.target.value })}
+                />
+              </div>
+
+              {/* Notes */}
+              <div className="space-y-2">
+                <Label htmlFor="payment-notes">Notes</Label>
+                <Input
+                  id="payment-notes"
+                  placeholder="Additional notes"
+                  value={paymentForm.notes}
+                  onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })}
+                />
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <Button type="submit" disabled={submittingPayment} className="flex-1">
+                  {submittingPayment ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Recording...
+                    </>
+                  ) : (
+                    'Record Payment'
+                  )}
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setClientPaymentDialogOpen(false)} disabled={submittingPayment}>
+                  Cancel
+                </Button>
+              </div>
+            </form>
           </DialogContent>
         </Dialog>
       </div>
@@ -897,7 +1267,7 @@ const Clients = () => {
                 <TableHead>Client Name</TableHead>
                 <TableHead>Total Purchases</TableHead>
                 <TableHead>Sales Count</TableHead>
-                <TableHead>Last Purchase</TableHead>
+                <TableHead>Receivable</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -917,11 +1287,7 @@ const Clients = () => {
                     <span className="font-mono">{client.salesCount}</span>
                   </TableCell>
                   <TableCell>
-                    {client.lastPurchase ? (
-                      formatDate(client.lastPurchase)
-                    ) : (
-                      <span className="text-muted-foreground">Never</span>
-                    )}
+                    <span className="font-mono text-orange-600">{formatCurrency(client.currentCredit || 0)}</span>
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-2">

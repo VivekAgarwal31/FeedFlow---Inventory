@@ -60,10 +60,51 @@ const saleSchema = new mongoose.Schema({
         lowercase: true
     },
     items: [saleItemSchema],
+    wages: {
+        type: Number,
+        default: 0,
+        min: 0
+    },
     totalAmount: {
         type: Number,
         required: true,
         min: 0
+    },
+    // Invoice and payment tracking fields
+    invoiceNumber: {
+        type: Number,
+        index: true
+    },
+    invoiceDate: {
+        type: Date
+    },
+    dueDate: {
+        type: Date
+    },
+    amountPaid: {
+        type: Number,
+        default: 0,
+        min: 0
+    },
+    amountDue: {
+        type: Number,
+        default: 0,
+        min: 0
+    },
+    paymentHistory: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Payment'
+    }],
+    lastPaymentDate: {
+        type: Date
+    },
+    paymentTerms: {
+        type: String,
+        trim: true
+    },
+    isOverdue: {
+        type: Boolean,
+        default: false
     },
     paymentStatus: {
         type: String,
@@ -93,9 +134,33 @@ const saleSchema = new mongoose.Schema({
     timestamps: true
 });
 
+// Calculate amount due before saving
+saleSchema.pre('save', function (next) {
+    // Calculate amount due
+    this.amountDue = this.totalAmount - this.amountPaid;
+
+    // Auto-update payment status based on amounts
+    if (this.amountPaid === 0) {
+        this.paymentStatus = 'pending';
+    } else if (this.amountPaid >= this.totalAmount) {
+        this.paymentStatus = 'paid';
+    } else {
+        this.paymentStatus = 'partial';
+    }
+
+    // Check if overdue
+    if (this.dueDate && this.amountDue > 0) {
+        this.isOverdue = new Date() > this.dueDate;
+    }
+
+    next();
+});
+
 // Compound indexes for common queries
 saleSchema.index({ companyId: 1, saleDate: -1 }); // Recent sales
 saleSchema.index({ companyId: 1, clientName: 1 }); // Client-based queries
 saleSchema.index({ companyId: 1, paymentStatus: 1 }); // Payment status queries
+saleSchema.index({ companyId: 1, isOverdue: 1 }); // Overdue sales
+saleSchema.index({ companyId: 1, invoiceNumber: 1 }); // Invoice lookup
 
 export default mongoose.model('Sale', saleSchema);

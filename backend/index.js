@@ -16,6 +16,9 @@ import staffRoutes from './routes/staff.js';
 import adminRoutes from './routes/admin.js';
 import dataManagementRoutes from './routes/dataManagement.js';
 import reportRoutes from './routes/reports.js';
+import paymentRoutes from './routes/payments.js';
+import invoiceRoutes from './routes/invoices.js';
+import accountsRoutes from './routes/accounts.js';
 import { startHttpPing } from './utils/keepAlive.js';
 import { startDbPing } from './utils/dbPing.js';
 
@@ -32,6 +35,9 @@ import './models/StockTransaction.js';
 import './models/BackupMetadata.js';
 import './models/ArchiveMetadata.js';
 import './models/CleanupLog.js';
+import './models/Payment.js';
+import './models/Invoice.js';
+import './models/PaymentReminder.js';
 
 // Load environment variables (works both locally and on Render)
 dotenv.config();
@@ -101,6 +107,9 @@ app.use('/api/staff', staffRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/data-management', dataManagementRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/payments', paymentRoutes);
+app.use('/api/invoices', invoiceRoutes);
+app.use('/api/accounts', accountsRoutes);
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);

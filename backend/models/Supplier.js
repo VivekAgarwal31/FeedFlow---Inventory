@@ -58,6 +58,30 @@ const supplierSchema = new mongoose.Schema({
     lastPurchaseDate: {
         type: Date
     },
+    // Payment tracking fields
+    currentPayable: {
+        type: Number,
+        default: 0,
+        min: 0
+    },
+    overduePayable: {
+        type: Number,
+        default: 0,
+        min: 0
+    },
+    lastPaymentDate: {
+        type: Date
+    },
+    lastPaymentAmount: {
+        type: Number,
+        default: 0,
+        min: 0
+    },
+    averagePaymentDays: {
+        type: Number,
+        default: 0,
+        min: 0
+    },
     isActive: {
         type: Boolean,
         default: true

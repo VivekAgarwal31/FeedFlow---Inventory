@@ -18,7 +18,8 @@ import {
   LogOut,
   Truck,
   Wheat,
-  FileBarChart
+  FileBarChart,
+  DollarSign
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { Button } from '../ui/button'
@@ -82,7 +83,9 @@ const DashboardLayout = ({ children }) => {
         { title: 'Sales', icon: TrendingUp, path: '/sales' },
         { title: 'Purchases', icon: ShoppingCart, path: '/purchases' },
         { title: 'Clients', icon: Users, path: '/clients' },
-        { title: 'Suppliers', icon: Truck, path: '/suppliers' }
+        { title: 'Suppliers', icon: Truck, path: '/suppliers' },
+        { title: 'Accounts Receivable', icon: DollarSign, path: '/accounts-receivable' },
+        { title: 'Accounts Payable', icon: DollarSign, path: '/accounts-payable' }
       ]
     },
     ...(user?.permissions?.canManageStaff ? [{

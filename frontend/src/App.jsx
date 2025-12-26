@@ -24,6 +24,8 @@ import CompanyManagement from './pages/admin/CompanyManagement'
 import UserManagement from './pages/admin/UserManagement'
 import OTPVerification from './pages/OTPVerification'
 import Reports from './pages/Reports'
+import AccountsReceivable from './pages/AccountsReceivable'
+import AccountsPayable from './pages/AccountsPayable'
 
 function App() {
   const { user, loading } = useAuth()
@@ -87,6 +89,8 @@ function App() {
         <Route path="/staff" element={<Staff />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/reports" element={<Reports />} />
+        <Route path="/accounts-receivable" element={<AccountsReceivable />} />
+        <Route path="/accounts-payable" element={<AccountsPayable />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </DashboardLayout>
