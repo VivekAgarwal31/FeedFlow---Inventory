@@ -104,7 +104,8 @@ router.post('/', authenticate, requirePermission('canManageInventory'), [
                 quantity,
                 reason: notes || 'Initial stock creation',
                 notes,
-                performedBy: req.user._id
+                performedBy: req.user._id,
+                staffName: req.user.fullName
             });
             await transaction.save();
         }
@@ -194,6 +195,7 @@ router.post('/in', authenticate, requirePermission('canManageInventory'), [
                 totalAmount: 0,
                 paymentStatus: 'pending',
                 purchaseDate: new Date(),
+                staffName: req.user.fullName,
                 notes: notes || `Stock In${referenceNumber ? ` - Ref: ${referenceNumber}` : ''}`
             });
             await purchase.save();
@@ -341,15 +343,24 @@ router.post('/out', authenticate, requirePermission('canManageInventory'), [
             saleId = sale._id;
 
             // Update client statistics
-            await Client.findByIdAndUpdate(clientId, {
-                $inc: {
-                    totalRevenue: 0,
-                    saleCount: 1
-                },
-                $set: {
-                    lastPurchaseDate: new Date()
+            try {
+                const clientUpdate = await Client.findByIdAndUpdate(clientId, {
+                    $inc: {
+                        totalRevenue: 0,
+                        salesCount: 1
+                    },
+                    $set: {
+                        lastPurchaseDate: new Date()
+                    }
+                });
+
+                if (!clientUpdate) {
+                    console.warn(`Client ${clientId} not found for statistics update`);
                 }
-            });
+            } catch (clientError) {
+                console.error('Error updating client statistics:', clientError);
+                // Don't fail the whole operation if client update fails
+            }
         }
 
         // Create single or consolidated transaction based on item count

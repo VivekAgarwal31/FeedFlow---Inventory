@@ -155,7 +155,8 @@ router.post('/', authenticate, requirePermission('canManagePurchases'), [
                     referenceModel: 'Purchase',
                     reason: `Purchase from ${supplierName}`,
                     transactionDate: purchaseDate || new Date(),
-                    performedBy: req.user._id
+                    performedBy: req.user._id,
+                    staffName: req.user.fullName
                 });
                 await transaction.save();
             } else {
@@ -173,7 +174,8 @@ router.post('/', authenticate, requirePermission('canManagePurchases'), [
                     referenceModel: 'Purchase',
                     reason: `Purchase from ${supplierName}`,
                     transactionDate: purchaseDate || new Date(),
-                    performedBy: req.user._id
+                    performedBy: req.user._id,
+                    staffName: req.user.fullName
                 });
                 await transaction.save();
             }

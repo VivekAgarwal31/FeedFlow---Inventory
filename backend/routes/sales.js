@@ -206,7 +206,8 @@ router.post('/', authenticate, requirePermission('canManageSales'), [
                 referenceModel: 'Sale',
                 reason: `Sale to ${clientName}`,
                 transactionDate: saleDate || new Date(),
-                performedBy: req.user._id
+                performedBy: req.user._id,
+                staffName: req.user.fullName
             });
             await transaction.save();
         } else {
@@ -226,7 +227,8 @@ router.post('/', authenticate, requirePermission('canManageSales'), [
                 referenceModel: 'Sale',
                 reason: `Sale to ${clientName}`,
                 transactionDate: saleDate || new Date(),
-                performedBy: req.user._id
+                performedBy: req.user._id,
+                staffName: req.user.fullName
             });
             await transaction.save();
         }

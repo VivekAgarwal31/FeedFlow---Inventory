@@ -23,6 +23,7 @@ import AdminDashboard from './pages/admin/AdminDashboard'
 import CompanyManagement from './pages/admin/CompanyManagement'
 import UserManagement from './pages/admin/UserManagement'
 import OTPVerification from './pages/OTPVerification'
+import Reports from './pages/Reports'
 
 function App() {
   const { user, loading } = useAuth()
@@ -85,6 +86,7 @@ function App() {
         <Route path="/suppliers" element={<Suppliers />} />
         <Route path="/staff" element={<Staff />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/reports" element={<Reports />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </DashboardLayout>

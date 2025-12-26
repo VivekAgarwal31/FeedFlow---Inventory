@@ -15,6 +15,7 @@ import stockRoutes from './routes/stock.js';
 import staffRoutes from './routes/staff.js';
 import adminRoutes from './routes/admin.js';
 import dataManagementRoutes from './routes/dataManagement.js';
+import reportRoutes from './routes/reports.js';
 import { startHttpPing } from './utils/keepAlive.js';
 import { startDbPing } from './utils/dbPing.js';
 
@@ -99,6 +100,7 @@ app.use('/api/stock', stockRoutes);
 app.use('/api/staff', staffRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/data-management', dataManagementRoutes);
+app.use('/api/reports', reportRoutes);
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);

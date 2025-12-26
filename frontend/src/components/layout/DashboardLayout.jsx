@@ -17,7 +17,8 @@ import {
   Menu,
   LogOut,
   Truck,
-  Wheat
+  Wheat,
+  FileBarChart
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { Button } from '../ui/button'
@@ -89,6 +90,11 @@ const DashboardLayout = ({ children }) => {
       icon: Users,
       path: '/staff'
     }] : []),
+    {
+      title: 'Reports',
+      icon: FileBarChart,
+      path: '/reports'
+    },
     {
       title: 'Settings',
       icon: Settings,
