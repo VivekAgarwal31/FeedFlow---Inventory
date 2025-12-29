@@ -101,38 +101,26 @@ const Dashboard = () => {
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Total Receivables
-              </CardTitle>
-              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">New</Badge>
-            </div>
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Total Receivables
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-1">
-              <p className="text-xs text-muted-foreground">Total unpaid bills ₹0.00</p>
-              <div className="text-2xl font-bold">
-                {formatCurrency(stats.totalReceivables)}
-              </div>
+            <div className="text-2xl font-bold">
+              {formatCurrency(stats.totalReceivables)}
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Total Payables
-              </CardTitle>
-              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">New</Badge>
-            </div>
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Total Payables
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-1">
-              <p className="text-xs text-muted-foreground">Total unpaid bills ₹0.00</p>
-              <div className="text-2xl font-bold">
-                {formatCurrency(stats.totalPayables)}
-              </div>
+            <div className="text-2xl font-bold">
+              {formatCurrency(stats.totalPayables)}
             </div>
           </CardContent>
         </Card>

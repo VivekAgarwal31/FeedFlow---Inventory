@@ -348,6 +348,14 @@ const DashboardLayout = ({ children }) => {
         <main className="p-4 md:p-6">
           {children}
         </main>
+
+        {/* Copyright Footer */}
+        <footer className="border-t border-gray-200 bg-white py-4 px-4 md:px-6">
+          <div className="text-center text-sm text-gray-600">
+            <p>© {new Date().getFullYear()} <span className="font-semibold text-primary">Stockwise</span>. All rights reserved.</p>
+            <p className="text-xs text-gray-500 mt-1">Smart Inventory Management System</p>
+          </div>
+        </footer>
       </div>
     </div>
   )

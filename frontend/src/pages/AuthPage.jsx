@@ -117,9 +117,9 @@ const AuthPage = () => {
             </div>
           </div>
           <div>
-            <CardTitle className="text-2xl font-bold">Inventory Manager</CardTitle>
+            <CardTitle className="text-2xl font-bold">Stockwise</CardTitle>
             <CardDescription className="mt-1">
-              Manage your inventory efficiently
+              Smart Inventory Management System
             </CardDescription>
           </div>
         </CardHeader>
