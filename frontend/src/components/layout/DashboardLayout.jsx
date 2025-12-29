@@ -197,6 +197,8 @@ const DashboardLayout = ({ children }) => {
           <img
             src="/stockwise logo.webp"
             alt="Stockwise Logo"
+            width="200"
+            height="56"
             className="h-14 object-contain py-1"
           />
         </div>
