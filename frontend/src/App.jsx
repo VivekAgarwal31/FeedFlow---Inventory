@@ -1,6 +1,7 @@
 import React, { useEffect, lazy, Suspense } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from './contexts/AuthContext'
+import { useAnalytics } from './hooks/useAnalytics'
 
 // Public pages - keep in main bundle for fast initial load
 import HomePage from './pages/HomePage'
@@ -60,6 +61,9 @@ function App() {
   useEffect(() => {
     window.scrollTo(0, 0)
   }, [location.pathname])
+
+  // Track page views with Google Analytics (public pages only)
+  useAnalytics()
 
   if (loading) {
     return (

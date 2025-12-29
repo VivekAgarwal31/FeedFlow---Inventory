@@ -20,6 +20,7 @@ import { Button } from '../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import { pricingPlans } from '../lib/pricingPlans'
+import { trackCTAClick } from '../hooks/useAnalytics'
 
 const HomePage = () => {
     const { user } = useAuth()
@@ -187,7 +188,11 @@ const HomePage = () => {
 
                             <div className="flex flex-col sm:flex-row gap-4">
                                 <Link to="/auth" className="w-full sm:w-auto">
-                                    <Button size="lg" className="w-full min-h-[48px]">
+                                    <Button
+                                        size="lg"
+                                        className="w-full min-h-[48px]"
+                                        onClick={() => trackCTAClick('Get Started Free', 'hero')}
+                                    >
                                         Get Started Free
                                         <ArrowRight className="ml-2 h-4 w-4" />
                                     </Button>
@@ -635,7 +640,11 @@ const HomePage = () => {
                         </p>
                         <div className="flex flex-col sm:flex-row gap-4 justify-center">
                             <Link to="/auth">
-                                <Button size="lg" className="w-full sm:w-auto">
+                                <Button
+                                    size="lg"
+                                    className="w-full sm:w-auto"
+                                    onClick={() => trackCTAClick('Get Started Free', 'bottom_cta')}
+                                >
                                     Get Started Free
                                     <ArrowRight className="ml-2 h-4 w-4" />
                                 </Button>
