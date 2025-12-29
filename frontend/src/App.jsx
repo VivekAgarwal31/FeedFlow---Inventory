@@ -1,6 +1,7 @@
 import React from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './contexts/AuthContext'
+import HomePage from './pages/HomePage'
 import AuthPage from './pages/AuthPage'
 import CompanySetupPage from './pages/CompanySetupPage'
 import DashboardLayout from './components/layout/DashboardLayout'
@@ -50,9 +51,10 @@ function App() {
   if (!user) {
     return (
       <Routes>
+        <Route path="/" element={<HomePage />} />
         <Route path="/auth" element={<AuthPage />} />
         <Route path="/verify-otp" element={<OTPVerification />} />
-        <Route path="*" element={<Navigate to="/auth" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     )
   }
