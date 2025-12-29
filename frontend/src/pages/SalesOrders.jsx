@@ -33,6 +33,7 @@ const SalesOrders = () => {
     const { toast } = useToast()
 
     const [form, setForm] = useState({
+        clientId: '',
         clientName: '',
         clientPhone: '',
         clientEmail: '',
@@ -166,6 +167,7 @@ const SalesOrders = () => {
     const handleClientSelect = (client) => {
         setForm({
             ...form,
+            clientId: client._id,
             clientName: client.name,
             clientPhone: client.phone || '',
             clientEmail: client.email || ''
@@ -199,6 +201,7 @@ const SalesOrders = () => {
             const totalAmount = calculateOrderTotal()
 
             const orderData = {
+                clientId: form.clientId || undefined,
                 clientName: form.clientName,
                 clientPhone: form.clientPhone,
                 clientEmail: form.clientEmail,
@@ -217,6 +220,7 @@ const SalesOrders = () => {
             })
 
             setForm({
+                clientId: '',
                 clientName: '',
                 clientPhone: '',
                 clientEmail: '',

@@ -97,6 +97,13 @@ router.post('/record', async (req, res) => {
         }
 
         // Create journal entry for accounting
+        console.log('Creating payment journal entry:', {
+            transactionType,
+            amount,
+            partyName,
+            paymentMethod,
+            accountName: (paymentMethod === 'cash') ? 'Cash' : 'Bank'
+        });
         try {
             // Check if accounts are initialized, if not, initialize them
             const accountCount = await LedgerAccount.countDocuments({ companyId: userCompanyId });
@@ -138,8 +145,16 @@ router.post('/record', async (req, res) => {
                 });
             }
         } catch (journalError) {
-            console.error('Journal entry creation error:', journalError);
+            console.error('Journal entry creation error for payment:', {
+                error: journalError.message,
+                paymentId: payment._id,
+                transactionType,
+                amount,
+                partyName,
+                stack: journalError.stack
+            });
             // Don't fail the payment if journal entry fails
+            // But log it prominently so it can be investigated
         }
 
         res.status(201).json({
@@ -321,6 +336,41 @@ router.post('/record-client-payment', async (req, res) => {
 
         await payment.save();
 
+        // Create journal entry for accounting
+        try {
+            // Check if accounts are initialized
+            const accountCount = await LedgerAccount.countDocuments({ companyId: userCompanyId });
+            if (accountCount === 0) {
+                await initializeDefaultAccounts(userCompanyId);
+            }
+
+            const accountName = (paymentMode === 'cash') ? 'Cash' : 'Bank';
+
+            // Customer payment: Debit Cash/Bank, Credit Accounts Receivable
+            await createJournalEntry({
+                companyId: userCompanyId,
+                entryDate: payment.paymentDate,
+                entryType: 'payment_received',
+                referenceType: 'Payment',
+                referenceId: payment._id,
+                description: `Payment received from ${client.name} - ₹${amount}`,
+                lines: [
+                    { accountName, debit: amount, credit: 0 },
+                    { accountName: 'Accounts Receivable', debit: 0, credit: amount }
+                ],
+                createdBy: req.user._id
+            });
+        } catch (journalError) {
+            console.error('Journal entry creation error for client payment:', {
+                error: journalError.message,
+                paymentId: payment._id,
+                clientName: client.name,
+                amount,
+                stack: journalError.stack
+            });
+            // Don't fail the payment if journal entry fails
+        }
+
 
         // Recalculate client's credit from ALL unpaid/partial sales orders (including updated ones)
         const allUnpaidSalesOrders = await SalesOrder.find({
@@ -450,6 +500,41 @@ router.post('/record-supplier-payment', async (req, res) => {
         });
 
         await payment.save();
+
+        // Create journal entry for accounting
+        try {
+            // Check if accounts are initialized
+            const accountCount = await LedgerAccount.countDocuments({ companyId: userCompanyId });
+            if (accountCount === 0) {
+                await initializeDefaultAccounts(userCompanyId);
+            }
+
+            const accountName = (paymentMode === 'cash') ? 'Cash' : 'Bank';
+
+            // Supplier payment: Debit Accounts Payable, Credit Cash/Bank
+            await createJournalEntry({
+                companyId: userCompanyId,
+                entryDate: payment.paymentDate,
+                entryType: 'payment_made',
+                referenceType: 'Payment',
+                referenceId: payment._id,
+                description: `Payment made to ${supplier.name} - ₹${amount}`,
+                lines: [
+                    { accountName: 'Accounts Payable', debit: amount, credit: 0 },
+                    { accountName, debit: 0, credit: amount }
+                ],
+                createdBy: req.user._id
+            });
+        } catch (journalError) {
+            console.error('Journal entry creation error for supplier payment:', {
+                error: journalError.message,
+                paymentId: payment._id,
+                supplierName: supplier.name,
+                amount,
+                stack: journalError.stack
+            });
+            // Don't fail the payment if journal entry fails
+        }
 
         // Recalculate supplier's payable from ALL unpaid/partial purchase orders (including updated ones)
         const allUnpaidPurchaseOrders = await PurchaseOrder.find({

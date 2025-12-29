@@ -44,6 +44,8 @@ const DashboardLayout = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false)
+  const [filteredResults, setFilteredResults] = useState([])
   const [expandedGroups, setExpandedGroups] = useState({
     stock: true,
     sales: false,
@@ -137,32 +139,52 @@ const DashboardLayout = ({ children }) => {
     logout()
   }
 
-  const handleSearch = (e) => {
-    e.preventDefault()
-    if (!searchQuery.trim()) return
+  // Handle search input change
+  const handleSearchChange = (e) => {
+    const query = e.target.value
+    setSearchQuery(query)
+
+    if (!query.trim()) {
+      setShowSearchDropdown(false)
+      setFilteredResults([])
+      return
+    }
 
     // Create searchable items list
     const searchableItems = []
     menuItems.forEach(item => {
       if (item.path) {
-        searchableItems.push({ title: item.title, path: item.path })
+        searchableItems.push({ title: item.title, path: item.path, icon: item.icon })
       }
       if (item.items) {
         item.items.forEach(subItem => {
-          searchableItems.push({ title: subItem.title, path: subItem.path })
+          searchableItems.push({ title: subItem.title, path: subItem.path, icon: subItem.icon, parent: item.title })
         })
       }
     })
 
-    // Find matching item
-    const match = searchableItems.find(item =>
-      item.title.toLowerCase().includes(searchQuery.toLowerCase())
+    // Filter matching items
+    const matches = searchableItems.filter(item =>
+      item.title.toLowerCase().includes(query.toLowerCase())
     )
 
-    if (match) {
-      navigate(match.path)
-      setSearchQuery('')
-      setSearchOpen(false)
+    setFilteredResults(matches)
+    setShowSearchDropdown(matches.length > 0)
+  }
+
+  // Handle search item click
+  const handleSearchItemClick = (path) => {
+    navigate(path)
+    setSearchQuery('')
+    setShowSearchDropdown(false)
+    setFilteredResults([])
+  }
+
+  // Handle search form submit
+  const handleSearch = (e) => {
+    e.preventDefault()
+    if (filteredResults.length > 0) {
+      handleSearchItemClick(filteredResults[0].path)
     }
   }
 
@@ -180,17 +202,43 @@ const DashboardLayout = ({ children }) => {
         </div>
 
         {/* Search Bar - Center */}
-        <div className="flex-1 max-w-2xl mx-auto">
+        <div className="flex-1 max-w-2xl mx-auto relative">
           <form onSubmit={handleSearch} className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 z-10" />
             <input
               type="text"
               placeholder="Search features (e.g., Dashboard, Stock List, Sales Orders...)"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={handleSearchChange}
+              onFocus={() => searchQuery && setShowSearchDropdown(true)}
+              onBlur={() => setTimeout(() => setShowSearchDropdown(false), 200)}
               className="w-full bg-gray-800 text-white placeholder-gray-400 border border-gray-700 rounded-md pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
             />
           </form>
+
+          {/* Search Dropdown */}
+          {showSearchDropdown && filteredResults.length > 0 && (
+            <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-md shadow-lg max-h-96 overflow-y-auto z-50">
+              {filteredResults.map((item, index) => {
+                const Icon = item.icon
+                return (
+                  <button
+                    key={index}
+                    onClick={() => handleSearchItemClick(item.path)}
+                    className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 border-b border-gray-100 last:border-0 transition-colors"
+                  >
+                    {Icon && <Icon className="h-4 w-4 text-gray-500 flex-shrink-0" />}
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-gray-900 truncate">{item.title}</div>
+                      {item.parent && (
+                        <div className="text-xs text-gray-500 truncate">{item.parent}</div>
+                      )}
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         {/* User Info - Right */}
@@ -325,32 +373,28 @@ const DashboardLayout = ({ children }) => {
       </div>
 
       {/* Main Content */}
-      <div className="md:ml-64 pt-16">
+      <div className="md:ml-64 pt-16 min-h-screen flex flex-col">
         {/* Top Bar */}
         <header className="bg-white border-b border-gray-200 px-4 md:px-6 py-3 sticky top-16 z-30">
           <div className="flex items-center gap-4">
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setSidebarOpen(!sidebarOpen)}
               className="md:hidden"
+              onClick={() => setSidebarOpen(!sidebarOpen)}
             >
               <Menu className="h-5 w-5" />
             </Button>
-
-            <div className="flex-1">
-              {/* Breadcrumb or page context can go here */}
-            </div>
           </div>
         </header>
 
         {/* Page Content */}
-        <main className="p-4 md:p-6">
+        <main className="p-4 md:p-6 flex-grow">
           {children}
         </main>
 
         {/* Copyright Footer */}
-        <footer className="border-t border-gray-200 bg-white py-4 px-4 md:px-6">
+        <footer className="border-t border-gray-200 bg-white py-4 px-4 md:px-6 mt-auto">
           <div className="text-center text-sm text-gray-600">
             <p>© {new Date().getFullYear()} <span className="font-semibold text-primary">Stockwise</span>. All rights reserved.</p>
             <p className="text-xs text-gray-500 mt-1">Smart Inventory Management System</p>

@@ -100,7 +100,9 @@ export const getRolePermissions = (role) => {
             canManageClients: true,
             canManageSuppliers: true,
             canViewReports: true,
-            canManageSettings: true
+            canManageSettings: true,
+            canManageAccounting: true,
+            isOwner: true
         },
         admin: {
             canManageStaff: true,
@@ -110,7 +112,9 @@ export const getRolePermissions = (role) => {
             canManageClients: true,
             canManageSuppliers: true,
             canViewReports: true,
-            canManageSettings: false
+            canManageSettings: false,
+            canManageAccounting: true,
+            isOwner: false
         },
         manager: {
             canManageStaff: false,
@@ -120,7 +124,9 @@ export const getRolePermissions = (role) => {
             canManageClients: true,
             canManageSuppliers: true,
             canViewReports: true,
-            canManageSettings: false
+            canManageSettings: false,
+            canManageAccounting: true,
+            isOwner: false
         },
         staff: {
             canManageStaff: false,
@@ -130,7 +136,9 @@ export const getRolePermissions = (role) => {
             canManageClients: false,
             canManageSuppliers: false,
             canViewReports: false,
-            canManageSettings: false
+            canManageSettings: false,
+            canManageAccounting: false,
+            isOwner: false
         },
         new_joinee: {
             canManageStaff: false,
@@ -140,7 +148,9 @@ export const getRolePermissions = (role) => {
             canManageClients: false,
             canManageSuppliers: false,
             canViewReports: false,
-            canManageSettings: false
+            canManageSettings: false,
+            canManageAccounting: false,
+            isOwner: false
         }
     };
 

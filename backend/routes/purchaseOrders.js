@@ -193,8 +193,10 @@ router.post('/', authenticate, requirePermission('canManagePurchases'), [
             return res.status(500).json({ message: 'Failed to generate unique order number' });
         }
 
-        // Update supplier statistics (order count only, not payables)
+        // Update supplier statistics
         supplier.purchaseCount = (supplier.purchaseCount || 0) + 1;
+        supplier.totalPurchases = (supplier.totalPurchases || 0) + totalAmount;
+        supplier.lastPurchaseDate = purchaseOrder.orderDate || new Date();
         await supplier.save();
 
         res.status(201).json({

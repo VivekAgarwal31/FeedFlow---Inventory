@@ -105,14 +105,14 @@ router.get('/entries-register', authenticate, async (req, res) => {
         const paymentsReceived = await Payment.find({
             companyId,
             paymentDate: { $gte: startOfDay, $lte: endOfDay },
-            paymentType: 'received'
-        }).populate('clientId', 'name').lean();
+            transactionType: 'sale'  // Changed from paymentType to transactionType
+        }).sort({ createdAt: -1 }).lean();
 
         const paymentsData = paymentsReceived.map(payment => ({
             paymentDate: payment.paymentDate,
-            customerName: payment.clientId?.name || payment.clientName || 'N/A',
-            invoiceReference: payment.invoiceNumber || 'N/A',
-            paymentMode: payment.paymentMode || 'Cash',
+            customerName: payment.partyName || 'N/A',  // Use partyName instead of clientId
+            invoiceReference: payment.transactionNumber || 'N/A',
+            paymentMode: payment.paymentMode || payment.paymentMethod || 'Cash',
             amountReceived: payment.amount
         }));
 
@@ -176,7 +176,7 @@ router.get('/cashbook', authenticate, async (req, res) => {
         const entries = await JournalEntry.find({
             companyId,
             entryDate: { $gte: startOfDay, $lte: endOfDay }
-        }).lean();
+        }).sort({ createdAt: -1 }).lean();
 
         const entryIds = entries.map(e => e._id);
 
@@ -209,7 +209,8 @@ router.get('/cashbook', authenticate, async (req, res) => {
                     source: entry.description || entry.entryType,
                     reference: entry.referenceType ? `${entry.referenceType}-${entry.referenceId}` : 'Manual',
                     paymentMode: line.accountName,
-                    amount: line.debit
+                    amount: line.debit,
+                    createdAt: entry.createdAt  // Add createdAt for sorting
                 });
             } else if (line.credit > 0) {
                 // Money going out
@@ -218,10 +219,15 @@ router.get('/cashbook', authenticate, async (req, res) => {
                     category: entry.description || entry.entryType,
                     paidTo: 'N/A',
                     paymentMode: line.accountName,
-                    amount: line.credit
+                    amount: line.credit,
+                    createdAt: entry.createdAt  // Add createdAt for sorting
                 });
             }
         }
+
+        // Sort by createdAt descending (latest first)
+        incomes.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        expenses.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
         res.json({
             date: dateOnly,
@@ -380,7 +386,7 @@ router.get('/wages/calculate', authenticate, async (req, res) => {
 });
 
 // Record wages journal entry
-router.post('/wages/record', authenticate, requirePermission('canManageAccounting'), async (req, res) => {
+router.post('/wages/record', authenticate, async (req, res) => {
     try {
         const companyId = req.user.companyId?._id || req.user.companyId;
         const { date, totalWages, description } = req.body;

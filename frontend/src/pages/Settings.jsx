@@ -218,26 +218,26 @@ const Settings = () => {
       )}
 
       <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5">
-          <TabsTrigger value="profile" className="flex items-center gap-2">
-            <User className="h-4 w-4" />
-            <span className="hidden sm:inline">Profile</span>
+        <TabsList className="grid w-full grid-cols-5 gap-1">
+          <TabsTrigger value="profile" className="flex items-center justify-center gap-1 px-2">
+            <User className="h-4 w-4 flex-shrink-0" />
+            <span className="hidden sm:inline truncate">Profile</span>
           </TabsTrigger>
-          <TabsTrigger value="company" className="flex items-center gap-2">
-            <Building2 className="h-4 w-4" />
-            <span className="hidden sm:inline">Company</span>
+          <TabsTrigger value="company" className="flex items-center justify-center gap-1 px-2">
+            <Building2 className="h-4 w-4 flex-shrink-0" />
+            <span className="hidden sm:inline truncate">Company</span>
           </TabsTrigger>
-          <TabsTrigger value="data" className="flex items-center gap-2">
-            <Database className="h-4 w-4" />
-            <span className="hidden sm:inline">Data</span>
+          <TabsTrigger value="data" className="flex items-center justify-center gap-1 px-2">
+            <Database className="h-4 w-4 flex-shrink-0" />
+            <span className="hidden sm:inline truncate">Data</span>
           </TabsTrigger>
-          <TabsTrigger value="security" className="flex items-center gap-2">
-            <Shield className="h-4 w-4" />
-            <span className="hidden sm:inline">Security</span>
+          <TabsTrigger value="security" className="flex items-center justify-center gap-1 px-2">
+            <Shield className="h-4 w-4 flex-shrink-0" />
+            <span className="hidden sm:inline truncate">Security</span>
           </TabsTrigger>
-          <TabsTrigger value="notifications" className="flex items-center gap-2">
-            <Bell className="h-4 w-4" />
-            <span className="hidden sm:inline">Notifications</span>
+          <TabsTrigger value="notifications" className="flex items-center justify-center gap-1 px-2">
+            <Bell className="h-4 w-4 flex-shrink-0" />
+            <span className="hidden sm:inline truncate">Notifications</span>
           </TabsTrigger>
         </TabsList>
 

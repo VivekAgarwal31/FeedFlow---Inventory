@@ -230,10 +230,25 @@ router.post('/', authenticate, requirePermission('canManageSales'), [
             return res.status(500).json({ message: 'Failed to generate unique order number' });
         }
 
-        // Update client statistics (order count only, not revenue)
+        // Update client statistics
+        console.log('Updating client statistics:', {
+            hasClient: !!client,
+            clientId: client?._id,
+            clientName: client?.name,
+            totalAmount
+        });
         if (client) {
             client.salesCount = (client.salesCount || 0) + 1;
+            client.totalPurchases = (client.totalPurchases || 0) + totalAmount;
+            client.lastPurchaseDate = salesOrder.orderDate || new Date();
             await client.save();
+            console.log('Client updated successfully:', {
+                salesCount: client.salesCount,
+                totalPurchases: client.totalPurchases,
+                lastPurchaseDate: client.lastPurchaseDate
+            });
+        } else {
+            console.log('WARNING: No client found to update!');
         }
 
         // Create journal entry for accounting (non-blocking)
@@ -246,13 +261,14 @@ router.post('/', authenticate, requirePermission('canManageSales'), [
 
             if (paymentType === 'cash') {
                 // Cash sale: Debit Cash, Credit Sales Revenue
-                await createJournalEntry({
+                const journalEntry = await createJournalEntry({
                     companyId,
                     entryDate: salesOrder.orderDate,
-                    entryType: 'cash_sale',
+                    entryType: 'sales_invoice',
                     referenceType: 'SalesOrder',
                     referenceId: salesOrder._id,
-                    description: `Cash sale - Order #${salesOrder.orderNumber} - ${salesOrder.clientName}`,
+                    description: `Cash sale to ${clientName} - Order #${salesOrder.orderNumber}`,
+                    totalAmount,
                     lines: [
                         { accountName: 'Cash', debit: totalAmount, credit: 0 },
                         { accountName: 'Sales Revenue', debit: 0, credit: totalAmount }
@@ -261,13 +277,14 @@ router.post('/', authenticate, requirePermission('canManageSales'), [
                 });
             } else {
                 // Credit sale: Debit Accounts Receivable, Credit Sales Revenue
-                await createJournalEntry({
+                const journalEntry = await createJournalEntry({
                     companyId,
                     entryDate: salesOrder.orderDate,
-                    entryType: 'credit_sale',
+                    entryType: 'sales_invoice',
                     referenceType: 'SalesOrder',
                     referenceId: salesOrder._id,
-                    description: `Credit sale - Order #${salesOrder.orderNumber} - ${salesOrder.clientName}`,
+                    description: `Credit sale to ${clientName} - Order #${salesOrder.orderNumber}`,
+                    totalAmount,
                     lines: [
                         { accountName: 'Accounts Receivable', debit: totalAmount, credit: 0 },
                         { accountName: 'Sales Revenue', debit: 0, credit: totalAmount }

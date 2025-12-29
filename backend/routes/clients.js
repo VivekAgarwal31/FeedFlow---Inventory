@@ -57,6 +57,15 @@ router.get('/', authenticate, async (req, res) => {
                 return sum + amountDue;
             }, 0);
 
+            // Get all sales orders for total purchases
+            const allOrders = await SalesOrder.find({
+                companyId,
+                clientName: client.name
+            }).select('totalAmount');
+
+            // Calculate total purchases from all orders
+            client.totalPurchases = allOrders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
+
             // Get most recent order for lastPurchaseDate
             const mostRecentOrder = await SalesOrder.findOne({
                 companyId,
