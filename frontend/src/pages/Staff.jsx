@@ -486,7 +486,7 @@ const Staff = () => {
                             </div>
 
                             <div className="space-y-3">
-                                <h4 className="font-semibold">Sales & Purchases</h4>
+                                <h4 className="font-semibold">Orders & Deliveries</h4>
                                 <div className="flex items-center space-x-2">
                                     <Checkbox
                                         id="canManageSales"
@@ -494,7 +494,7 @@ const Staff = () => {
                                         onCheckedChange={(checked) => setPermissions({ ...permissions, canManageSales: checked })}
                                     />
                                     <label htmlFor="canManageSales" className="text-sm cursor-pointer">
-                                        Manage Sales
+                                        Manage Sales Orders
                                     </label>
                                 </div>
                                 <div className="flex items-center space-x-2">
@@ -504,7 +504,17 @@ const Staff = () => {
                                         onCheckedChange={(checked) => setPermissions({ ...permissions, canManagePurchases: checked })}
                                     />
                                     <label htmlFor="canManagePurchases" className="text-sm cursor-pointer">
-                                        Manage Purchases
+                                        Manage Purchase Orders
+                                    </label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                    <Checkbox
+                                        id="canManageDeliveries"
+                                        checked={permissions.canManageDeliveries}
+                                        onCheckedChange={(checked) => setPermissions({ ...permissions, canManageDeliveries: checked })}
+                                    />
+                                    <label htmlFor="canManageDeliveries" className="text-sm cursor-pointer">
+                                        Manage Deliveries (In/Out)
                                     </label>
                                 </div>
                             </div>
@@ -529,6 +539,30 @@ const Staff = () => {
                                     />
                                     <label htmlFor="canManageSuppliers" className="text-sm cursor-pointer">
                                         Manage Suppliers
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div className="space-y-3">
+                                <h4 className="font-semibold">Accounting</h4>
+                                <div className="flex items-center space-x-2">
+                                    <Checkbox
+                                        id="canViewAccounting"
+                                        checked={permissions.canViewAccounting}
+                                        onCheckedChange={(checked) => setPermissions({ ...permissions, canViewAccounting: checked })}
+                                    />
+                                    <label htmlFor="canViewAccounting" className="text-sm cursor-pointer">
+                                        View Accounting
+                                    </label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                    <Checkbox
+                                        id="canManageAccounting"
+                                        checked={permissions.canManageAccounting}
+                                        onCheckedChange={(checked) => setPermissions({ ...permissions, canManageAccounting: checked })}
+                                    />
+                                    <label htmlFor="canManageAccounting" className="text-sm cursor-pointer">
+                                        Manage Accounting
                                     </label>
                                 </div>
                             </div>

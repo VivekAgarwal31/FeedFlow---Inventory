@@ -161,6 +161,6 @@ saleSchema.index({ companyId: 1, saleDate: -1 }); // Recent sales
 saleSchema.index({ companyId: 1, clientName: 1 }); // Client-based queries
 saleSchema.index({ companyId: 1, paymentStatus: 1 }); // Payment status queries
 saleSchema.index({ companyId: 1, isOverdue: 1 }); // Overdue sales
-saleSchema.index({ companyId: 1, invoiceNumber: 1 }); // Invoice lookup
+saleSchema.index({ companyId: 1, invoiceNumber: 1 }, { unique: true, sparse: true }); // Unique invoice numbers per company
 
 export default mongoose.model('Sale', saleSchema);

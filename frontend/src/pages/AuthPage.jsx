@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Wheat, Loader2, Mail } from 'lucide-react'
+import { Package, Loader2, Mail } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { authAPI } from '../lib/api'
 import { Button } from '../components/ui/button'
@@ -113,13 +113,13 @@ const AuthPage = () => {
         <CardHeader className="text-center space-y-4">
           <div className="flex justify-center">
             <div className="h-14 w-14 bg-primary rounded-full flex items-center justify-center">
-              <Wheat className="h-7 w-7 text-primary-foreground" />
+              <Package className="h-7 w-7 text-primary-foreground" />
             </div>
           </div>
           <div>
-            <CardTitle className="text-2xl font-bold">Cattle Feed Manager</CardTitle>
+            <CardTitle className="text-2xl font-bold">Inventory Manager</CardTitle>
             <CardDescription className="mt-1">
-              Manage your cattle feed business efficiently
+              Manage your inventory efficiently
             </CardDescription>
           </div>
         </CardHeader>

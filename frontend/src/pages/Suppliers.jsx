@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, Truck, Phone, Mail, MapPin, Loader2, ArrowLeft, Calendar, Filter, Eye, Download, Search, Trash2 } from 'lucide-react'
+import { Plus, Truck, Phone, Mail, MapPin, Loader2, ArrowLeft, Calendar, Filter, Eye, Download, Search, Trash2, DollarSign, FileText } from 'lucide-react'
 import { supplierAPI, purchaseAPI } from '../lib/api'
+import { getSupplierPayments, recordSupplierPayment } from '../lib/paymentApi'
 import { formatCurrency, formatDate } from '../lib/utils'
 import { exportSupplierToExcel, exportSupplierToPDF } from '../lib/exportUtils'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
@@ -14,6 +15,7 @@ import { Alert, AlertDescription } from '../components/ui/alert'
 import { Badge } from '../components/ui/badge'
 import { useToast } from '../hooks/use-toast'
 import { Pagination } from '../components/ui/Pagination'
+import { Textarea } from '../components/ui/textarea'
 
 const Suppliers = () => {
   const [suppliers, setSuppliers] = useState([])
@@ -23,6 +25,7 @@ const Suppliers = () => {
   const [error, setError] = useState('')
   const [selectedSupplier, setSelectedSupplier] = useState(null)
   const [supplierTransactions, setSupplierTransactions] = useState([])
+  const [supplierDeliveries, setSupplierDeliveries] = useState([])
   const [filteredTransactions, setFilteredTransactions] = useState([])
   const [dateFilter, setDateFilter] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
@@ -43,6 +46,19 @@ const Suppliers = () => {
   const [showSupplierDropdown, setShowSupplierDropdown] = useState(false)
   const [exporting, setExporting] = useState(false)
 
+  // Financial details state
+  const [financialDialogOpen, setFinancialDialogOpen] = useState(false)
+  const [supplierPayments, setSupplierPayments] = useState([])
+  const [supplierPaymentDialogOpen, setSupplierPaymentDialogOpen] = useState(false)
+  const [submittingPayment, setSubmittingPayment] = useState(false)
+  const [paymentForm, setPaymentForm] = useState({
+    amount: '',
+    paymentMode: 'cash',
+    paymentDate: new Date().toISOString().split('T')[0],
+    referenceNumber: '',
+    notes: ''
+  })
+
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 12
@@ -59,6 +75,12 @@ const Suppliers = () => {
   useEffect(() => {
     fetchSuppliers()
     fetchExportSuppliers()
+    // Automatically recalculate payables on first load to fix existing data
+    const hasRecalculated = localStorage.getItem('suppliersPayablesRecalculated')
+    if (!hasRecalculated) {
+      handleRecalculatePayables()
+      localStorage.setItem('suppliersPayablesRecalculated', 'true')
+    }
   }, [])
 
   useEffect(() => {
@@ -91,7 +113,8 @@ const Suppliers = () => {
   const fetchSupplierTransactions = async (supplierId) => {
     try {
       const response = await supplierAPI.getById(supplierId)
-      setSupplierTransactions(response.data.purchases || [])
+      setSupplierTransactions(response.data.purchaseOrders || [])
+      setSupplierDeliveries(response.data.deliveries || [])
     } catch (error) {
       console.error('Failed to fetch supplier transactions:', error)
     }
@@ -100,6 +123,15 @@ const Suppliers = () => {
   const viewPurchaseDetails = (purchase) => {
     setSelectedPurchase(purchase)
     setDetailsDialogOpen(true)
+  }
+
+  const getStatusBadgeVariant = (status) => {
+    switch (status) {
+      case 'completed': return 'default'
+      case 'partially_received': return 'secondary'
+      case 'cancelled': return 'destructive'
+      default: return 'outline'
+    }
   }
 
   const filterTransactions = () => {
@@ -239,6 +271,74 @@ const Suppliers = () => {
     }
   }
 
+  const handleViewFinancials = async () => {
+    try {
+      const response = await getSupplierPayments(selectedSupplier._id)
+      setSupplierPayments(response.payments || [])
+      setFinancialDialogOpen(true)
+    } catch (error) {
+      console.error('Error fetching supplier payments:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to load payment history',
+        variant: 'destructive'
+      })
+    }
+  }
+
+  const handleOpenSupplierPayment = () => {
+    setPaymentForm({
+      amount: '',
+      paymentMode: 'cash',
+      paymentDate: new Date().toISOString().split('T')[0],
+      referenceNumber: '',
+      notes: ''
+    })
+    setSupplierPaymentDialogOpen(true)
+  }
+
+  const handleSubmitSupplierPayment = async (e) => {
+    e.preventDefault()
+    setSubmittingPayment(true)
+
+    try {
+      const response = await recordSupplierPayment({
+        supplierId: selectedSupplier._id,
+        amount: parseFloat(paymentForm.amount),
+        paymentMode: paymentForm.paymentMode,
+        paymentDate: paymentForm.paymentDate,
+        referenceNumber: paymentForm.referenceNumber,
+        notes: paymentForm.notes
+      })
+
+      toast({
+        title: 'Success',
+        description: `Payment recorded! ${response.deliveriesUpdated?.length || 0} bill(s) updated.${response.overpaidAmount > 0 ? ` Overpaid: ${formatCurrency(response.overpaidAmount)}` : ''}`
+      })
+
+      setSupplierPaymentDialogOpen(false)
+      setSubmittingPayment(false)
+
+      // Refresh all supplier data to get updated currentPayable
+      await fetchSuppliers()
+
+      // Re-fetch the selected supplier to update the detail view
+      const updatedSupplierResponse = await supplierAPI.getById(selectedSupplier._id)
+      setSelectedSupplier(updatedSupplierResponse.data.supplier)
+
+      fetchSupplierTransactions(selectedSupplier._id)
+      handleViewFinancials() // Refresh financial data
+    } catch (error) {
+      console.error('Error recording payment:', error)
+      setSubmittingPayment(false)
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to record payment',
+        variant: 'destructive'
+      })
+    }
+  }
+
   const handleExport = async () => {
     if (!exportForm.supplierName || !exportForm.fromDate || !exportForm.toDate) {
       setError('Please fill all export fields')
@@ -266,7 +366,7 @@ const Suppliers = () => {
         limit: 1000
       })
 
-      const allPurchases = response.data.purchases || []
+      const allOrders = response.data.purchaseOrders || []
 
       // Filter by date range
       const fromDate = new Date(exportForm.fromDate)
@@ -322,6 +422,24 @@ const Suppliers = () => {
     }
   }
 
+  const handleRecalculatePayables = async () => {
+    try {
+      const response = await supplierAPI.recalculatePayables()
+      toast({
+        title: 'Success',
+        description: response.data.message || 'Payables recalculated successfully'
+      })
+      fetchSuppliers() // Refresh supplier list
+    } catch (error) {
+      console.error('Recalculate payables error:', error)
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to recalculate payables',
+        variant: 'destructive'
+      })
+    }
+  }
+
   // Calculate pagination
   const totalPages = Math.ceil(suppliers.length / itemsPerPage)
   const startIndex = (currentPage - 1) * itemsPerPage
@@ -353,6 +471,16 @@ const Suppliers = () => {
               </p>
             </div>
           </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleViewFinancials}>
+              <FileText className="mr-2 h-4 w-4" />
+              View Financial Details
+            </Button>
+            <Button onClick={handleOpenSupplierPayment}>
+              <DollarSign className="mr-2 h-4 w-4" />
+              Record Payment
+            </Button>
+          </div>
         </div>
 
         {/* Supplier Summary */}
@@ -382,12 +510,10 @@ const Suppliers = () => {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-primary" />
+                <DollarSign className="h-5 w-5 text-orange-600" />
                 <div>
-                  <p className="text-sm text-muted-foreground">Last Purchase</p>
-                  <p className="text-lg font-semibold">
-                    {selectedSupplier.lastPurchase ? formatDate(selectedSupplier.lastPurchase) : 'Never'}
-                  </p>
+                  <p className="text-sm text-muted-foreground">Amount Payable</p>
+                  <p className="text-2xl font-bold text-orange-600">{formatCurrency(selectedSupplier.currentPayable || 0)}</p>
                 </div>
               </div>
             </CardContent>
@@ -478,7 +604,7 @@ const Suppliers = () => {
                   <TableRow>
                     <TableHead>Date</TableHead>
                     <TableHead>Items</TableHead>
-                    <TableHead>Warehouse</TableHead>
+                    <TableHead>Receipt Status</TableHead>
                     <TableHead>Quantity</TableHead>
                     <TableHead>Total Amount</TableHead>
                     <TableHead>Actions</TableHead>
@@ -503,16 +629,13 @@ const Suppliers = () => {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {transaction.items && transaction.items.length > 0
-                          ? transaction.items.length === 1
-                            ? transaction.items[0].warehouseName || '-'
-                            : (() => {
-                              const warehouses = [...new Set(transaction.items.map(i => i.warehouseName).filter(Boolean))];
-                              return warehouses.length > 1
-                                ? `${warehouses.length} warehouses`
-                                : warehouses[0] || '-';
-                            })()
-                          : '-'}
+                        <Badge variant={
+                          transaction.orderStatus === 'completed' ? 'default' :
+                            transaction.orderStatus === 'partially_received' ? 'secondary' :
+                              'outline'
+                        }>
+                          {transaction.orderStatus?.replace('_', ' ').toUpperCase() || 'PENDING'}
+                        </Badge>
                       </TableCell>
                       <TableCell className="font-mono">
                         {transaction.items && transaction.items.length > 0
@@ -521,16 +644,14 @@ const Suppliers = () => {
                       </TableCell>
                       <TableCell className="font-mono font-medium">{formatCurrency(transaction.totalAmount || 0)}</TableCell>
                       <TableCell>
-                        {transaction.items && transaction.items.length > 1 && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => viewPurchaseDetails(transaction)}
-                          >
-                            <Eye className="h-4 w-4 mr-1" />
-                            View Details
-                          </Button>
-                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => viewPurchaseDetails(transaction)}
+                          className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -542,63 +663,142 @@ const Suppliers = () => {
 
         {/* Purchase Details Dialog */}
         <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Purchase Details</DialogTitle>
+              <DialogTitle>Purchase Order Details - #{selectedPurchase?.orderNumber}</DialogTitle>
               <DialogDescription>
-                {selectedPurchase && (
-                  <>
-                    Purchase on {formatDate(selectedPurchase.createdAt)}
-                  </>
-                )}
+                Order details and receipt status
               </DialogDescription>
             </DialogHeader>
 
-            {selectedPurchase && selectedPurchase.items && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4 text-sm">
+            {selectedPurchase && (
+              <div className="space-y-6">
+                {/* Order Info */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div>
-                    <span className="text-muted-foreground">Total Amount:</span>
-                    <p className="font-medium">{formatCurrency(selectedPurchase.totalAmount)}</p>
-                  </div>
-
-                  <div>
-                    <span className="text-muted-foreground">Total Quantity:</span>
-                    <p className="font-medium">{selectedPurchase.items.reduce((sum, item) => sum + item.quantity, 0)} bags</p>
+                    <Label className="text-muted-foreground">Order Number</Label>
+                    <p className="font-mono font-medium">#{selectedPurchase.orderNumber}</p>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">Items Count:</span>
-                    <p className="font-medium">{selectedPurchase.items.length} items</p>
+                    <Label className="text-muted-foreground">Order Date</Label>
+                    <p className="font-medium">{formatDate(selectedPurchase.orderDate || selectedPurchase.createdAt)}</p>
+                  </div>
+                  <div>
+                    <Label className="text-muted-foreground">Supplier</Label>
+                    <p className="font-medium">{selectedPurchase.supplierName}</p>
+                  </div>
+                  <div>
+                    <Label className="text-muted-foreground">Status</Label>
+                    <Badge variant={getStatusBadgeVariant(selectedPurchase.orderStatus)}>
+                      {selectedPurchase.orderStatus?.replace('_', ' ').toUpperCase() || 'PENDING'}
+                    </Badge>
                   </div>
                 </div>
 
+                {/* Items Table */}
                 <div>
-                  <h4 className="font-semibold mb-3">Items Breakdown</h4>
+                  <h3 className="font-semibold mb-3">Order Items</h3>
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead>Item Name</TableHead>
-                        <TableHead>Warehouse</TableHead>
-                        <TableHead>Quantity</TableHead>
-                        <TableHead>Unit Price</TableHead>
+                        <TableHead>Ordered Qty</TableHead>
+                        <TableHead>Received Qty</TableHead>
+                        <TableHead>Remaining</TableHead>
+                        <TableHead>Cost Price</TableHead>
                         <TableHead>Total</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {selectedPurchase.items.map((item, index) => (
+                      {selectedPurchase.items?.map((item, index) => (
                         <TableRow key={index}>
                           <TableCell className="font-medium">{item.itemName}</TableCell>
-                          <TableCell className="font-mono">{item.warehouseName}</TableCell>
-                          <TableCell className="font-mono">{item.quantity} bags</TableCell>
-                          <TableCell className="font-mono">{formatCurrency(item.costPrice || 0)}</TableCell>
-                          <TableCell className="font-mono font-medium">{formatCurrency(item.quantity * (item.costPrice || 0))}</TableCell>
+                          <TableCell className="font-mono">{item.quantity}</TableCell>
+                          <TableCell className="font-mono">{item.receivedQuantity || 0}</TableCell>
+                          <TableCell className="font-mono font-bold">
+                            {item.quantity - (item.receivedQuantity || 0)}
+                          </TableCell>
+                          <TableCell className="font-mono">{formatCurrency(item.costPrice)}</TableCell>
+                          <TableCell className="font-mono font-medium">{formatCurrency(item.total)}</TableCell>
                         </TableRow>
                       ))}
+                      <TableRow>
+                        <TableCell colSpan={5} className="font-semibold">Total Amount</TableCell>
+                        <TableCell className="font-mono font-bold text-lg">{formatCurrency(selectedPurchase.totalAmount)}</TableCell>
+                      </TableRow>
                     </TableBody>
                   </Table>
                 </div>
+
+                {/* Payment Status */}
+                <div className="grid grid-cols-3 gap-4 p-4 bg-muted/30 rounded-lg">
+                  <div>
+                    <Label className="text-muted-foreground">Total Amount</Label>
+                    <p className="font-mono font-bold">{formatCurrency(selectedPurchase.totalAmount)}</p>
+                  </div>
+                  <div>
+                    <Label className="text-muted-foreground">Amount Paid</Label>
+                    <p className="font-mono font-bold text-green-600">{formatCurrency(selectedPurchase.amountPaid || 0)}</p>
+                  </div>
+                  <div>
+                    <Label className="text-muted-foreground">Amount Due</Label>
+                    <p className="font-mono font-bold text-orange-600">{formatCurrency(selectedPurchase.amountDue || selectedPurchase.totalAmount)}</p>
+                  </div>
+                </div>
+
+                {/* Notes */}
+                {selectedPurchase.notes && (
+                  <div>
+                    <Label className="text-muted-foreground">Notes</Label>
+                    <p className="mt-1">{selectedPurchase.notes}</p>
+                  </div>
+                )}
               </div>
             )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Financial Details Dialog */}
+        <Dialog open={financialDialogOpen} onOpenChange={setFinancialDialogOpen}>
+          <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Financial Details - {selectedSupplier.name}</DialogTitle>
+              <DialogDescription>Complete payment and billing history</DialogDescription>
+            </DialogHeader>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <h3 className="text-lg font-semibold mb-3 flex items-center gap-2"><DollarSign className="h-5 w-5 text-green-600" />PAYMENTS</h3>
+                <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                  {supplierPayments.length > 0 ? supplierPayments.map((payment) => (
+                    <Card key={payment._id} className="p-2"><div className="space-y-1"><div className="flex justify-between items-start"><span className="text-xs text-muted-foreground">{formatDate(payment.createdAt)}</span><span className="text-base font-bold text-green-600">{formatCurrency(payment.amount)}</span></div><div className="text-xs text-muted-foreground capitalize">{payment.paymentMode}</div>{payment.allocations && payment.allocations.length > 0 && (<div className="mt-1 pt-1 border-t border-border/50 space-y-0.5">{payment.allocations.map((allocation, idx) => (<div key={idx} className="text-xs text-muted-foreground flex items-center gap-1"><span>↳ {formatCurrency(allocation.amountAllocated)} adjusted in {allocation.invoiceNumber}</span>{allocation.status === 'cleared' && <span className="text-green-600 font-medium">- Cleared</span>}</div>))}</div>)}</div></Card>
+                  )) : (<p className="text-muted-foreground text-center py-8">No payments recorded</p>)}
+                </div>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold mb-3 flex items-center gap-2"><FileText className="h-5 w-5 text-blue-600" />BILLS</h3>
+                <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                  {filteredTransactions.length > 0 ? filteredTransactions.map((purchase) => (
+                    <Card key={purchase._id} className="p-2"><div className="space-y-1"><div className="flex justify-between items-start"><span className="text-xs text-muted-foreground">{formatDate(purchase.createdAt)}</span><span className="text-base font-bold text-blue-600">{formatCurrency(purchase.totalAmount)}</span></div><div className="flex justify-between text-xs items-center"><span className="font-medium">Bill #{purchase.billNumber || purchase._id.slice(-6)}</span><Badge variant={purchase.paymentStatus === 'paid' ? 'default' : purchase.paymentStatus === 'partial' ? 'secondary' : 'destructive'} className="text-xs h-5">{purchase.paymentStatus?.toUpperCase() || 'PENDING'}</Badge></div>{purchase.paymentStatus !== 'pending' && (<div className="mt-1 pt-1 border-t border-border/50"><div className="text-xs text-muted-foreground flex justify-between"><span>Amount Paid:</span><span className="text-green-600 font-medium">{formatCurrency(purchase.amountPaid || 0)}</span></div>{purchase.paymentStatus === 'partial' && (<div className="text-xs text-muted-foreground flex justify-between"><span>Remaining:</span><span className="text-orange-600 font-medium">{formatCurrency(purchase.amountDue || (purchase.totalAmount - (purchase.amountPaid || 0)))}</span></div>)}</div>)}</div></Card>
+                  )) : (<p className="text-muted-foreground text-center py-8">No bills found</p>)}
+                </div>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Supplier Payment Dialog */}
+        <Dialog open={supplierPaymentDialogOpen} onOpenChange={setSupplierPaymentDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader><DialogTitle>Record Payment - {selectedSupplier.name}</DialogTitle><DialogDescription>Payment will be automatically allocated across outstanding bills</DialogDescription></DialogHeader>
+            <form onSubmit={handleSubmitSupplierPayment} className="space-y-4">
+              <div className="text-sm space-y-1 p-2 bg-muted rounded"><div className="flex justify-between"><span className="text-muted-foreground">Payable:</span><span className="font-medium text-orange-600">{formatCurrency(selectedSupplier.currentPayable || 0)}</span></div>{selectedSupplier.overpaidAmount > 0 && (<div className="flex justify-between"><span className="text-muted-foreground">Overpaid:</span><span className="font-medium text-green-600">{formatCurrency(selectedSupplier.overpaidAmount)}</span></div>)}</div>
+              <div className="space-y-2"><Label htmlFor="amount">Amount *</Label><Input id="amount" type="number" step="0.01" placeholder="0.00" value={paymentForm.amount} onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })} required /></div>
+              <div className="space-y-2"><Label htmlFor="paymentMode">Payment Mode *</Label><Select value={paymentForm.paymentMode} onValueChange={(value) => setPaymentForm({ ...paymentForm, paymentMode: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="cash">Cash</SelectItem><SelectItem value="card">Card</SelectItem><SelectItem value="upi">UPI</SelectItem><SelectItem value="bank_transfer">Bank Transfer</SelectItem><SelectItem value="cheque">Cheque</SelectItem></SelectContent></Select></div>
+              <div className="space-y-2"><Label htmlFor="paymentDate">Payment Date *</Label><Input id="paymentDate" type="date" value={paymentForm.paymentDate} onChange={(e) => setPaymentForm({ ...paymentForm, paymentDate: e.target.value })} required /></div>
+              <div className="space-y-2"><Label htmlFor="referenceNumber">Reference Number</Label><Input id="referenceNumber" placeholder="Transaction ID, Cheque No, etc." value={paymentForm.referenceNumber} onChange={(e) => setPaymentForm({ ...paymentForm, referenceNumber: e.target.value })} /></div>
+              <div className="space-y-2"><Label htmlFor="notes">Notes</Label><Textarea id="notes" placeholder="Additional notes..." value={paymentForm.notes} onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })} rows={2} /></div>
+              <div className="flex gap-3 pt-4"><Button type="submit" disabled={submittingPayment} className="flex-1">{submittingPayment ? 'Recording...' : 'Record Payment'}</Button><Button type="button" variant="outline" onClick={() => setSupplierPaymentDialogOpen(false)} disabled={submittingPayment}>Cancel</Button></div>
+            </form>
           </DialogContent>
         </Dialog>
       </div>
@@ -899,7 +1099,7 @@ const Suppliers = () => {
                 <TableHead>Contact</TableHead>
                 <TableHead>Total Purchases</TableHead>
                 <TableHead>Purchase Count</TableHead>
-                <TableHead>Last Purchase</TableHead>
+                <TableHead>Amount Payable</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -935,11 +1135,9 @@ const Suppliers = () => {
                     <span className="font-mono">{supplier.purchaseCount}</span>
                   </TableCell>
                   <TableCell>
-                    {supplier.lastPurchase ? (
-                      formatDate(supplier.lastPurchase)
-                    ) : (
-                      <span className="text-muted-foreground">Never</span>
-                    )}
+                    <span className="font-mono font-medium text-orange-600">
+                      {formatCurrency(supplier.currentPayable || 0)}
+                    </span>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
@@ -975,6 +1173,103 @@ const Suppliers = () => {
           />
         </Card>
       )}
+
+      {/* Purchase Order Details Dialog */}
+      <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Purchase Order Details - #{selectedPurchase?.orderNumber}</DialogTitle>
+            <DialogDescription>
+              Order details and receipt status
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedPurchase && (
+            <div className="space-y-6">
+              {/* Order Info */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                  <Label className="text-muted-foreground">Order Number</Label>
+                  <p className="font-mono font-medium">#{selectedPurchase.orderNumber}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">Order Date</Label>
+                  <p className="font-medium">{formatDate(selectedPurchase.orderDate || selectedPurchase.createdAt)}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">Supplier</Label>
+                  <p className="font-medium">{selectedPurchase.supplierName}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">Status</Label>
+                  <Badge variant={getStatusBadgeVariant(selectedPurchase.orderStatus)}>
+                    {selectedPurchase.orderStatus?.replace('_', ' ').toUpperCase() || 'PENDING'}
+                  </Badge>
+                </div>
+              </div>
+
+              {/* Items Table */}
+              <div>
+                <h3 className="font-semibold mb-3">Order Items</h3>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Item Name</TableHead>
+                      <TableHead>Ordered Qty</TableHead>
+                      <TableHead>Received Qty</TableHead>
+                      <TableHead>Remaining</TableHead>
+                      <TableHead>Cost Price</TableHead>
+                      <TableHead>Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {selectedPurchase.items?.map((item, index) => (
+                      <TableRow key={index}>
+                        <TableCell className="font-medium">{item.itemName}</TableCell>
+                        <TableCell className="font-mono">{item.quantity}</TableCell>
+                        <TableCell className="font-mono">{item.receivedQuantity || 0}</TableCell>
+                        <TableCell className="font-mono font-bold">
+                          {item.quantity - (item.receivedQuantity || 0)}
+                        </TableCell>
+                        <TableCell className="font-mono">{formatCurrency(item.costPrice)}</TableCell>
+                        <TableCell className="font-mono font-medium">{formatCurrency(item.total)}</TableCell>
+                      </TableRow>
+                    ))}
+                    <TableRow>
+                      <TableCell colSpan={5} className="font-semibold">Total Amount</TableCell>
+                      <TableCell className="font-mono font-bold text-lg">{formatCurrency(selectedPurchase.totalAmount)}</TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Payment Status */}
+              <div className="grid grid-cols-3 gap-4 p-4 bg-muted/30 rounded-lg">
+                <div>
+                  <Label className="text-muted-foreground">Total Amount</Label>
+                  <p className="font-mono font-bold">{formatCurrency(selectedPurchase.totalAmount)}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">Amount Paid</Label>
+                  <p className="font-mono font-bold text-green-600">{formatCurrency(selectedPurchase.amountPaid || 0)}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">Amount Due</Label>
+                  <p className="font-mono font-bold text-orange-600">{formatCurrency(selectedPurchase.amountDue || selectedPurchase.totalAmount)}</p>
+                </div>
+              </div>
+
+              {/* Notes */}
+              {selectedPurchase.notes && (
+                <div>
+                  <Label className="text-muted-foreground">Notes</Label>
+                  <p className="mt-1">{selectedPurchase.notes}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

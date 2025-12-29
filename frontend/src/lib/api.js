@@ -92,7 +92,8 @@ export const supplierAPI = {
   getById: (id) => api.get(`/suppliers/${id}`),
   create: (data) => api.post('/suppliers', data),
   update: (id, data) => api.put(`/suppliers/${id}`, data),
-  delete: (id) => api.delete(`/suppliers/${id}`)
+  delete: (id) => api.delete(`/suppliers/${id}`),
+  recalculatePayables: () => api.post('/suppliers/recalculate-payables')
 }
 
 // Purchase API
@@ -100,6 +101,41 @@ export const purchaseAPI = {
   getAll: (params) => api.get('/purchases', { params }),
   create: (data) => api.post('/purchases', data),
   delete: (id) => api.delete(`/purchases/${id}`)
+}
+
+// Sales Order API
+export const salesOrderAPI = {
+  getAll: (params) => api.get('/sales-orders', { params }),
+  getById: (id) => api.get(`/sales-orders/${id}`),
+  getPendingByClient: (clientId) => api.get(`/sales-orders/pending/${clientId}`),
+  create: (data) => api.post('/sales-orders', data),
+  update: (id, data) => api.put(`/sales-orders/${id}`, data),
+  delete: (id) => api.delete(`/sales-orders/${id}`)
+}
+
+// Purchase Order API
+export const purchaseOrderAPI = {
+  getAll: (params) => api.get('/purchase-orders', { params }),
+  getById: (id) => api.get(`/purchase-orders/${id}`),
+  getPendingBySupplier: (supplierId) => api.get(`/purchase-orders/pending/${supplierId}`),
+  create: (data) => api.post('/purchase-orders', data),
+  update: (id, data) => api.put(`/purchase-orders/${id}`, data),
+  delete: (id) => api.delete(`/purchase-orders/${id}`)
+}
+
+// Delivery API
+export const deliveryAPI = {
+  // Delivery Out (Sales)
+  getAllOut: (params) => api.get('/deliveries/out', { params }),
+  getOutById: (id) => api.get(`/deliveries/out/${id}`),
+  createOut: (data) => api.post('/deliveries/out', data),
+  deleteOut: (id) => api.delete(`/deliveries/out/${id}`),
+
+  // Delivery In (Purchase)
+  getAllIn: (params) => api.get('/deliveries/in', { params }),
+  getInById: (id) => api.get(`/deliveries/in/${id}`),
+  createIn: (data) => api.post('/deliveries/in', data),
+  deleteIn: (id) => api.delete(`/deliveries/in/${id}`)
 }
 
 // Client API

@@ -9,28 +9,30 @@ const stockTransactionSchema = new mongoose.Schema({
     },
     type: {
         type: String,
-        enum: ['stock_in', 'stock_out', 'stock_move', 'stock_adjust', 'purchase', 'sale'],
+        enum: ['delivery_in', 'delivery_out', 'stock_move', 'stock_adjust'],
         required: true,
         index: true
     },
     itemId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'StockItem',
-        required: true,
-        index: true
+        ref: 'StockItem'
     },
     itemName: {
-        type: String,
-        required: true
+        type: String
     },
     warehouseId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Warehouse',
-        required: true
+        ref: 'Warehouse'
     },
     warehouseName: {
-        type: String,
-        required: true
+        type: String
+    },
+    // For aggregated delivery transactions
+    items: {
+        type: Number  // Count of items in delivery
+    },
+    warehouses: {
+        type: Number  // Count of warehouses involved
     },
     // For stock moves
     toWarehouseId: {
@@ -70,7 +72,7 @@ const stockTransactionSchema = new mongoose.Schema({
     },
     referenceModel: {
         type: String,
-        enum: ['Sale', 'Purchase']
+        enum: ['DeliveryOut', 'DeliveryIn', 'Sale', 'Purchase']
     },
     reason: {
         type: String,

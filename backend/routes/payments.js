@@ -1,10 +1,12 @@
 import express from 'express';
 import Payment from '../models/Payment.js';
-import Sale from '../models/Sale.js';
-import Purchase from '../models/Purchase.js';
+import SalesOrder from '../models/SalesOrder.js';
+import PurchaseOrder from '../models/PurchaseOrder.js';
 import Client from '../models/Client.js';
 import Supplier from '../models/Supplier.js';
+import LedgerAccount from '../models/LedgerAccount.js';
 import { authenticate } from '../middleware/auth.js';
+import { createJournalEntry, initializeDefaultAccounts } from '../utils/journalEntry.js';
 
 const router = express.Router();
 
@@ -22,7 +24,7 @@ router.post('/record', async (req, res) => {
         }
 
         // Get the transaction
-        const TransactionModel = transactionType === 'sale' ? Sale : Purchase;
+        const TransactionModel = transactionType === 'sale' ? SalesOrder : PurchaseOrder;
         const transaction = await TransactionModel.findById(transactionId);
 
         if (!transaction) {
@@ -52,7 +54,7 @@ router.post('/record', async (req, res) => {
             companyId: userCompanyId,
             transactionType,
             transactionId,
-            transactionModel: transactionType === 'sale' ? 'Sale' : 'Purchase',
+            transactionModel: transactionType === 'sale' ? 'SalesOrder' : 'PurchaseOrder',
             transactionNumber: transaction.invoiceNumber || transaction.billNumber || transactionId,
             partyType,
             partyId,
@@ -92,6 +94,52 @@ router.post('/record', async (req, res) => {
                 supplier.lastPaymentAmount = amount;
                 await supplier.save();
             }
+        }
+
+        // Create journal entry for accounting
+        try {
+            // Check if accounts are initialized, if not, initialize them
+            const accountCount = await LedgerAccount.countDocuments({ companyId: userCompanyId });
+            if (accountCount === 0) {
+                await initializeDefaultAccounts(userCompanyId);
+            }
+
+            const accountName = (paymentMethod === 'cash') ? 'Cash' : 'Bank';
+
+            if (transactionType === 'sale') {
+                // Customer payment: Debit Cash/Bank, Credit Accounts Receivable
+                await createJournalEntry({
+                    companyId: userCompanyId,
+                    entryDate: payment.paymentDate,
+                    entryType: 'payment_received',
+                    referenceType: 'Payment',
+                    referenceId: payment._id,
+                    description: `Payment received from ${partyName} - ${payment.transactionNumber}`,
+                    lines: [
+                        { accountName, debit: amount, credit: 0 },
+                        { accountName: 'Accounts Receivable', debit: 0, credit: amount }
+                    ],
+                    createdBy: req.user._id
+                });
+            } else {
+                // Supplier payment: Debit Accounts Payable, Credit Cash/Bank
+                await createJournalEntry({
+                    companyId: userCompanyId,
+                    entryDate: payment.paymentDate,
+                    entryType: 'payment_made',
+                    referenceType: 'Payment',
+                    referenceId: payment._id,
+                    description: `Payment made to ${partyName} - ${payment.transactionNumber}`,
+                    lines: [
+                        { accountName: 'Accounts Payable', debit: amount, credit: 0 },
+                        { accountName, debit: 0, credit: amount }
+                    ],
+                    createdBy: req.user._id
+                });
+            }
+        } catch (journalError) {
+            console.error('Journal entry creation error:', journalError);
+            // Don't fail the payment if journal entry fails
         }
 
         res.status(201).json({
@@ -196,78 +244,97 @@ router.post('/record-client-payment', async (req, res) => {
             return res.status(403).json({ message: 'Not authorized' });
         }
 
-        // Get all unpaid/partial sales for this client (oldest first)
-        const unpaidSales = await Sale.find({
+        // Get all unpaid/partial sales orders for this client (oldest first)
+        const unpaidSalesOrders = await SalesOrder.find({
             companyId: userCompanyId,
             clientId: clientId,
             paymentStatus: { $in: ['pending', 'partial'] }
-        }).sort({ saleDate: 1 }); // Oldest first
+        }).sort({ orderDate: 1 }); // Oldest first
 
         let remainingAmount = parseFloat(amount);
-        const paymentsCreated = [];
+        const allocations = [];
         const salesUpdated = [];
 
-        // Allocate payment across bills
-        for (const sale of unpaidSales) {
-            if (remainingAmount <= 0) break;
+        // Build allocations array
+        for (const order of unpaidSalesOrders) {
+            if (remainingAmount <= 0.01) break; // Account for floating point precision
 
-            const amountDue = sale.amountDue || (sale.totalAmount - (sale.amountPaid || 0));
+            // Round to 2 decimal places to avoid floating point issues
+            const amountDue = Math.round((order.amountDue || (order.totalAmount - (order.amountPaid || 0))) * 100) / 100;
 
-            if (amountDue <= 0) continue; // Skip if already paid
+            if (amountDue <= 0.01) continue; // Skip if already paid
 
-            const paymentForThisSale = Math.min(remainingAmount, amountDue);
+            // Calculate payment for this order and round to 2 decimals
+            const paymentForThisOrder = Math.round(Math.min(remainingAmount, amountDue) * 100) / 100;
+            const willBeCleared = (order.amountPaid + paymentForThisOrder) >= order.totalAmount;
 
-            // Create payment record
-            const payment = new Payment({
-                companyId: userCompanyId,
-                transactionType: 'sale',
-                transactionId: sale._id,
-                transactionModel: 'Sale',
-                clientId: clientId,
-                partyId: clientId,
-                partyType: 'client',
-                partyModel: 'Client',
-                partyName: client.name,
-                amount: paymentForThisSale,
-                paymentMode: paymentMode || 'cash',
-                paymentDate: paymentDate || new Date(),
-                referenceNumber,
-                notes,
-                recordedBy: req.user.fullName || req.user.email
+            // Add to allocations array
+            allocations.push({
+                saleId: order._id,
+                invoiceNumber: order.orderNumber || `ORD-${order._id.toString().slice(-8).toUpperCase()}`,
+                amountAllocated: paymentForThisOrder,
+                status: willBeCleared ? 'cleared' : 'partial'
             });
 
-            await payment.save();
-            paymentsCreated.push(payment);
-
-            // Update sale
-            sale.amountPaid = (sale.amountPaid || 0) + paymentForThisSale;
-            sale.amountDue = sale.totalAmount - sale.amountPaid;
+            // Update order with rounded values
+            order.amountPaid = Math.round(((order.amountPaid || 0) + paymentForThisOrder) * 100) / 100;
+            order.amountDue = Math.round((order.totalAmount - order.amountPaid) * 100) / 100;
 
             // Update payment status
-            if (sale.amountPaid >= sale.totalAmount) {
-                sale.paymentStatus = 'paid';
-            } else if (sale.amountPaid > 0) {
-                sale.paymentStatus = 'partial';
+            if (order.amountPaid >= order.totalAmount - 0.01) { // Account for rounding
+                order.paymentStatus = 'paid';
+                order.amountDue = 0; // Ensure it's exactly 0
+            } else if (order.amountPaid > 0) {
+                order.paymentStatus = 'partial';
             }
 
-            await sale.save();
+            await order.save();
             salesUpdated.push({
-                saleId: sale._id,
-                invoiceNumber: sale.invoiceNumber,
-                amountPaid: paymentForThisSale,
-                newStatus: sale.paymentStatus
+                saleId: order._id,
+                invoiceNumber: order.orderNumber,
+                amountPaid: paymentForThisOrder,
+                newStatus: order.paymentStatus
             });
 
-            remainingAmount -= paymentForThisSale;
+            remainingAmount = Math.round((remainingAmount - paymentForThisOrder) * 100) / 100;
         }
 
-        // Update client's credit and overpaid amount
-        const totalReceivable = unpaidSales.reduce((sum, sale) => {
-            const due = sale.amountDue || (sale.totalAmount - (sale.amountPaid || 0));
+        // Create ONE payment record with all allocations
+        const payment = new Payment({
+            companyId: userCompanyId,
+            transactionType: 'sale',
+            transactionId: allocations.length > 0 ? allocations[0].saleId : null,
+            transactionModel: 'SalesOrder',
+            clientId: clientId,
+            partyId: clientId,
+            partyType: 'client',
+            partyModel: 'Client',
+            partyName: client.name,
+            amount: parseFloat(amount),
+            paymentMode: paymentMode || 'cash',
+            paymentDate: paymentDate || new Date(),
+            referenceNumber,
+            notes,
+            recordedBy: req.user.fullName || req.user.email,
+            allocations: allocations
+        });
+
+        await payment.save();
+
+
+        // Recalculate client's credit from ALL unpaid/partial sales orders (including updated ones)
+        const allUnpaidSalesOrders = await SalesOrder.find({
+            companyId: userCompanyId,
+            clientId: clientId,
+            paymentStatus: { $in: ['pending', 'partial'] }
+        });
+
+        const totalReceivable = allUnpaidSalesOrders.reduce((sum, order) => {
+            const due = order.amountDue || (order.totalAmount - (order.amountPaid || 0));
             return sum + due;
         }, 0);
 
-        client.currentCredit = Math.max(0, totalReceivable - amount);
+        client.currentCredit = Math.round(Math.max(0, totalReceivable) * 100) / 100;
 
         // If payment exceeds total receivable, store as overpaid
         if (remainingAmount > 0) {
@@ -278,7 +345,7 @@ router.post('/record-client-payment', async (req, res) => {
 
         res.json({
             message: 'Payment recorded successfully',
-            paymentsCreated: paymentsCreated.length,
+            payment: payment._id,
             salesUpdated,
             overpaidAmount: remainingAmount > 0 ? remainingAmount : 0,
             newReceivable: client.currentCredit,
@@ -287,6 +354,154 @@ router.post('/record-client-payment', async (req, res) => {
     } catch (error) {
         console.error('Error recording client payment:', error);
         res.status(500).json({ message: 'Server error', error: error.message });
+    }
+});
+
+// Record supplier-level payment (auto-allocates across bills)
+router.post('/record-supplier-payment', async (req, res) => {
+    try {
+        const { supplierId, amount, paymentMode, paymentDate, referenceNumber, notes } = req.body;
+        const userCompanyId = req.user.companyId?._id || req.user.companyId;
+
+        // Validate input
+        if (!supplierId || !amount || amount <= 0) {
+            return res.status(400).json({ message: 'Supplier ID and valid amount are required' });
+        }
+
+        // Get supplier
+        const supplier = await Supplier.findById(supplierId);
+        if (!supplier) {
+            return res.status(404).json({ message: 'Supplier not found' });
+        }
+
+        // Verify company ownership
+        if (supplier.companyId.toString() !== userCompanyId.toString()) {
+            return res.status(403).json({ message: 'Not authorized' });
+        }
+
+        // Get all unpaid/partial purchase orders for this supplier (oldest first)
+        const unpaidPurchaseOrders = await PurchaseOrder.find({
+            companyId: userCompanyId,
+            supplierId: supplierId,
+            paymentStatus: { $in: ['pending', 'partial'] }
+        }).sort({ orderDate: 1 }); // Oldest first
+
+        let remainingAmount = parseFloat(amount);
+        const allocations = [];
+        const purchasesUpdated = [];
+
+        // Build allocations array
+        for (const order of unpaidPurchaseOrders) {
+            if (remainingAmount <= 0.01) break;
+
+            const amountDue = Math.round((order.amountDue || (order.totalAmount - (order.amountPaid || 0))) * 100) / 100;
+
+            if (amountDue <= 0.01) continue;
+
+            const paymentForThisOrder = Math.round(Math.min(remainingAmount, amountDue) * 100) / 100;
+            const willBeCleared = (order.amountPaid + paymentForThisOrder) >= order.totalAmount;
+
+            allocations.push({
+                saleId: order._id,
+                invoiceNumber: order.orderNumber || `ORD-${order._id.toString().slice(-8).toUpperCase()}`,
+                amountAllocated: paymentForThisOrder,
+                status: willBeCleared ? 'cleared' : 'partial'
+            });
+
+            order.amountPaid = Math.round(((order.amountPaid || 0) + paymentForThisOrder) * 100) / 100;
+            order.amountDue = Math.round((order.totalAmount - order.amountPaid) * 100) / 100;
+
+            if (order.amountPaid >= order.totalAmount - 0.01) {
+                order.paymentStatus = 'paid';
+                order.amountDue = 0;
+            } else if (order.amountPaid > 0) {
+                order.paymentStatus = 'partial';
+            }
+
+            await order.save();
+            purchasesUpdated.push({
+                purchaseId: order._id,
+                billNumber: order.orderNumber,
+                amountPaid: paymentForThisOrder,
+                newStatus: order.paymentStatus
+            });
+
+            remainingAmount = Math.round((remainingAmount - paymentForThisOrder) * 100) / 100;
+        }
+
+        // Create ONE payment record with all allocations
+        const payment = new Payment({
+            companyId: userCompanyId,
+            transactionType: 'purchase',
+            transactionId: allocations.length > 0 ? allocations[0].saleId : null,
+            transactionModel: 'PurchaseOrder',
+            supplierId: supplierId,
+            partyId: supplierId,
+            partyType: 'supplier',
+            partyModel: 'Supplier',
+            partyName: supplier.name,
+            amount: parseFloat(amount),
+            paymentMode: paymentMode || 'cash',
+            paymentDate: paymentDate || new Date(),
+            referenceNumber,
+            notes,
+            recordedBy: req.user.fullName || req.user.email,
+            allocations: allocations
+        });
+
+        await payment.save();
+
+        // Recalculate supplier's payable from ALL unpaid/partial purchase orders (including updated ones)
+        const allUnpaidPurchaseOrders = await PurchaseOrder.find({
+            companyId: userCompanyId,
+            supplierId: supplierId,
+            paymentStatus: { $in: ['pending', 'partial'] }
+        });
+
+        const totalPayable = allUnpaidPurchaseOrders.reduce((sum, order) => {
+            const due = order.amountDue || (order.totalAmount - (order.amountPaid || 0));
+            return sum + due;
+        }, 0);
+
+        supplier.currentPayable = Math.round(Math.max(0, totalPayable) * 100) / 100;
+
+        if (remainingAmount > 0) {
+            supplier.overpaidAmount = (supplier.overpaidAmount || 0) + remainingAmount;
+        }
+
+        await supplier.save();
+
+        res.json({
+            message: 'Payment recorded successfully',
+            payment: payment._id,
+            purchasesUpdated,
+            overpaidAmount: remainingAmount > 0 ? remainingAmount : 0,
+            newPayable: supplier.currentPayable,
+            totalOverpaid: supplier.overpaidAmount
+        });
+    } catch (error) {
+        console.error('Error recording supplier payment:', error);
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+});
+
+// Get all payments for a specific supplier
+router.get('/supplier/:supplierId', authenticate, async (req, res) => {
+    try {
+        const userCompanyId = req.user.companyId?._id || req.user.companyId;
+
+        const payments = await Payment.find({
+            companyId: userCompanyId,
+            partyId: req.params.supplierId,
+            partyType: 'supplier'
+        })
+            .sort({ createdAt: -1 })
+            .lean();
+
+        res.json({ payments });
+    } catch (error) {
+        console.error('Get supplier payments error:', error);
+        res.status(500).json({ message: 'Server error' });
     }
 });
 
@@ -331,7 +546,7 @@ router.get('/client/:clientId', authenticate, async (req, res) => {
             partyId: req.params.clientId, // Assuming clientId maps to partyId
             partyType: 'client' // Explicitly filter for client payments
         })
-            .sort({ paymentDate: -1 })
+            .sort({ createdAt: -1 }) // Latest first by creation time
             .lean();
 
         res.json({ payments });
@@ -410,7 +625,7 @@ router.delete('/:id', async (req, res) => {
         }
 
         // Reverse the payment from transaction
-        const TransactionModel = payment.transactionType === 'sale' ? Sale : Purchase;
+        const TransactionModel = payment.transactionType === 'sale' ? SalesOrder : PurchaseOrder;
         const transaction = await TransactionModel.findById(payment.transactionId);
 
         if (transaction) {

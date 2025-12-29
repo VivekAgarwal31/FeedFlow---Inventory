@@ -19,7 +19,7 @@ const paymentSchema = new mongoose.Schema({
     },
     transactionModel: {
         type: String,
-        enum: ['Sale', 'Purchase'],
+        enum: ['Sale', 'Purchase', 'SalesOrder', 'PurchaseOrder'],
         required: true
     },
     transactionNumber: {
@@ -73,7 +73,20 @@ const paymentSchema = new mongoose.Schema({
         type: String,
         required: true,
         trim: true
-    }
+    },
+    // Track which invoices this payment was allocated to (for client/supplier level payments)
+    allocations: [{
+        saleId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Sale'
+        },
+        invoiceNumber: String,
+        amountAllocated: Number,
+        status: {
+            type: String,
+            enum: ['cleared', 'partial']
+        }
+    }]
 }, {
     timestamps: true
 });

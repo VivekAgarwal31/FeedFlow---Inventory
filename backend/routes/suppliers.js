@@ -1,7 +1,8 @@
 import express from 'express';
 import { body, validationResult } from 'express-validator';
 import Supplier from '../models/Supplier.js';
-import Purchase from '../models/Purchase.js';
+import PurchaseOrder from '../models/PurchaseOrder.js';
+import DeliveryIn from '../models/DeliveryIn.js';
 import { authenticate } from '../middleware/auth.js';
 import { requirePermission } from '../middleware/rbac.js';
 
@@ -43,26 +44,37 @@ router.get('/', authenticate, async (req, res) => {
 
         // Calculate purchase statistics for each supplier
         const suppliersWithStats = await Promise.all(suppliers.map(async (supplier) => {
-            const purchases = await Purchase.find({
+            const purchaseOrders = await PurchaseOrder.find({
                 companyId,
-                supplierId: supplier._id
+                supplierName: supplier.name
             }).lean();
 
-            const totalPurchases = purchases.reduce((sum, p) => sum + (p.totalAmount || 0), 0);
-            const purchaseCount = purchases.length;
-            const lastPurchaseDate = purchases.length > 0
-                ? purchases.reduce((latest, p) => {
-                    const pDate = new Date(p.purchaseDate || p.createdAt);
-                    return pDate > latest ? pDate : latest;
+            const totalPurchases = purchaseOrders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
+            const purchaseCount = purchaseOrders.length;
+
+            const lastPurchaseDate = purchaseOrders.length > 0
+                ? purchaseOrders.reduce((latest, order) => {
+                    const orderDate = new Date(order.orderDate || order.createdAt);
+                    return orderDate > latest ? orderDate : latest;
                 }, new Date(0))
                 : null;
+
+            // Calculate current payable from unpaid/partial orders
+            const unpaidOrders = purchaseOrders.filter(order =>
+                order.paymentStatus === 'pending' || order.paymentStatus === 'partial'
+            );
+            const currentPayable = unpaidOrders.reduce((sum, order) => {
+                const amountDue = order.amountDue || (order.totalAmount - (order.amountPaid || 0));
+                return sum + amountDue;
+            }, 0);
 
             return {
                 ...supplier,
                 totalPurchases,
                 purchaseCount,
                 lastPurchaseDate,
-                lastPurchase: lastPurchaseDate
+                lastPurchase: lastPurchaseDate,
+                currentPayable
             };
         }));
 
@@ -78,18 +90,23 @@ router.get('/:id', authenticate, async (req, res) => {
     try {
         const companyId = req.user.companyId?._id || req.user.companyId;
 
-        const [supplier, purchases] = await Promise.all([
-            Supplier.findOne({ _id: req.params.id, companyId }),
-            Purchase.find({ companyId, supplierId: req.params.id })
-                .sort({ purchaseDate: -1 })
-                .limit(50)
-        ]);
+        const supplier = await Supplier.findOne({ _id: req.params.id, companyId });
 
         if (!supplier) {
             return res.status(404).json({ message: 'Supplier not found' });
         }
 
-        res.json({ supplier, purchases });
+        // Get both purchase orders and deliveries
+        const [purchaseOrders, deliveries] = await Promise.all([
+            PurchaseOrder.find({ companyId, supplierName: supplier.name })
+                .sort({ orderDate: -1, createdAt: -1 })
+                .limit(50),
+            DeliveryIn.find({ companyId, supplierName: supplier.name })
+                .sort({ receiptDate: -1, createdAt: -1 })
+                .limit(50)
+        ]);
+
+        res.json({ supplier, purchaseOrders, deliveries });
     } catch (error) {
         console.error('Get supplier error:', error);
         res.status(500).json({ message: 'Server error' });
@@ -198,6 +215,50 @@ router.delete('/:id', authenticate, requirePermission('canManageSuppliers'), asy
         res.json({ message: 'Supplier deleted successfully' });
     } catch (error) {
         console.error('Delete supplier error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// Utility endpoint to recalculate currentPayable for all suppliers
+router.post('/recalculate-payables', authenticate, requirePermission('canManageSuppliers'), async (req, res) => {
+    try {
+        const companyId = req.user.companyId?._id || req.user.companyId;
+
+        if (!companyId) {
+            return res.status(400).json({ message: 'No company associated with user' });
+        }
+
+        // Get all suppliers for this company
+        const suppliers = await Supplier.find({ companyId });
+
+        let updated = 0;
+
+        for (const supplier of suppliers) {
+            // Get all unpaid/partial purchase orders for this supplier
+            const unpaidOrders = await PurchaseOrder.find({
+                companyId,
+                supplierName: supplier.name,
+                paymentStatus: { $in: ['pending', 'partial'] }
+            });
+
+            // Calculate total payable
+            const currentPayable = unpaidOrders.reduce((sum, order) => {
+                const amountDue = order.amountDue || (order.totalAmount - (order.amountPaid || 0));
+                return sum + amountDue;
+            }, 0);
+
+            // Update supplier
+            supplier.currentPayable = currentPayable;
+            await supplier.save();
+            updated++;
+        }
+
+        res.json({
+            message: `Successfully recalculated payables for ${updated} suppliers`,
+            updated
+        });
+    } catch (error) {
+        console.error('Recalculate payables error:', error);
         res.status(500).json({ message: 'Server error' });
     }
 });

@@ -8,8 +8,10 @@ import mongoose from 'mongoose';
 export const analyzeOrphanedRecords = async (companyId) => {
     const report = {
         orphanedStockItems: [],
-        orphanedSales: [],
-        orphanedPurchases: [],
+        orphanedSalesOrders: [],
+        orphanedPurchaseOrders: [],
+        orphanedDeliveries: [],
+        orphanedPayments: [],
         orphanedTransactions: []
     };
 
@@ -30,51 +32,53 @@ export const analyzeOrphanedRecords = async (companyId) => {
         warehouseId: item.warehouseId
     }));
 
-    // Find sales with invalid client references
-    const Sale = mongoose.model('Sale');
+    // Find sales orders with invalid client references
+    const SalesOrder = mongoose.model('SalesOrder');
     const Client = mongoose.model('Client');
 
-    const sales = await Sale.find({ companyId, clientId: { $exists: true } }).lean();
+    const salesOrders = await SalesOrder.find({ companyId, clientId: { $exists: true } }).lean();
     const clientIds = new Set(
         (await Client.find({ companyId }).select('_id').lean()).map(c => c._id.toString())
     );
 
-    report.orphanedSales = sales.filter(sale =>
-        sale.clientId && !clientIds.has(sale.clientId.toString())
-    ).map(sale => ({
-        _id: sale._id,
-        clientName: sale.clientName,
-        clientId: sale.clientId,
-        totalAmount: sale.totalAmount
+    report.orphanedSalesOrders = salesOrders.filter(order =>
+        order.clientId && !clientIds.has(order.clientId.toString())
+    ).map(order => ({
+        _id: order._id,
+        clientName: order.clientName,
+        clientId: order.clientId,
+        totalAmount: order.totalAmount
     }));
 
-    // Find purchases with invalid supplier references
-    const Purchase = mongoose.model('Purchase');
+    // Find purchase orders with invalid supplier references
+    const PurchaseOrder = mongoose.model('PurchaseOrder');
     const Supplier = mongoose.model('Supplier');
 
-    const purchases = await Purchase.find({ companyId }).lean();
+    const purchaseOrders = await PurchaseOrder.find({ companyId }).lean();
     const supplierIds = new Set(
         (await Supplier.find({ companyId }).select('_id').lean()).map(s => s._id.toString())
     );
 
-    report.orphanedPurchases = purchases.filter(purchase =>
-        !supplierIds.has(purchase.supplierId.toString())
-    ).map(purchase => ({
-        _id: purchase._id,
-        supplierName: purchase.supplierName,
-        supplierId: purchase.supplierId,
-        totalAmount: purchase.totalAmount
+    report.orphanedPurchaseOrders = purchaseOrders.filter(order =>
+        !supplierIds.has(order.supplierId.toString())
+    ).map(order => ({
+        _id: order._id,
+        supplierName: order.supplierName,
+        supplierId: order.supplierId,
+        totalAmount: order.totalAmount
     }));
 
-    // Find transactions with invalid item/warehouse references
+    // Find transactions with invalid references (for aggregated transactions, itemId/warehouseId may be null)
     const StockTransaction = mongoose.model('StockTransaction');
     const transactions = await StockTransaction.find({ companyId }).lean();
     const stockItemIds = new Set(stockItems.map(item => item._id.toString()));
 
-    report.orphanedTransactions = transactions.filter(txn =>
-        !stockItemIds.has(txn.itemId.toString()) ||
-        !warehouseIds.has(txn.warehouseId.toString())
-    ).map(txn => ({
+    report.orphanedTransactions = transactions.filter(txn => {
+        // Skip validation for aggregated delivery transactions (no itemId/warehouseId)
+        if (!txn.itemId || !txn.warehouseId) return false;
+        return !stockItemIds.has(txn.itemId.toString()) ||
+            !warehouseIds.has(txn.warehouseId.toString());
+    }).map(txn => ({
         _id: txn._id,
         type: txn.type,
         itemName: txn.itemName,
@@ -86,8 +90,10 @@ export const analyzeOrphanedRecords = async (companyId) => {
         summary: {
             totalOrphaned:
                 report.orphanedStockItems.length +
-                report.orphanedSales.length +
-                report.orphanedPurchases.length +
+                report.orphanedSalesOrders.length +
+                report.orphanedPurchaseOrders.length +
+                report.orphanedDeliveries.length +
+                report.orphanedPayments.length +
                 report.orphanedTransactions.length
         },
         details: report
@@ -169,23 +175,23 @@ export const cleanupOrphans = async (companyId, dryRun = true, userId) => {
             totalDeleted += result.deletedCount;
         }
 
-        // Delete orphaned sales
-        if (analysis.details.orphanedSales.length > 0) {
-            const Sale = mongoose.model('Sale');
-            const result = await Sale.deleteMany({
-                _id: { $in: analysis.details.orphanedSales.map(sale => sale._id) }
+        // Delete orphaned sales orders
+        if (analysis.details.orphanedSalesOrders.length > 0) {
+            const SalesOrder = mongoose.model('SalesOrder');
+            const result = await SalesOrder.deleteMany({
+                _id: { $in: analysis.details.orphanedSalesOrders.map(order => order._id) }
             }, { session });
-            deletedDetails.sales = result.deletedCount;
+            deletedDetails.salesOrders = result.deletedCount;
             totalDeleted += result.deletedCount;
         }
 
-        // Delete orphaned purchases
-        if (analysis.details.orphanedPurchases.length > 0) {
-            const Purchase = mongoose.model('Purchase');
-            const result = await Purchase.deleteMany({
-                _id: { $in: analysis.details.orphanedPurchases.map(purchase => purchase._id) }
+        // Delete orphaned purchase orders
+        if (analysis.details.orphanedPurchaseOrders.length > 0) {
+            const PurchaseOrder = mongoose.model('PurchaseOrder');
+            const result = await PurchaseOrder.deleteMany({
+                _id: { $in: analysis.details.orphanedPurchaseOrders.map(order => order._id) }
             }, { session });
-            deletedDetails.purchases = result.deletedCount;
+            deletedDetails.purchaseOrders = result.deletedCount;
             totalDeleted += result.deletedCount;
         }
 
@@ -231,8 +237,11 @@ export const cleanupOrphans = async (companyId, dryRun = true, userId) => {
 export const optimizeDatabase = async (companyId) => {
     const collections = [
         'stockitems',
-        'sales',
-        'purchases',
+        'salesorders',
+        'purchaseorders',
+        'deliveryins',
+        'deliveryouts',
+        'payments',
         'stocktransactions',
         'clients',
         'suppliers',

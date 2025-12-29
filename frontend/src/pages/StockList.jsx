@@ -391,7 +391,7 @@ const StockList = () => {
                   <Input
                     id="item-name"
                     type="text"
-                    placeholder="Cattle Feed Premium"
+                    placeholder="Premium Product"
                     value={form.itemName}
                     onChange={(e) => setForm({ ...form, itemName: e.target.value })}
                     required
@@ -583,7 +583,7 @@ const StockList = () => {
                 <Label>Results</Label>
                 <div className="flex items-center h-10 px-3 py-2 border rounded-md bg-muted">
                   <span className="text-sm font-medium">
-                    {filteredStockItems.length} items
+                    {consolidatedItems.length} items
                   </span>
                 </div>
               </div>

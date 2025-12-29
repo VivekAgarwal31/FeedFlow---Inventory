@@ -46,7 +46,7 @@ router.get('/', authenticate, async (req, res) => {
 
         const [transactions, total] = await Promise.all([
             StockTransaction.find(query)
-                .sort({ transactionDate: -1 })
+                .sort({ transactionDate: -1, createdAt: -1 })
                 .skip(skip)
                 .limit(limit)
                 .lean(),

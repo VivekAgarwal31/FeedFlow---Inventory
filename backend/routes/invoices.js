@@ -1,6 +1,7 @@
 import express from 'express';
 import Invoice from '../models/Invoice.js';
 import Sale from '../models/Sale.js';
+import SalesOrder from '../models/SalesOrder.js';
 import Company from '../models/Company.js';
 import Client from '../models/Client.js';
 import { authenticate } from '../middleware/auth.js';
@@ -402,6 +403,111 @@ router.put('/:id/terms', async (req, res) => {
         });
     } catch (error) {
         console.error('Error updating invoice:', error);
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+});
+
+// Download invoice PDF by sales order ID
+router.get('/download-by-order/:orderId', async (req, res) => {
+    try {
+        const salesOrder = await SalesOrder.findById(req.params.orderId);
+
+        if (!salesOrder) {
+            return res.status(404).json({ message: 'Sales order not found' });
+        }
+
+        // Verify company ownership
+        const userCompanyId = req.user.companyId?._id || req.user.companyId;
+        if (salesOrder.companyId.toString() !== userCompanyId.toString()) {
+            return res.status(403).json({ message: 'Not authorized' });
+        }
+
+        // Get company details
+        const company = await Company.findById(userCompanyId);
+
+        // Get client details
+        let clientDetails = {
+            name: salesOrder.clientName,
+            address: '',
+            phone: salesOrder.clientPhone || '',
+            email: salesOrder.clientEmail || '',
+            gstNumber: ''
+        };
+
+        if (salesOrder.clientId) {
+            const client = await Client.findById(salesOrder.clientId);
+            if (client) {
+                clientDetails = {
+                    name: client.name,
+                    address: client.address || '',
+                    phone: client.phone || salesOrder.clientPhone || '',
+                    email: client.email || salesOrder.clientEmail || '',
+                    gstNumber: client.gstNumber || ''
+                };
+            }
+        }
+
+        // Prepare invoice items
+        const invoiceItems = salesOrder.items.map(item => ({
+            description: item.itemName,
+            quantity: item.quantity,
+            unit: 'BAGS',
+            weightInKgs: null,
+            rate: item.unitPrice || 0,
+            per: 'BAG',
+            amount: item.total || (item.quantity * (item.unitPrice || 0))
+        }));
+
+        const totalQuantity = calculateTotalQuantity(invoiceItems);
+
+        // Create temporary invoice object for PDF generation
+        const invoiceData = {
+            invoiceNumber: salesOrder.orderNumber,
+            invoiceDate: salesOrder.orderDate,
+            companyDetails: {
+                name: company.name,
+                address: company.address || '',
+                phone: company.phone || '',
+                email: company.email || '',
+                gstNumber: company.gstNumber || ''
+            },
+            clientDetails,
+            deliveryNote: 'Cash',
+            supplierRef: '',
+            buyerOrderNo: salesOrder.orderNumber.toString(),
+            buyerOrderDate: salesOrder.orderDate,
+            despatchDocNo: '',
+            despatchDocDate: null,
+            despatchedThrough: '',
+            destination: clientDetails.address,
+            termsOfDelivery: '',
+            items: invoiceItems,
+            totalQuantity,
+            wages: salesOrder.wages || 0,
+            totalAmount: salesOrder.totalAmount,
+            amountInWords: numberToWords(salesOrder.totalAmount),
+            amountPaid: salesOrder.amountPaid || 0,
+            amountDue: salesOrder.amountDue || salesOrder.totalAmount,
+            paymentStatus: salesOrder.paymentStatus,
+            authorizedSignatory: req.user.fullName
+        };
+
+        // Generate PDF
+        const doc = generateInvoicePDF(invoiceData);
+
+        // Set CORS headers
+        res.setHeader('Access-Control-Allow-Origin', process.env.FRONTEND_URL || 'http://localhost:5173');
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+
+        // Set response headers
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename=Invoice-${salesOrder.orderNumber}.pdf`);
+
+        // Pipe PDF to response
+        doc.pipe(res);
+        doc.end();
+    } catch (error) {
+        console.error('Error downloading sales order invoice:', error);
         res.status(500).json({ message: 'Server error', error: error.message });
     }
 });

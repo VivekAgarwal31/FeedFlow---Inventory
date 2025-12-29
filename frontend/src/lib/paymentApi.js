@@ -56,6 +56,16 @@ export const recordClientPayment = async (paymentData) => {
     return response.data;
 };
 
+export const getSupplierPayments = async (supplierId) => {
+    const response = await api.get(`/payments/supplier/${supplierId}`);
+    return response.data;
+};
+
+export const recordSupplierPayment = async (paymentData) => {
+    const response = await api.post('/payments/record-supplier-payment', paymentData);
+    return response.data;
+};
+
 export const deletePayment = async (paymentId) => {
     const response = await api.delete(`/payments/${paymentId}`);
     return response.data;
@@ -69,6 +79,13 @@ export const generateInvoice = async (saleId, invoiceData = {}) => {
 
 export const downloadInvoiceBySale = async (saleId) => {
     const response = await api.get(`/invoices/download-by-sale/${saleId}`, {
+        responseType: 'blob'
+    });
+    return response.data;
+};
+
+export const downloadInvoiceByOrder = async (orderId) => {
+    const response = await api.get(`/invoices/download-by-order/${orderId}`, {
         responseType: 'blob'
     });
     return response.data;

@@ -182,13 +182,26 @@ router.post('/', authenticate, requirePermission('canManagePurchases'), [
         }
 
         // Update supplier statistics
-        await Supplier.findByIdAndUpdate(supplierId, {
+        const updateData = {
             $inc: {
                 totalPurchases: totalAmount,
                 purchaseCount: 1
             },
             lastPurchaseDate: purchaseDate || new Date()
-        });
+        };
+
+        // Update currentPayable based on payment status
+        if (paymentStatus === 'pending') {
+            // Full amount is payable
+            updateData.$inc.currentPayable = totalAmount;
+        } else if (paymentStatus === 'partial') {
+            // Partial amount is payable (assuming amountDue is set)
+            const amountDue = purchase.amountDue || totalAmount;
+            updateData.$inc.currentPayable = amountDue;
+        }
+        // If paymentStatus is 'paid', don't add to currentPayable
+
+        await Supplier.findByIdAndUpdate(supplierId, updateData);
 
         res.status(201).json({
             message: 'Purchase created successfully',

@@ -82,6 +82,11 @@ const supplierSchema = new mongoose.Schema({
         default: 0,
         min: 0
     },
+    overpaidAmount: {
+        type: Number,
+        default: 0,
+        min: 0
+    },
     isActive: {
         type: Boolean,
         default: true

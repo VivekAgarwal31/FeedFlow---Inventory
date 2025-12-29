@@ -7,8 +7,11 @@ import { createBackup, listBackups, restoreBackup, deleteBackup, getBackupFilePa
 import { archiveOldRecords, getArchivedRecords, restoreFromArchive, getArchiveStats } from '../utils/archival.js';
 import { analyzeOrphanedRecords, findDuplicates, cleanupOrphans, optimizeDatabase, getCleanupHistory } from '../utils/cleanup.js';
 import StockItem from '../models/StockItem.js';
-import Sale from '../models/Sale.js';
-import Purchase from '../models/Purchase.js';
+import SalesOrder from '../models/SalesOrder.js';
+import PurchaseOrder from '../models/PurchaseOrder.js';
+import DeliveryIn from '../models/DeliveryIn.js';
+import DeliveryOut from '../models/DeliveryOut.js';
+import Payment from '../models/Payment.js';
 import Client from '../models/Client.js';
 import Supplier from '../models/Supplier.js';
 import Warehouse from '../models/Warehouse.js';
@@ -42,12 +45,18 @@ const upload = multer({
 const getModel = (entityType) => {
     const models = {
         stockItems: StockItem,
-        sales: Sale,
-        purchases: Purchase,
+        salesOrders: SalesOrder,
+        purchaseOrders: PurchaseOrder,
+        deliveryIns: DeliveryIn,
+        deliveryOuts: DeliveryOut,
+        payments: Payment,
         clients: Client,
         suppliers: Supplier,
         warehouses: Warehouse,
-        stockTransactions: StockTransaction
+        stockTransactions: StockTransaction,
+        // Backward compatibility
+        sales: SalesOrder,
+        purchases: PurchaseOrder
     };
     return models[entityType];
 };

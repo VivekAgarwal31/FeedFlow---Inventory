@@ -11,6 +11,7 @@ import { formatCurrency } from '../lib/utils'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert'
+import { Badge } from '../components/ui/badge'
 
 const Dashboard = () => {
   const [stats, setStats] = useState({
@@ -20,7 +21,9 @@ const Dashboard = () => {
     warehouseCount: 0,
     totalRevenue: 0,
     totalSales: 0,
-    lowStockCount: 0
+    lowStockCount: 0,
+    totalReceivables: 0,
+    totalPayables: 0
   })
   const [company, setCompany] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -93,6 +96,47 @@ const Dashboard = () => {
           </AlertDescription>
         </Alert>
       )}
+
+      {/* Financial Stats */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Total Receivables
+              </CardTitle>
+              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">New</Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">Total unpaid bills ₹0.00</p>
+              <div className="text-2xl font-bold">
+                {formatCurrency(stats.totalReceivables)}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Total Payables
+              </CardTitle>
+              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">New</Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">Total unpaid bills ₹0.00</p>
+              <div className="text-2xl font-bold">
+                {formatCurrency(stats.totalPayables)}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

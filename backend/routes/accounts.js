@@ -1,6 +1,6 @@
 import express from 'express';
-import Sale from '../models/Sale.js';
-import Purchase from '../models/Purchase.js';
+import SalesOrder from '../models/SalesOrder.js';
+import PurchaseOrder from '../models/PurchaseOrder.js';
 import Client from '../models/Client.js';
 import Supplier from '../models/Supplier.js';
 import Invoice from '../models/Invoice.js';
@@ -16,8 +16,8 @@ router.get('/receivable', async (req, res) => {
     try {
         const userCompanyId = req.user.companyId?._id || req.user.companyId;
 
-        // Get all unpaid and partial sales
-        const sales = await Sale.find({
+        // Get all unpaid and partial sales orders
+        const salesOrders = await SalesOrder.find({
             companyId: userCompanyId,
             paymentStatus: { $in: ['pending', 'partial'] }
         });
@@ -34,30 +34,30 @@ router.get('/receivable', async (req, res) => {
             days90Plus: 0    // 90+ days
         };
 
-        sales.forEach(sale => {
-            totalOutstanding += sale.amountDue;
+        salesOrders.forEach(order => {
+            totalOutstanding += order.amountDue;
 
-            if (sale.isOverdue) {
-                overdueAmount += sale.amountDue;
+            if (order.isOverdue) {
+                overdueAmount += order.amountDue;
             }
 
             // Calculate aging
-            const saleDate = new Date(sale.saleDate);
-            const daysOld = Math.floor((today - saleDate) / (1000 * 60 * 60 * 24));
+            const orderDate = new Date(order.orderDate);
+            const daysOld = Math.floor((today - orderDate) / (1000 * 60 * 60 * 24));
 
             if (daysOld <= 30) {
-                aging.current += sale.amountDue;
+                aging.current += order.amountDue;
             } else if (daysOld <= 60) {
-                aging.days31_60 += sale.amountDue;
+                aging.days31_60 += order.amountDue;
             } else if (daysOld <= 90) {
-                aging.days61_90 += sale.amountDue;
+                aging.days61_90 += order.amountDue;
             } else {
-                aging.days90Plus += sale.amountDue;
+                aging.days90Plus += order.amountDue;
             }
         });
 
         // Get client-wise breakdown
-        const clientBreakdown = await Sale.aggregate([
+        const clientBreakdown = await SalesOrder.aggregate([
             {
                 $match: {
                     companyId: userCompanyId,
@@ -86,7 +86,7 @@ router.get('/receivable', async (req, res) => {
             currentAmount: totalOutstanding - overdueAmount,
             aging,
             topClients: clientBreakdown,
-            salesCount: sales.length
+            salesCount: salesOrders.length
         });
     } catch (error) {
         console.error('Error fetching accounts receivable:', error);
@@ -116,17 +116,17 @@ router.get('/receivable/clients', async (req, res) => {
 
         // Enrich with sales data
         const enrichedClients = await Promise.all(clients.map(async (client) => {
-            const sales = await Sale.find({
+            const salesOrders = await SalesOrder.find({
                 companyId: userCompanyId,
                 clientId: client._id,
                 paymentStatus: { $in: ['pending', 'partial'] }
             });
 
-            const overdueCount = sales.filter(s => s.isOverdue).length;
+            const overdueCount = salesOrders.filter(s => s.isOverdue).length;
 
             return {
                 ...client.toObject(),
-                outstandingSales: sales.length,
+                outstandingSales: salesOrders.length,
                 overdueSales: overdueCount
             };
         }));
@@ -167,15 +167,15 @@ router.get('/receivable/invoices', async (req, res) => {
 
         const skip = (page - 1) * limit;
 
-        const sales = await Sale.find(query)
-            .sort({ saleDate: -1 })
+        const salesOrders = await SalesOrder.find(query)
+            .sort({ orderDate: -1 })
             .skip(skip)
             .limit(parseInt(limit));
 
-        const total = await Sale.countDocuments(query);
+        const total = await SalesOrder.countDocuments(query);
 
         res.json({
-            invoices: sales,
+            invoices: salesOrders,
             pagination: {
                 page: parseInt(page),
                 limit: parseInt(limit),
@@ -194,8 +194,8 @@ router.get('/payable', async (req, res) => {
     try {
         const userCompanyId = req.user.companyId?._id || req.user.companyId;
 
-        // Get all unpaid and partial purchases
-        const purchases = await Purchase.find({
+        // Get all unpaid and partial purchase orders
+        const purchaseOrders = await PurchaseOrder.find({
             companyId: userCompanyId,
             paymentStatus: { $in: ['pending', 'partial'] }
         });
@@ -212,30 +212,30 @@ router.get('/payable', async (req, res) => {
             days90Plus: 0
         };
 
-        purchases.forEach(purchase => {
-            totalPayable += purchase.amountDue;
+        purchaseOrders.forEach(order => {
+            totalPayable += order.amountDue;
 
-            if (purchase.isOverdue) {
-                overdueAmount += purchase.amountDue;
+            if (order.isOverdue) {
+                overdueAmount += order.amountDue;
             }
 
             // Calculate aging
-            const purchaseDate = new Date(purchase.purchaseDate);
-            const daysOld = Math.floor((today - purchaseDate) / (1000 * 60 * 60 * 24));
+            const orderDate = new Date(order.orderDate);
+            const daysOld = Math.floor((today - orderDate) / (1000 * 60 * 60 * 24));
 
             if (daysOld <= 30) {
-                aging.current += purchase.amountDue;
+                aging.current += order.amountDue;
             } else if (daysOld <= 60) {
-                aging.days31_60 += purchase.amountDue;
+                aging.days31_60 += order.amountDue;
             } else if (daysOld <= 90) {
-                aging.days61_90 += purchase.amountDue;
+                aging.days61_90 += order.amountDue;
             } else {
-                aging.days90Plus += purchase.amountDue;
+                aging.days90Plus += order.amountDue;
             }
         });
 
         // Get supplier-wise breakdown
-        const supplierBreakdown = await Purchase.aggregate([
+        const supplierBreakdown = await PurchaseOrder.aggregate([
             {
                 $match: {
                     companyId: userCompanyId,
@@ -264,7 +264,7 @@ router.get('/payable', async (req, res) => {
             currentAmount: totalPayable - overdueAmount,
             aging,
             topSuppliers: supplierBreakdown,
-            purchasesCount: purchases.length
+            purchasesCount: purchaseOrders.length
         });
     } catch (error) {
         console.error('Error fetching accounts payable:', error);
@@ -294,17 +294,17 @@ router.get('/payable/suppliers', async (req, res) => {
 
         // Enrich with purchase data
         const enrichedSuppliers = await Promise.all(suppliers.map(async (supplier) => {
-            const purchases = await Purchase.find({
+            const purchaseOrders = await PurchaseOrder.find({
                 companyId: userCompanyId,
                 supplierId: supplier._id,
                 paymentStatus: { $in: ['pending', 'partial'] }
             });
 
-            const overdueCount = purchases.filter(p => p.isOverdue).length;
+            const overdueCount = purchaseOrders.filter(p => p.isOverdue).length;
 
             return {
                 ...supplier.toObject(),
-                outstandingPurchases: purchases.length,
+                outstandingPurchases: purchaseOrders.length,
                 overduePurchases: overdueCount
             };
         }));
@@ -345,15 +345,15 @@ router.get('/payable/bills', async (req, res) => {
 
         const skip = (page - 1) * limit;
 
-        const purchases = await Purchase.find(query)
-            .sort({ purchaseDate: -1 })
+        const purchaseOrders = await PurchaseOrder.find(query)
+            .sort({ orderDate: -1 })
             .skip(skip)
             .limit(parseInt(limit));
 
-        const total = await Purchase.countDocuments(query);
+        const total = await PurchaseOrder.countDocuments(query);
 
         res.json({
-            bills: purchases,
+            bills: purchaseOrders,
             pagination: {
                 page: parseInt(page),
                 limit: parseInt(limit),

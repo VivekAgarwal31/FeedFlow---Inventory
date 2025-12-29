@@ -128,24 +128,57 @@ router.post('/', authenticate, requirePermission('canManageSales'), [
             await client.save();
         }
 
-        // Create sale
-        const sale = new Sale({
-            companyId,
-            clientId: client._id,
-            clientName,
-            clientPhone,
-            clientEmail,
-            items,
-            wages: wages || 0,
-            totalAmount,
-            paymentStatus: paymentStatus || 'pending',
-            paymentMethod: paymentMethod || 'cash',
-            notes,
-            staffName: req.user.fullName,
-            saleDate: saleDate || new Date()
-        });
+        // Generate unique invoice number with retry logic to handle race conditions
+        let sale;
+        let retries = 5;
 
-        await sale.save();
+        while (retries > 0) {
+            try {
+                // Get the next invoice number
+                const lastSale = await Sale.findOne({ companyId })
+                    .sort({ invoiceNumber: -1 })
+                    .select('invoiceNumber')
+                    .lean();
+
+                const nextInvoiceNumber = lastSale && lastSale.invoiceNumber ? lastSale.invoiceNumber + 1 : 1;
+
+                // Create sale with the invoice number
+                sale = new Sale({
+                    companyId,
+                    clientId: client._id,
+                    clientName,
+                    clientPhone,
+                    clientEmail,
+                    items,
+                    wages: wages || 0,
+                    totalAmount,
+                    invoiceNumber: nextInvoiceNumber,
+                    invoiceDate: saleDate || new Date(),
+                    paymentStatus: paymentStatus || 'pending',
+                    paymentMethod: paymentMethod || 'cash',
+                    notes,
+                    staffName: req.user.fullName,
+                    saleDate: saleDate || new Date()
+                });
+
+                await sale.save();
+                break; // Success - exit retry loop
+
+            } catch (error) {
+                // If duplicate key error (invoice number collision), retry
+                if (error.code === 11000 && retries > 1) {
+                    retries--;
+                    await new Promise(resolve => setTimeout(resolve, 50)); // Wait 50ms before retry
+                    continue;
+                } else {
+                    throw error; // Re-throw if not a duplicate key error or out of retries
+                }
+            }
+        }
+
+        if (!sale) {
+            return res.status(500).json({ message: 'Failed to generate unique invoice number after multiple attempts' });
+        }
 
         // Update stock quantities and create transactions
         let totalQuantity = 0;

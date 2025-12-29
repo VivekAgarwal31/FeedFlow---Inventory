@@ -149,13 +149,25 @@ router.put('/', authenticate, [
   body('name').optional().trim().isLength({ min: 2 }).withMessage('Company name must be at least 2 characters'),
   body('address').optional().trim(),
   body('phone').optional().trim(),
-  body('email').optional().isEmail().withMessage('Please provide a valid email')
+  body('email').optional().custom((value) => {
+    if (value && value.trim() !== '') {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(value)) {
+        throw new Error('Please provide a valid email');
+      }
+    }
+    return true;
+  }),
+  body('wagesPerBag').optional().isNumeric().withMessage('Wages per bag must be a number')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      console.error('Validation errors:', errors.array());
       return res.status(400).json({ errors: errors.array() });
     }
+
+    console.log('Update request body:', req.body);
 
     if (!req.user.companyId) {
       return res.status(404).json({ message: 'No company found' });
@@ -166,13 +178,14 @@ router.put('/', authenticate, [
       return res.status(403).json({ message: 'Insufficient permissions to update company' });
     }
 
-    const { name, address, phone, email } = req.body;
+    const { name, address, phone, email, wagesPerBag } = req.body;
     const updateData = {};
 
     if (name) updateData.name = name;
     if (address) updateData.address = address;
     if (phone) updateData.contactNumber = phone;
     if (email) updateData.email = email;
+    if (wagesPerBag !== undefined) updateData.wagesPerBag = wagesPerBag;
 
     const company = await Company.findByIdAndUpdate(
       req.user.companyId._id,
@@ -190,7 +203,8 @@ router.put('/', authenticate, [
         address: company.address,
         contactNumber: company.contactNumber,
         gstNumber: company.gstNumber,
-        email: company.email
+        email: company.email,
+        wagesPerBag: company.wagesPerBag
       }
     });
   } catch (error) {

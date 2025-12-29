@@ -41,8 +41,11 @@ export const createBackup = async (companyId, companyName) => {
             { collection: 'stockitems', model: 'StockItem' },
             { collection: 'clients', model: 'Client' },
             { collection: 'suppliers', model: 'Supplier' },
-            { collection: 'sales', model: 'Sale' },
-            { collection: 'purchases', model: 'Purchase' },
+            { collection: 'salesorders', model: 'SalesOrder' },
+            { collection: 'purchaseorders', model: 'PurchaseOrder' },
+            { collection: 'deliveryins', model: 'DeliveryIn' },
+            { collection: 'deliveryouts', model: 'DeliveryOut' },
+            { collection: 'payments', model: 'Payment' },
             { collection: 'stocktransactions', model: 'StockTransaction' }
         ];
 
@@ -184,9 +187,15 @@ export const restoreBackup = async (companyId, backupFilePath) => {
                 { collection: 'stockitems', model: 'StockItem' },
                 { collection: 'clients', model: 'Client' },
                 { collection: 'suppliers', model: 'Supplier' },
-                { collection: 'sales', model: 'Sale' },
-                { collection: 'purchases', model: 'Purchase' },
-                { collection: 'stocktransactions', model: 'StockTransaction' }
+                { collection: 'salesorders', model: 'SalesOrder' },
+                { collection: 'purchaseorders', model: 'PurchaseOrder' },
+                { collection: 'deliveryins', model: 'DeliveryIn' },
+                { collection: 'deliveryouts', model: 'DeliveryOut' },
+                { collection: 'payments', model: 'Payment' },
+                { collection: 'stocktransactions', model: 'StockTransaction' },
+                // Backward compatibility for old backups
+                { collection: 'sales', model: 'SalesOrder' },
+                { collection: 'purchases', model: 'PurchaseOrder' }
             ];
 
             const restoredCounts = {};

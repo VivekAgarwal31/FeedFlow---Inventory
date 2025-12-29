@@ -27,6 +27,18 @@ const ENTITY_FIELDS = {
         { key: 'saleDate', header: 'Sale Date' },
         { key: 'notes', header: 'Notes' }
     ],
+    salesOrders: [
+        { key: 'orderNumber', header: 'Order Number' },
+        { key: 'clientName', header: 'Client Name' },
+        { key: 'orderDate', header: 'Order Date' },
+        { key: 'orderStatus', header: 'Order Status' },
+        { key: 'totalAmount', header: 'Total Amount' },
+        { key: 'amountPaid', header: 'Amount Paid' },
+        { key: 'amountDue', header: 'Amount Due' },
+        { key: 'paymentStatus', header: 'Payment Status' },
+        { key: 'wages', header: 'Wages' },
+        { key: 'notes', header: 'Notes' }
+    ],
     purchases: [
         { key: 'supplierName', header: 'Supplier Name' },
         { key: 'invoiceNumber', header: 'Invoice Number' },
@@ -35,6 +47,17 @@ const ENTITY_FIELDS = {
         { key: 'paymentMethod', header: 'Payment Method' },
         { key: 'staffName', header: 'Staff Name' },
         { key: 'purchaseDate', header: 'Purchase Date' },
+        { key: 'notes', header: 'Notes' }
+    ],
+    purchaseOrders: [
+        { key: 'orderNumber', header: 'Order Number' },
+        { key: 'supplierName', header: 'Supplier Name' },
+        { key: 'orderDate', header: 'Order Date' },
+        { key: 'orderStatus', header: 'Order Status' },
+        { key: 'totalAmount', header: 'Total Amount' },
+        { key: 'amountPaid', header: 'Amount Paid' },
+        { key: 'amountDue', header: 'Amount Due' },
+        { key: 'paymentStatus', header: 'Payment Status' },
         { key: 'notes', header: 'Notes' }
     ],
     clients: [

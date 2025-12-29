@@ -52,6 +52,11 @@ const companySchema = new mongoose.Schema({
     enum: ['active', 'suspended', 'deleted'],
     default: 'active'
   },
+  wagesPerBag: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
   metadata: {
     userCount: { type: Number, default: 0 },
     dataVolume: { type: Number, default: 0 },

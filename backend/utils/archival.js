@@ -11,8 +11,11 @@ import mongoose from 'mongoose';
 export const archiveOldRecords = async (companyId, entityType, cutoffDate, userId) => {
     const modelMap = {
         stockTransactions: 'StockTransaction',
-        sales: 'Sale',
-        purchases: 'Purchase'
+        salesOrders: 'SalesOrder',
+        purchaseOrders: 'PurchaseOrder',
+        // Backward compatibility
+        sales: 'SalesOrder',
+        purchases: 'PurchaseOrder'
     };
 
     const modelName = modelMap[entityType];
@@ -29,7 +32,8 @@ export const archiveOldRecords = async (companyId, entityType, cutoffDate, userI
     try {
         // Determine date field based on entity type
         const dateField = entityType === 'stockTransactions' ? 'transactionDate' :
-            entityType === 'sales' ? 'saleDate' : 'purchaseDate';
+            (entityType === 'salesOrders' || entityType === 'sales') ? 'orderDate' :
+                (entityType === 'purchaseOrders' || entityType === 'purchases') ? 'orderDate' : 'createdAt';
 
         // Find records to archive
         const recordsToArchive = await Model.find({
@@ -138,8 +142,11 @@ export const getArchivedRecords = async (companyId, entityType, filters = {}, pa
 export const restoreFromArchive = async (companyId, entityType, recordIds) => {
     const modelMap = {
         stockTransactions: 'StockTransaction',
-        sales: 'Sale',
-        purchases: 'Purchase'
+        salesOrders: 'SalesOrder',
+        purchaseOrders: 'PurchaseOrder',
+        // Backward compatibility
+        sales: 'SalesOrder',
+        purchases: 'PurchaseOrder'
     };
 
     const modelName = modelMap[entityType];

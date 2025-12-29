@@ -5,6 +5,7 @@ import User from '../models/User.js';
 import { authenticate } from '../middleware/auth.js';
 import { requireSuperAdmin } from '../middleware/adminAuth.js';
 import { deleteCompanyData, getCompanyDataStats } from '../utils/cascadeDelete.js';
+import { deleteOrphanedData, getOrphanedDataStats } from '../utils/orphanedDataCleanup.js';
 
 const router = express.Router();
 
@@ -541,6 +542,38 @@ router.get('/analytics/overview', async (req, res) => {
     } catch (error) {
         console.error('Get analytics overview error:', error);
         res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// ============================================
+// DATA CLEANUP ROUTES
+// ============================================
+
+// Get orphaned data statistics
+router.get('/cleanup/orphaned-stats', async (req, res) => {
+    try {
+        const stats = await getOrphanedDataStats();
+        res.json(stats);
+    } catch (error) {
+        console.error('Get orphaned data stats error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// Delete all orphaned data (data not belonging to any active company)
+router.delete('/cleanup/orphaned-data', async (req, res) => {
+    try {
+        const result = await deleteOrphanedData();
+        res.json({
+            message: 'Orphaned data deleted successfully',
+            ...result
+        });
+    } catch (error) {
+        console.error('Delete orphaned data error:', error);
+        res.status(500).json({
+            message: 'Failed to delete orphaned data',
+            error: error.message
+        });
     }
 });
 

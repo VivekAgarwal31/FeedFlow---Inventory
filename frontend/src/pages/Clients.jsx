@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Plus, Users, Phone, Mail, MapPin, Loader2, ArrowLeft, Calendar, Filter, Eye, Download, Search, Trash2, CreditCard, DollarSign, FileText } from 'lucide-react'
 import { clientAPI, saleAPI } from '../lib/api'
-import { downloadInvoiceBySale, getClientPayments, recordClientPayment } from '../lib/paymentApi'
+import { downloadInvoiceBySale, downloadInvoiceByOrder, downloadBlob, getClientPayments, recordClientPayment } from '../lib/paymentApi'
 import { formatCurrency, formatDate } from '../lib/utils'
 import { exportClientToExcel, exportClientToPDF } from '../lib/exportUtils'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
@@ -24,6 +24,7 @@ const Clients = () => {
   const [error, setError] = useState('')
   const [selectedClient, setSelectedClient] = useState(null)
   const [clientTransactions, setClientTransactions] = useState([])
+  const [clientDeliveries, setClientDeliveries] = useState([])
   const [filteredTransactions, setFilteredTransactions] = useState([])
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedSale, setSelectedSale] = useState(null)
@@ -103,7 +104,8 @@ const Clients = () => {
   const fetchClientTransactions = async (clientId) => {
     try {
       const response = await clientAPI.getById(clientId)
-      setClientTransactions(response.data.sales || [])
+      setClientTransactions(response.data.salesOrders || [])
+      setClientDeliveries(response.data.deliveries || [])
     } catch (error) {
       console.error('Failed to fetch client transactions:', error)
     }
@@ -209,17 +211,19 @@ const Clients = () => {
     setSaleDetailsDialogOpen(true)
   }
 
+  const getStatusBadgeVariant = (status) => {
+    switch (status) {
+      case 'completed': return 'default'
+      case 'partially_delivered': return 'secondary'
+      case 'cancelled': return 'destructive'
+      default: return 'outline'
+    }
+  }
+
   const handleDownloadInvoice = async (sale) => {
     try {
-      const blob = await downloadInvoiceBySale(sale._id)
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `Invoice-${sale.invoiceNumber || sale._id}.pdf`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      window.URL.revokeObjectURL(url)
+      const blob = await downloadInvoiceByOrder(sale._id)
+      downloadBlob(blob, `Invoice-${sale.orderNumber || sale._id}.pdf`)
 
       toast({
         title: 'Success',
@@ -227,14 +231,11 @@ const Clients = () => {
       })
     } catch (error) {
       console.error('Error downloading invoice:', error)
-      // Only show error if it's actually an error (not a blob response)
-      if (error.response && error.response.status !== 200) {
-        toast({
-          title: 'Error',
-          description: error.response?.data?.message || 'Failed to download invoice',
-          variant: 'destructive'
-        })
-      }
+      toast({
+        title: 'Error',
+        description: 'Failed to download invoice',
+        variant: 'destructive'
+      })
     }
   }
 
@@ -293,8 +294,9 @@ const Clients = () => {
         await fetchClients()
 
         // Refresh client transactions
-        const salesResponse = await saleAPI.getClientSales(selectedClient._id)
-        setClientTransactions(salesResponse.sales || [])
+        const clientResponse = await clientAPI.getById(selectedClient._id)
+        setClientTransactions(clientResponse.data.salesOrders || [])
+        setClientDeliveries(clientResponse.data.deliveries || [])
 
         // Update selected client with new data
         const updatedClientsResponse = await clientAPI.getClients()
@@ -385,33 +387,33 @@ const Clients = () => {
         limit: 1000
       })
 
-      const allSales = response.data.sales || []
+      const allOrders = response.data.salesOrders || []
 
       // Filter by date range
       const fromDate = new Date(exportForm.fromDate)
       const toDate = new Date(exportForm.toDate)
       toDate.setHours(23, 59, 59, 999) // Include the entire end date
 
-      const filteredSales = allSales.filter(sale => {
-        const saleDate = new Date(sale.saleDate || sale.createdAt)
-        return saleDate >= fromDate && saleDate <= toDate
+      const filteredOrders = allOrders.filter(order => {
+        const orderDate = new Date(order.orderDate || order.createdAt)
+        return orderDate >= fromDate && orderDate <= toDate
       })
 
-      if (filteredSales.length === 0) {
+      if (filteredOrders.length === 0) {
         setError('No transactions found for the selected client and date range')
         return
       }
 
       // Prepare transaction data
-      const transactions = filteredSales.map(sale => ({
-        _id: sale._id,
-        createdAt: sale.createdAt,
-        reference: `SALE-${sale._id.slice(-6)}`,
-        itemName: sale.stockItemId?.itemName || 'Unknown Item',
-        quantity: sale.quantity,
-        unitPrice: sale.unitPrice,
-        totalAmount: sale.totalAmount,
-        notes: `Sale to ${sale.clientName}`
+      const transactions = filteredOrders.map(order => ({
+        _id: order._id,
+        createdAt: order.createdAt,
+        reference: `ORDER-${order._id.slice(-6)}`,
+        itemName: order.items?.[0]?.itemName || 'Unknown Item',
+        quantity: order.items?.reduce((sum, item) => sum + item.quantity, 0) || 0,
+        unitPrice: order.items?.[0]?.unitPrice || 0,
+        totalAmount: order.totalAmount,
+        notes: `Sales Order for ${order.clientName}`
       }))
 
       const dateRange = {
@@ -472,10 +474,16 @@ const Clients = () => {
               </p>
             </div>
           </div>
-          <Button onClick={handleOpenClientPayment}>
-            <DollarSign className="mr-2 h-4 w-4" />
-            Record Payment
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleViewFinancials}>
+              <FileText className="mr-2 h-4 w-4" />
+              View Financial Details
+            </Button>
+            <Button onClick={handleOpenClientPayment}>
+              <DollarSign className="mr-2 h-4 w-4" />
+              Record Payment
+            </Button>
+          </div>
         </div>
 
         {/* Client Summary */}
@@ -517,18 +525,10 @@ const Clients = () => {
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
                 <DollarSign className="h-5 w-5 text-orange-500" />
-                <div className="flex-1">
+                <div>
                   <p className="text-sm text-muted-foreground">Total Receivable</p>
                   <p className="text-2xl font-bold text-orange-600">{formatCurrency(selectedClient.currentCredit || 0)}</p>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleViewFinancials}
-                  title="View Financial Details"
-                >
-                  <Eye className="h-4 w-4" />
-                </Button>
               </div>
             </CardContent>
           </Card>
@@ -631,7 +631,7 @@ const Clients = () => {
                   <TableRow>
                     <TableHead>Date</TableHead>
                     <TableHead>Items</TableHead>
-                    <TableHead>Warehouse</TableHead>
+                    <TableHead>Delivery Status</TableHead>
                     <TableHead>Quantity</TableHead>
                     <TableHead>Total Amount</TableHead>
                     <TableHead>Actions</TableHead>
@@ -656,16 +656,13 @@ const Clients = () => {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {transaction.items && transaction.items.length > 0
-                          ? transaction.items.length === 1
-                            ? transaction.items[0].warehouseName || '-'
-                            : (() => {
-                              const warehouses = [...new Set(transaction.items.map(i => i.warehouseName).filter(Boolean))];
-                              return warehouses.length > 1
-                                ? `${warehouses.length} warehouses`
-                                : warehouses[0] || '-';
-                            })()
-                          : '-'}
+                        <Badge variant={
+                          transaction.orderStatus === 'completed' ? 'default' :
+                            transaction.orderStatus === 'partially_delivered' ? 'secondary' :
+                              'outline'
+                        }>
+                          {transaction.orderStatus?.replace('_', ' ').toUpperCase() || 'PENDING'}
+                        </Badge>
                       </TableCell>
                       <TableCell className="font-mono">
                         {transaction.items && transaction.items.length > 0
@@ -705,60 +702,102 @@ const Clients = () => {
 
         {/* Sale Details Dialog */}
         <Dialog open={saleDetailsDialogOpen} onOpenChange={setSaleDetailsDialogOpen}>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Sale Details</DialogTitle>
+              <DialogTitle>Sales Order Details - #{selectedSale?.orderNumber}</DialogTitle>
               <DialogDescription>
-                {selectedSale && (
-                  <>
-                    Sale on {formatDate(selectedSale.createdAt)}
-                  </>
-                )}
+                Order details and delivery status
               </DialogDescription>
             </DialogHeader>
 
-            {selectedSale && selectedSale.items && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4 text-sm">
+            {selectedSale && (
+              <div className="space-y-6">
+                {/* Order Info */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div>
-                    <span className="text-muted-foreground">Total Amount:</span>
-                    <p className="font-medium">{formatCurrency(selectedSale.totalAmount)}</p>
+                    <Label className="text-muted-foreground">Order Number</Label>
+                    <p className="font-mono font-medium">#{selectedSale.orderNumber}</p>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">Total Quantity:</span>
-                    <p className="font-medium">{selectedSale.items.reduce((sum, item) => sum + item.quantity, 0)} bags</p>
+                    <Label className="text-muted-foreground">Order Date</Label>
+                    <p className="font-medium">{formatDate(selectedSale.orderDate || selectedSale.createdAt)}</p>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">Items Count:</span>
-                    <p className="font-medium">{selectedSale.items.length} items</p>
+                    <Label className="text-muted-foreground">Customer</Label>
+                    <p className="font-medium">{selectedSale.clientName}</p>
+                  </div>
+                  <div>
+                    <Label className="text-muted-foreground">Status</Label>
+                    <Badge variant={getStatusBadgeVariant(selectedSale.orderStatus)}>
+                      {selectedSale.orderStatus?.replace('_', ' ').toUpperCase() || 'PENDING'}
+                    </Badge>
                   </div>
                 </div>
 
+                {/* Items Table */}
                 <div>
-                  <h4 className="font-semibold mb-3">Items Breakdown</h4>
+                  <h3 className="font-semibold mb-3">Order Items</h3>
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead>Item Name</TableHead>
-                        <TableHead>Warehouse</TableHead>
-                        <TableHead>Quantity</TableHead>
-                        <TableHead>Unit Price</TableHead>
+                        <TableHead>Ordered Qty</TableHead>
+                        <TableHead>Delivered Qty</TableHead>
+                        <TableHead>Remaining</TableHead>
+                        <TableHead>Price</TableHead>
                         <TableHead>Total</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {selectedSale.items.map((item, index) => (
+                      {selectedSale.items?.map((item, index) => (
                         <TableRow key={index}>
                           <TableCell className="font-medium">{item.itemName}</TableCell>
-                          <TableCell>{item.warehouseName || '-'}</TableCell>
-                          <TableCell className="font-mono">{item.quantity} bags</TableCell>
+                          <TableCell className="font-mono">{item.quantity}</TableCell>
+                          <TableCell className="font-mono">{item.deliveredQuantity || 0}</TableCell>
+                          <TableCell className="font-mono font-bold">
+                            {item.quantity - (item.deliveredQuantity || 0)}
+                          </TableCell>
                           <TableCell className="font-mono">{formatCurrency(item.sellingPrice)}</TableCell>
                           <TableCell className="font-mono font-medium">{formatCurrency(item.total)}</TableCell>
                         </TableRow>
                       ))}
+                      {selectedSale.wages > 0 && (
+                        <TableRow>
+                          <TableCell colSpan={5} className="font-medium">Wages</TableCell>
+                          <TableCell className="font-mono">{formatCurrency(selectedSale.wages)}</TableCell>
+                        </TableRow>
+                      )}
+                      <TableRow>
+                        <TableCell colSpan={5} className="font-semibold">Total Amount</TableCell>
+                        <TableCell className="font-mono font-bold text-lg">{formatCurrency(selectedSale.totalAmount)}</TableCell>
+                      </TableRow>
                     </TableBody>
                   </Table>
                 </div>
+
+                {/* Payment Status */}
+                <div className="grid grid-cols-3 gap-4 p-4 bg-muted/30 rounded-lg">
+                  <div>
+                    <Label className="text-muted-foreground">Total Amount</Label>
+                    <p className="font-mono font-bold">{formatCurrency(selectedSale.totalAmount)}</p>
+                  </div>
+                  <div>
+                    <Label className="text-muted-foreground">Amount Paid</Label>
+                    <p className="font-mono font-bold text-green-600">{formatCurrency(selectedSale.amountPaid || 0)}</p>
+                  </div>
+                  <div>
+                    <Label className="text-muted-foreground">Amount Due</Label>
+                    <p className="font-mono font-bold text-orange-600">{formatCurrency(selectedSale.amountDue || selectedSale.totalAmount)}</p>
+                  </div>
+                </div>
+
+                {/* Notes */}
+                {selectedSale.notes && (
+                  <div>
+                    <Label className="text-muted-foreground">Notes</Label>
+                    <p className="mt-1">{selectedSale.notes}</p>
+                  </div>
+                )}
               </div>
             )}
           </DialogContent>
@@ -774,27 +813,27 @@ const Clients = () => {
               </DialogDescription>
             </DialogHeader>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Left: Payments */}
               <div>
-                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
                   <DollarSign className="h-5 w-5 text-green-600" />
                   PAYMENTS
                 </h3>
-                <div className="space-y-3 max-h-[500px] overflow-y-auto">
+                <div className="space-y-2 max-h-[500px] overflow-y-auto">
                   {clientPayments.length > 0 ? (
                     clientPayments.map((payment) => (
-                      <Card key={payment._id} className="p-4">
-                        <div className="space-y-2">
+                      <Card key={payment._id} className="p-2">
+                        <div className="space-y-1">
                           <div className="flex justify-between items-start">
-                            <span className="text-sm text-muted-foreground">
+                            <span className="text-xs text-muted-foreground">
                               {formatDate(payment.paymentDate)}
                             </span>
-                            <span className="text-lg font-bold text-green-600">
+                            <span className="text-base font-bold text-green-600">
                               {formatCurrency(payment.amount)}
                             </span>
                           </div>
-                          <div className="flex justify-between text-sm">
+                          <div className="flex justify-between text-xs">
                             <span className="font-medium">{payment.paymentMode || 'Cash'}</span>
                             {payment.referenceNumber && (
                               <span className="text-muted-foreground">
@@ -802,6 +841,20 @@ const Clients = () => {
                               </span>
                             )}
                           </div>
+                          {/* Allocation Details */}
+                          {payment.allocations && payment.allocations.length > 0 && (
+                            <div className="mt-1 pt-1 border-t border-border/50">
+                              {payment.allocations.map((allocation, idx) => (
+                                <div key={idx} className="text-xs text-muted-foreground flex items-start gap-1">
+                                  <span className="text-muted-foreground/70">↳</span>
+                                  <span>
+                                    {formatCurrency(allocation.amountAllocated)} adjusted in Invoice #{allocation.invoiceNumber}
+                                    {allocation.status === 'cleared' && <span className="text-green-600 font-medium"> - Cleared</span>}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                           {payment.notes && (
                             <p className="text-xs text-muted-foreground">{payment.notes}</p>
                           )}
@@ -816,24 +869,24 @@ const Clients = () => {
 
               {/* Right: Bills/Sales */}
               <div>
-                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
                   <FileText className="h-5 w-5 text-blue-600" />
                   BILLS
                 </h3>
-                <div className="space-y-3 max-h-[500px] overflow-y-auto">
+                <div className="space-y-2 max-h-[500px] overflow-y-auto">
                   {clientTransactions.length > 0 ? (
                     clientTransactions.map((sale) => (
-                      <Card key={sale._id} className="p-4">
-                        <div className="space-y-2">
+                      <Card key={sale._id} className="p-2">
+                        <div className="space-y-1">
                           <div className="flex justify-between items-start">
-                            <span className="text-sm text-muted-foreground">
+                            <span className="text-xs text-muted-foreground">
                               {formatDate(sale.createdAt)}
                             </span>
-                            <span className="text-lg font-bold text-blue-600">
+                            <span className="text-base font-bold text-blue-600">
                               {formatCurrency(sale.totalAmount)}
                             </span>
                           </div>
-                          <div className="flex justify-between text-sm">
+                          <div className="flex justify-between text-xs items-center">
                             <span className="font-medium">
                               Invoice #{sale.invoiceNumber || sale._id.slice(-6)}
                             </span>
@@ -843,11 +896,26 @@ const Clients = () => {
                                   sale.paymentStatus === 'partial' ? 'secondary' :
                                     'destructive'
                               }
-                              className="text-xs"
+                              className="text-xs h-5"
                             >
                               {sale.paymentStatus?.toUpperCase() || 'PENDING'}
                             </Badge>
                           </div>
+                          {/* Show payment details for partial/paid bills */}
+                          {sale.paymentStatus !== 'pending' && (
+                            <div className="mt-1 pt-1 border-t border-border/50">
+                              <div className="text-xs text-muted-foreground flex justify-between">
+                                <span>Amount Paid:</span>
+                                <span className="text-green-600 font-medium">{formatCurrency(sale.amountPaid || 0)}</span>
+                              </div>
+                              {sale.paymentStatus === 'partial' && (
+                                <div className="text-xs text-muted-foreground flex justify-between">
+                                  <span>Remaining:</span>
+                                  <span className="text-orange-600 font-medium">{formatCurrency(sale.amountDue || (sale.totalAmount - (sale.amountPaid || 0)))}</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </Card>
                     ))

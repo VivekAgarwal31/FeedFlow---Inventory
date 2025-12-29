@@ -1,7 +1,11 @@
 import express from 'express';
 import StockItem from '../models/StockItem.js';
-import Sale from '../models/Sale.js';
+import SalesOrder from '../models/SalesOrder.js';
+import PurchaseOrder from '../models/PurchaseOrder.js';
+import DeliveryOut from '../models/DeliveryOut.js';
 import Warehouse from '../models/Warehouse.js';
+import Client from '../models/Client.js';
+import Supplier from '../models/Supplier.js';
 import { authenticate } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -21,7 +25,9 @@ router.get('/stats', authenticate, async (req, res) => {
       totalStockValue,
       warehouseCount,
       revenueData,
-      lowStockCount
+      lowStockCount,
+      totalReceivables,
+      totalPayables
     ] = await Promise.all([
       // Total stock items count
       StockItem.countDocuments({ companyId }),
@@ -43,8 +49,8 @@ router.get('/stats', authenticate, async (req, res) => {
       // Warehouse count
       Warehouse.countDocuments({ companyId }),
 
-      // Revenue statistics
-      Sale.aggregate([
+      // Revenue statistics from sales orders
+      SalesOrder.aggregate([
         { $match: { companyId } },
         {
           $group: {
@@ -65,12 +71,52 @@ router.get('/stats', authenticate, async (req, res) => {
         },
         { $match: { isLowStock: true } },
         { $count: 'lowStockCount' }
+      ]),
+
+      // Total receivables - sum of amountDue from unpaid/partial sales orders
+      SalesOrder.aggregate([
+        {
+          $match: {
+            companyId,
+            paymentStatus: { $in: ['pending', 'partial'] }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalReceivables: { $sum: '$amountDue' }
+          }
+        }
+      ]),
+
+      // Total payables - sum of amountDue from unpaid/partial purchase orders
+      PurchaseOrder.aggregate([
+        {
+          $match: {
+            companyId,
+            paymentStatus: { $in: ['pending', 'partial'] }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalPayables: { $sum: '$amountDue' }
+          }
+        }
       ])
     ]);
 
     const stockValue = totalStockValue[0] || { totalValue: 0, totalQuantity: 0 };
     const revenue = revenueData[0] || { totalRevenue: 0, totalSales: 0 };
     const lowStock = lowStockCount[0]?.lowStockCount || 0;
+
+    // Better fallback for receivables and payables
+    const receivables = (totalReceivables && totalReceivables[0])
+      ? (totalReceivables[0].totalReceivables || 0)
+      : 0;
+    const payables = (totalPayables && totalPayables[0])
+      ? (totalPayables[0].totalPayables || 0)
+      : 0;
 
     res.json({
       stats: {
@@ -80,7 +126,9 @@ router.get('/stats', authenticate, async (req, res) => {
         warehouseCount,
         totalRevenue: revenue.totalRevenue,
         totalSales: revenue.totalSales,
-        lowStockCount: lowStock
+        lowStockCount: lowStock,
+        totalReceivables: receivables,
+        totalPayables: payables
       }
     });
   } catch (error) {

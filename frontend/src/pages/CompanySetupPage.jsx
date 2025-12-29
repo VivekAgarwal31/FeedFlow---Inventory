@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Building2, Users, Upload, Wheat, Loader2, LogOut } from 'lucide-react'
+import { Building2, Users, Upload, Package, Loader2, LogOut } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { companyAPI } from '../lib/api'
@@ -94,7 +94,7 @@ const CompanySetupPage = () => {
             <div className="flex-1" />
             <div className="flex justify-center flex-1">
               <div className="h-14 w-14 bg-primary rounded-full flex items-center justify-center">
-                <Wheat className="h-7 w-7 text-primary-foreground" />
+                <Package className="h-7 w-7 text-primary-foreground" />
               </div>
             </div>
             <div className="flex-1 flex justify-end">

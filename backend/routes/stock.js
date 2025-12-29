@@ -96,7 +96,7 @@ router.post('/', authenticate, requirePermission('canManageInventory'), [
             const warehouse = await Warehouse.findById(warehouseId);
             const transaction = new StockTransaction({
                 companyId,
-                type: 'stock_in',
+                type: 'stock_adjust',
                 itemId: primaryStockItem._id,
                 itemName: primaryStockItem.itemName,
                 warehouseId,
@@ -218,7 +218,7 @@ router.post('/in', authenticate, requirePermission('canManageInventory'), [
             // Single item - create traditional transaction
             const transaction = new StockTransaction({
                 companyId,
-                type: 'stock_in',
+                type: 'stock_adjust',
                 itemId: items[0].itemId,
                 itemName: itemsForTransaction[0].itemName,
                 warehouseId,
@@ -236,7 +236,7 @@ router.post('/in', authenticate, requirePermission('canManageInventory'), [
             // Multiple items - create consolidated transaction
             const transaction = new StockTransaction({
                 companyId,
-                type: 'stock_in',
+                type: 'stock_adjust',
                 itemId: items[0].itemId, // Use first item as primary reference
                 itemName: `${items.length} items`,
                 warehouseId,
@@ -368,7 +368,7 @@ router.post('/out', authenticate, requirePermission('canManageInventory'), [
             // Single item - create traditional transaction
             const transaction = new StockTransaction({
                 companyId,
-                type: 'stock_out',
+                type: 'stock_adjust',
                 itemId: items[0].itemId,
                 itemName: itemsForTransaction[0].itemName,
                 warehouseId,
@@ -386,7 +386,7 @@ router.post('/out', authenticate, requirePermission('canManageInventory'), [
             // Multiple items - create consolidated transaction
             const transaction = new StockTransaction({
                 companyId,
-                type: 'stock_out',
+                type: 'stock_adjust',
                 itemId: items[0].itemId,
                 itemName: `${items.length} items`,
                 warehouseId,

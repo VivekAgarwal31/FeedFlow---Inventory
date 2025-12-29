@@ -14,6 +14,10 @@ import StockMove from './pages/StockMove'
 import StockTransactions from './pages/StockTransactions'
 import Sales from './pages/Sales'
 import Purchases from './pages/Purchases'
+import SalesOrders from './pages/SalesOrders'
+import PurchaseOrders from './pages/PurchaseOrders'
+import DeliveryOut from './pages/DeliveryOut'
+import DeliveryIn from './pages/DeliveryIn'
 import Clients from './pages/Clients'
 import Suppliers from './pages/Suppliers'
 import Staff from './pages/Staff'
@@ -26,6 +30,10 @@ import OTPVerification from './pages/OTPVerification'
 import Reports from './pages/Reports'
 import AccountsReceivable from './pages/AccountsReceivable'
 import AccountsPayable from './pages/AccountsPayable'
+import EntriesRegister from './pages/EntriesRegister'
+import Cashbook from './pages/Cashbook'
+import WagesCalculator from './pages/WagesCalculator'
+import ManualEntry from './pages/ManualEntry'
 
 function App() {
   const { user, loading } = useAuth()
@@ -84,6 +92,10 @@ function App() {
         <Route path="/stock-transactions" element={<StockTransactions />} />
         <Route path="/sales" element={<Sales />} />
         <Route path="/purchases" element={<Purchases />} />
+        <Route path="/sales-orders" element={<SalesOrders />} />
+        <Route path="/purchase-orders" element={<PurchaseOrders />} />
+        <Route path="/delivery-out" element={<DeliveryOut />} />
+        <Route path="/delivery-in" element={<DeliveryIn />} />
         <Route path="/clients" element={<Clients />} />
         <Route path="/suppliers" element={<Suppliers />} />
         <Route path="/staff" element={<Staff />} />
@@ -91,6 +103,10 @@ function App() {
         <Route path="/reports" element={<Reports />} />
         <Route path="/accounts-receivable" element={<AccountsReceivable />} />
         <Route path="/accounts-payable" element={<AccountsPayable />} />
+        <Route path="/accounting/entries-register" element={<EntriesRegister />} />
+        <Route path="/accounting/cashbook" element={<Cashbook />} />
+        <Route path="/accounting/wages" element={<WagesCalculator />} />
+        <Route path="/accounting/manual-entry" element={<ManualEntry />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </DashboardLayout>

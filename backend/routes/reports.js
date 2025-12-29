@@ -1,6 +1,6 @@
 import express from 'express';
-import Sale from '../models/Sale.js';
-import Purchase from '../models/Purchase.js';
+import DeliveryOut from '../models/DeliveryOut.js';
+import DeliveryIn from '../models/DeliveryIn.js';
 import StockItem from '../models/StockItem.js';
 import { authenticate } from '../middleware/auth.js';
 import { generateSalesPDF, generatePurchasePDF, generateInventoryPDF } from '../utils/pdfGenerator.js';
@@ -19,31 +19,31 @@ router.post('/sales/pdf', authenticate, async (req, res) => {
             return res.status(400).json({ message: 'No company associated with user' });
         }
 
-        const { startDate, endDate, clientId, paymentStatus } = req.body;
+        const { startDate, endDate, clientName, paymentStatus } = req.body;
 
         // Build query
         const query = { companyId };
 
         if (startDate || endDate) {
-            query.saleDate = {};
-            if (startDate) query.saleDate.$gte = new Date(startDate);
+            query.deliveryDate = {};
+            if (startDate) query.deliveryDate.$gte = new Date(startDate);
             if (endDate) {
                 const end = new Date(endDate);
                 end.setHours(23, 59, 59, 999);
-                query.saleDate.$lte = end;
+                query.deliveryDate.$lte = end;
             }
         }
 
-        if (clientId) {
-            query.clientId = clientId;
+        if (clientName) {
+            query.clientName = clientName;
         }
 
         if (paymentStatus) {
             query.paymentStatus = paymentStatus;
         }
 
-        // Fetch sales data
-        const sales = await Sale.find(query).sort({ saleDate: -1 }).lean();
+        // Fetch delivery data
+        const sales = await DeliveryOut.find(query).sort({ deliveryDate: -1 }).lean();
 
         // Generate PDF
         const pdfBuffer = await generateSalesPDF(sales, req.user.companyId, { startDate, endDate });
@@ -76,31 +76,31 @@ router.post('/sales/excel', authenticate, async (req, res) => {
             return res.status(400).json({ message: 'No company associated with user' });
         }
 
-        const { startDate, endDate, clientId, paymentStatus } = req.body;
+        const { startDate, endDate, clientName, paymentStatus } = req.body;
 
         // Build query
         const query = { companyId };
 
         if (startDate || endDate) {
-            query.saleDate = {};
-            if (startDate) query.saleDate.$gte = new Date(startDate);
+            query.deliveryDate = {};
+            if (startDate) query.deliveryDate.$gte = new Date(startDate);
             if (endDate) {
                 const end = new Date(endDate);
                 end.setHours(23, 59, 59, 999);
-                query.saleDate.$lte = end;
+                query.deliveryDate.$lte = end;
             }
         }
 
-        if (clientId) {
-            query.clientId = clientId;
+        if (clientName) {
+            query.clientName = clientName;
         }
 
         if (paymentStatus) {
             query.paymentStatus = paymentStatus;
         }
 
-        // Fetch sales data
-        const sales = await Sale.find(query).sort({ saleDate: -1 }).lean();
+        // Fetch delivery data
+        const sales = await DeliveryOut.find(query).sort({ deliveryDate: -1 }).lean();
 
         // Generate Excel
         const excelBuffer = await generateSalesReportExcel(sales, req.user.companyId, { startDate, endDate });
@@ -133,31 +133,31 @@ router.post('/purchases/pdf', authenticate, async (req, res) => {
             return res.status(400).json({ message: 'No company associated with user' });
         }
 
-        const { startDate, endDate, supplierId, paymentStatus } = req.body;
+        const { startDate, endDate, supplierName, paymentStatus } = req.body;
 
         // Build query
         const query = { companyId };
 
         if (startDate || endDate) {
-            query.purchaseDate = {};
-            if (startDate) query.purchaseDate.$gte = new Date(startDate);
+            query.receiptDate = {};
+            if (startDate) query.receiptDate.$gte = new Date(startDate);
             if (endDate) {
                 const end = new Date(endDate);
                 end.setHours(23, 59, 59, 999);
-                query.purchaseDate.$lte = end;
+                query.receiptDate.$lte = end;
             }
         }
 
-        if (supplierId) {
-            query.supplierId = supplierId;
+        if (supplierName) {
+            query.supplierName = supplierName;
         }
 
         if (paymentStatus) {
             query.paymentStatus = paymentStatus;
         }
 
-        // Fetch purchase data
-        const purchases = await Purchase.find(query).sort({ purchaseDate: -1 }).lean();
+        // Fetch delivery data
+        const purchases = await DeliveryIn.find(query).sort({ receiptDate: -1 }).lean();
 
         // Generate PDF
         const pdfBuffer = await generatePurchasePDF(purchases, req.user.companyId, { startDate, endDate });
@@ -190,31 +190,31 @@ router.post('/purchases/excel', authenticate, async (req, res) => {
             return res.status(400).json({ message: 'No company associated with user' });
         }
 
-        const { startDate, endDate, supplierId, paymentStatus } = req.body;
+        const { startDate, endDate, supplierName, paymentStatus } = req.body;
 
         // Build query
         const query = { companyId };
 
         if (startDate || endDate) {
-            query.purchaseDate = {};
-            if (startDate) query.purchaseDate.$gte = new Date(startDate);
+            query.receiptDate = {};
+            if (startDate) query.receiptDate.$gte = new Date(startDate);
             if (endDate) {
                 const end = new Date(endDate);
                 end.setHours(23, 59, 59, 999);
-                query.purchaseDate.$lte = end;
+                query.receiptDate.$lte = end;
             }
         }
 
-        if (supplierId) {
-            query.supplierId = supplierId;
+        if (supplierName) {
+            query.supplierName = supplierName;
         }
 
         if (paymentStatus) {
             query.paymentStatus = paymentStatus;
         }
 
-        // Fetch purchase data
-        const purchases = await Purchase.find(query).sort({ purchaseDate: -1 }).lean();
+        // Fetch delivery data
+        const purchases = await DeliveryIn.find(query).sort({ receiptDate: -1 }).lean();
 
         // Generate Excel
         const excelBuffer = await generatePurchaseReportExcel(purchases, req.user.companyId, { startDate, endDate });

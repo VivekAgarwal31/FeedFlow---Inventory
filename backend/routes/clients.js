@@ -1,7 +1,8 @@
 import express from 'express';
 import { body, validationResult } from 'express-validator';
 import Client from '../models/Client.js';
-import Sale from '../models/Sale.js';
+import SalesOrder from '../models/SalesOrder.js';
+import DeliveryOut from '../models/DeliveryOut.js';
 import { authenticate } from '../middleware/auth.js';
 import { requirePermission } from '../middleware/rbac.js';
 
@@ -41,29 +42,29 @@ router.get('/', authenticate, async (req, res) => {
             .sort({ name: 1 })
             .lean();
 
-        // Calculate currentCredit for each client from unpaid sales
-        const Sale = (await import('../models/Sale.js')).default;
-
+        // Calculate currentCredit for each client from unpaid sales orders
         for (const client of clients) {
-            const unpaidSales = await Sale.find({
+            // Get unpaid sales orders
+            const unpaidOrders = await SalesOrder.find({
                 companyId,
-                clientId: client._id,
+                clientName: client.name,
                 paymentStatus: { $in: ['pending', 'partial'] }
             });
 
-            client.currentCredit = unpaidSales.reduce((sum, sale) => {
-                const amountDue = sale.amountDue || (sale.totalAmount - (sale.amountPaid || 0));
+            // Calculate total credit
+            client.currentCredit = unpaidOrders.reduce((sum, order) => {
+                const amountDue = order.amountDue || (order.totalAmount - (order.amountPaid || 0));
                 return sum + amountDue;
             }, 0);
 
-            // Get most recent sale for lastPurchaseDate
-            const mostRecentSale = await Sale.findOne({
+            // Get most recent order for lastPurchaseDate
+            const mostRecentOrder = await SalesOrder.findOne({
                 companyId,
-                clientId: client._id
-            }).sort({ saleDate: -1 }).select('saleDate');
+                clientName: client.name
+            }).sort({ orderDate: -1 }).select('orderDate');
 
-            if (mostRecentSale) {
-                client.lastPurchaseDate = mostRecentSale.saleDate;
+            if (mostRecentOrder) {
+                client.lastPurchaseDate = mostRecentOrder.orderDate;
             }
         }
 
@@ -128,19 +129,25 @@ router.get('/:id', authenticate, async (req, res) => {
     try {
         const companyId = req.user.companyId?._id || req.user.companyId;
 
-        const [client, sales] = await Promise.all([
-            Client.findOne({ _id: req.params.id, companyId }).lean(),
-            Sale.find({ companyId, clientId: req.params.id })
-                .sort({ saleDate: -1 })
-                .limit(50)
-                .lean()
-        ]);
+        const client = await Client.findOne({ _id: req.params.id, companyId }).lean();
 
         if (!client) {
             return res.status(404).json({ message: 'Client not found' });
         }
 
-        res.json({ client, sales });
+        // Get both sales orders and deliveries
+        const [salesOrders, deliveries] = await Promise.all([
+            SalesOrder.find({ companyId, clientName: client.name })
+                .sort({ orderDate: -1, createdAt: -1 })
+                .limit(50)
+                .lean(),
+            DeliveryOut.find({ companyId, clientName: client.name })
+                .sort({ deliveryDate: -1, createdAt: -1 })
+                .limit(50)
+                .lean()
+        ]);
+
+        res.json({ client, salesOrders, deliveries });
     } catch (error) {
         console.error('Get client error:', error);
         res.status(500).json({ message: 'Server error' });

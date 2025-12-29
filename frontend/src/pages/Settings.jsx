@@ -36,7 +36,8 @@ const Settings = () => {
     name: '',
     address: '',
     phone: '',
-    email: ''
+    email: '',
+    wagesPerBag: 0
   })
 
   useEffect(() => {
@@ -54,7 +55,8 @@ const Settings = () => {
           name: user.companyId.name || '',
           address: user.companyId.address || '',
           phone: user.companyId.contactNumber || '',
-          email: user.companyId.email || ''
+          email: user.companyId.email || '',
+          wagesPerBag: user.companyId.wagesPerBag || 0
         })
       }
     }
@@ -122,7 +124,16 @@ const Settings = () => {
     setSuccess('')
 
     try {
-      await companyAPI.update(companyForm)
+      // Send only the fields the backend expects
+      const updateData = {
+        name: companyForm.name,
+        address: companyForm.address,
+        phone: companyForm.phone,
+        email: companyForm.email,
+        wagesPerBag: parseFloat(companyForm.wagesPerBag) || 0
+      }
+
+      await companyAPI.update(updateData)
 
       // Update local user data
       const updatedUser = {
@@ -132,7 +143,8 @@ const Settings = () => {
           name: companyForm.name,
           address: companyForm.address,
           contactNumber: companyForm.phone,
-          email: companyForm.email
+          email: companyForm.email,
+          wagesPerBag: parseFloat(companyForm.wagesPerBag) || 0
         }
       }
       localStorage.setItem('user', JSON.stringify(updatedUser))
@@ -405,6 +417,24 @@ const Settings = () => {
                         clearMessages()
                       }}
                     />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="wagesPerBag">Wages per Bag (₹)</Label>
+                    <Input
+                      id="wagesPerBag"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={companyForm.wagesPerBag}
+                      onChange={(e) => {
+                        setCompanyForm({ ...companyForm, wagesPerBag: parseFloat(e.target.value) || 0 })
+                        clearMessages()
+                      }}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Amount paid to workers per bag handled (deliveries, moves, etc.)
+                    </p>
                   </div>
 
                   <div className="flex gap-3 pt-4">

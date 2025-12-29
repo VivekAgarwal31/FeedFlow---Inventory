@@ -1,22 +1,72 @@
-node_modules
+# Dependencies
+node_modules/
+package-lock.json
 
 # Environment variables
 .env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 backend/.env
 frontend/.env
+
+# Build outputs
+dist/
+build/
+frontend/dist/
+frontend/build/
+backend/dist/
+backend/build/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+logs/
+
+# IDE and Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+
+# OS files
+Thumbs.db
+.DS_Store
+.AppleDouble
+.LSOverride
 
 # Database migration and admin scripts  
 backend/scripts/createSuperAdmin.js
 backend/scripts/updateSuperAdminRole.js
 backend/scripts/markCompaniesActive.js
 backend/scripts/migrateStaffNames.js
+backend/scripts/migrate-to-order-delivery.js
 
 # Migration scripts (one-time use)
 backend/migrate-email-verified.js
 backend/migrate-permissions.js
+backend/migrate-payment-tracking.js
 
 # Test scripts (development only)
 backend/test-email.js
-
 test-api.js
-backend/temp
+
+# Temporary files
+backend/temp/
+*.tmp
+*.temp
+
+# Miscellaneous
+fix-supplier-payables.js
+.cache/
+coverage/
+.nyc_output/

@@ -296,8 +296,31 @@ const StockTransactions = () => {
     window.URL.revokeObjectURL(url)
   }
 
-  const viewTransactionDetails = (transaction) => {
-    setSelectedTransaction(transaction)
+  const viewTransactionDetails = async (transaction) => {
+    // For delivery_in and delivery_out, fetch the actual delivery details
+    if (transaction.type === 'delivery_in' || transaction.type === 'delivery_out') {
+      try {
+        const deliveryAPI = await import('../lib/api').then(m => m.deliveryAPI)
+        const response = transaction.type === 'delivery_in'
+          ? await deliveryAPI.getInById(transaction.referenceId)
+          : await deliveryAPI.getOutById(transaction.referenceId)
+
+        setSelectedTransaction({
+          ...transaction,
+          deliveryDetails: response.data
+        })
+      } catch (error) {
+        console.error('Failed to fetch delivery details:', error)
+        toast({
+          title: 'Error',
+          description: 'Failed to load delivery details',
+          variant: 'destructive'
+        })
+        setSelectedTransaction(transaction)
+      }
+    } else {
+      setSelectedTransaction(transaction)
+    }
     setDetailsDialogOpen(true)
   }
 
@@ -514,7 +537,21 @@ const StockTransactions = () => {
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col gap-1">
-                          <span>{transaction.warehouseName}</span>
+                          <span>
+                            {(() => {
+                              // Always compute from items for consistency
+                              if (transaction.items && transaction.items.length > 0) {
+                                const uniqueWarehouses = [...new Set(transaction.items.map(item => item.warehouseName).filter(Boolean))];
+                                if (uniqueWarehouses.length === 1) {
+                                  return uniqueWarehouses[0];
+                                } else if (uniqueWarehouses.length > 1) {
+                                  return `${uniqueWarehouses.length} warehouses`;
+                                }
+                              }
+                              // Fallback to transaction-level warehouseName
+                              return transaction.warehouseName || 'Unknown';
+                            })()}
+                          </span>
                           {transaction.toWarehouseName && (
                             <span className="text-xs text-muted-foreground">
                               → {transaction.toWarehouseName}
@@ -569,7 +606,7 @@ const StockTransactions = () => {
 
       {/* Transaction Details Dialog */}
       <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Transaction Details</DialogTitle>
             <DialogDescription>
@@ -581,12 +618,133 @@ const StockTransactions = () => {
             </DialogDescription>
           </DialogHeader>
 
-          {selectedTransaction && selectedTransaction.items && (
+          {selectedTransaction && selectedTransaction.deliveryDetails ? (
+            // Show delivery details for delivery_in/delivery_out
+            <div className="space-y-6">
+              {/* Delivery Info */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {selectedTransaction.type === 'delivery_in' ? (
+                  <>
+                    <div>
+                      <Label className="text-muted-foreground">GRN Number</Label>
+                      <p className="font-mono font-medium">#{selectedTransaction.deliveryDetails.grnNumber}</p>
+                    </div>
+                    <div>
+                      <Label className="text-muted-foreground">Receipt Date</Label>
+                      <p className="font-medium">{formatDate(selectedTransaction.deliveryDetails.receiptDate)}</p>
+                    </div>
+                    <div>
+                      <Label className="text-muted-foreground">Supplier</Label>
+                      <p className="font-medium">{selectedTransaction.deliveryDetails.supplierName}</p>
+                    </div>
+                    <div>
+                      <Label className="text-muted-foreground">PO Number</Label>
+                      <p className="font-mono font-medium">#{selectedTransaction.deliveryDetails.purchaseOrderNumber}</p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <Label className="text-muted-foreground">Delivery Number</Label>
+                      <p className="font-mono font-medium">#{selectedTransaction.deliveryDetails.deliveryNumber}</p>
+                    </div>
+                    <div>
+                      <Label className="text-muted-foreground">Delivery Date</Label>
+                      <p className="font-medium">{formatDate(selectedTransaction.deliveryDetails.deliveryDate)}</p>
+                    </div>
+                    <div>
+                      <Label className="text-muted-foreground">Client</Label>
+                      <p className="font-medium">{selectedTransaction.deliveryDetails.clientName}</p>
+                    </div>
+                    <div>
+                      <Label className="text-muted-foreground">SO Number</Label>
+                      <p className="font-mono font-medium">#{selectedTransaction.deliveryDetails.salesOrderNumber}</p>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Items Table */}
+              <div>
+                <h3 className="font-semibold mb-3">Items {selectedTransaction.type === 'delivery_in' ? 'Received' : 'Delivered'}</h3>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Item Name</TableHead>
+                      <TableHead>Quantity</TableHead>
+                      <TableHead>Warehouse</TableHead>
+                      {selectedTransaction.type === 'delivery_in' ? (
+                        <>
+                          <TableHead>Cost Price</TableHead>
+                          <TableHead>Total</TableHead>
+                        </>
+                      ) : (
+                        <>
+                          <TableHead>Selling Price</TableHead>
+                          <TableHead>Total</TableHead>
+                        </>
+                      )}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {selectedTransaction.deliveryDetails.items?.map((item, index) => (
+                      <TableRow key={index}>
+                        <TableCell className="font-medium">{item.itemName}</TableCell>
+                        <TableCell className="font-mono">{item.quantity}</TableCell>
+                        <TableCell>{item.warehouseName}</TableCell>
+                        {selectedTransaction.type === 'delivery_in' ? (
+                          <>
+                            <TableCell className="font-mono">{formatCurrency(item.costPrice)}</TableCell>
+                            <TableCell className="font-mono font-medium">{formatCurrency(item.total)}</TableCell>
+                          </>
+                        ) : (
+                          <>
+                            <TableCell className="font-mono">{formatCurrency(item.sellingPrice)}</TableCell>
+                            <TableCell className="font-mono font-medium">{formatCurrency(item.total)}</TableCell>
+                          </>
+                        )}
+                      </TableRow>
+                    ))}
+                    {selectedTransaction.type === 'delivery_in' && (
+                      <TableRow>
+                        <TableCell colSpan={3} className="font-semibold">Total Amount</TableCell>
+                        <TableCell colSpan={2} className="font-mono font-bold text-lg">{formatCurrency(selectedTransaction.deliveryDetails.totalAmount)}</TableCell>
+                      </TableRow>
+                    )}
+                    {selectedTransaction.type === 'delivery_out' && (
+                      <TableRow>
+                        <TableCell colSpan={3} className="font-semibold">Total Amount</TableCell>
+                        <TableCell colSpan={2} className="font-mono font-bold text-lg">{formatCurrency(selectedTransaction.deliveryDetails.totalAmount)}</TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Notes */}
+              {selectedTransaction.deliveryDetails.notes && (
+                <div>
+                  <Label className="text-muted-foreground">Notes</Label>
+                  <p className="mt-1">{selectedTransaction.deliveryDetails.notes}</p>
+                </div>
+              )}
+            </div>
+          ) : selectedTransaction && selectedTransaction.items && (
+            // Show regular transaction details
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <span className="text-muted-foreground">Warehouse:</span>
-                  <p className="font-medium">{selectedTransaction.warehouseName}</p>
+                  <p className="font-medium">
+                    {selectedTransaction.warehouseName || (() => {
+                      // Fallback: compute from items if warehouseName is undefined
+                      if (selectedTransaction.items && selectedTransaction.items.length > 0) {
+                        const uniqueWarehouses = [...new Set(selectedTransaction.items.map(item => item.warehouseName).filter(Boolean))];
+                        return uniqueWarehouses.length === 1 ? uniqueWarehouses[0] : `${uniqueWarehouses.length} warehouses`;
+                      }
+                      return 'Unknown';
+                    })()}
+                  </p>
                 </div>
                 {selectedTransaction.toWarehouseName && (
                   <div>
@@ -632,19 +790,6 @@ const StockTransactions = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(() => {
-                      console.log('=== RENDERING TRANSACTION ITEMS ===')
-                      console.log('Selected transaction:', selectedTransaction)
-                      console.log('Items:', selectedTransaction.items)
-                      selectedTransaction.items.forEach((item, idx) => {
-                        console.log(`Item ${idx}:`, {
-                          itemName: item.itemName,
-                          warehouseName: item.warehouseName,
-                          fallback: selectedTransaction.warehouseName
-                        })
-                      })
-                      return null
-                    })()}
                     {selectedTransaction.items.map((item, index) => (
                       <TableRow key={index}>
                         <TableCell className="font-medium">{item.itemName}</TableCell>
