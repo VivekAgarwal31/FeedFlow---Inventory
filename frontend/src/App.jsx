@@ -1,5 +1,5 @@
-import React from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
+import React, { useEffect } from 'react'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from './contexts/AuthContext'
 import HomePage from './pages/HomePage'
 import AuthPage from './pages/AuthPage'
@@ -48,6 +48,12 @@ import ManualEntry from './pages/ManualEntry'
 
 function App() {
   const { user, loading } = useAuth()
+  const location = useLocation()
+
+  // Scroll to top on route change
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [location.pathname])
 
   if (loading) {
     return (
