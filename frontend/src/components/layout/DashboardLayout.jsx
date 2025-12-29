@@ -173,8 +173,8 @@ const DashboardLayout = ({ children }) => {
         {/* Logo - Left */}
         <div className="flex items-center gap-3 flex-shrink-0">
           <img
-            src="/assets/stockwise logo.png"
-            alt="Logo"
+            src="/stockwise logo.png"
+            alt="Stockwise Logo"
             className="h-14 object-contain py-1"
           />
         </div>

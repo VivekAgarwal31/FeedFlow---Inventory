@@ -1,3 +1,5 @@
+/* stylelint-disable at-rule-no-unknown */
+/* Tailwind CSS directives - ignore linter warnings */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -59,6 +61,7 @@
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
   }
