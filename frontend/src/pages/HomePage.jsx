@@ -96,7 +96,7 @@ const HomePage = () => {
                         {/* Logo */}
                         <div className="flex items-center">
                             <img
-                                src="/stockwise black.png"
+                                src="/stockwise black.webp"
                                 alt="Stockwise Logo"
                                 className="h-12 w-auto"
                             />
@@ -659,7 +659,7 @@ const HomePage = () => {
                         <div className="space-y-4">
                             <div className="flex items-center">
                                 <img
-                                    src="/stockwise black.png"
+                                    src="/stockwise black.webp"
                                     alt="Stockwise Logo"
                                     className="h-10 w-auto"
                                 />

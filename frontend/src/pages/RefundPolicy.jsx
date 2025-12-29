@@ -19,7 +19,7 @@ const RefundPolicy = () => {
                     <div className="flex items-center justify-between h-16">
                         <Link to="/" className="flex items-center">
                             <img
-                                src="/stockwise black.png"
+                                src="/stockwise black.webp"
                                 alt="Stockwise Logo"
                                 className="h-10 w-auto"
                             />

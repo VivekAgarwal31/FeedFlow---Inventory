@@ -1,6 +1,8 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, lazy, Suspense } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from './contexts/AuthContext'
+
+// Public pages - keep in main bundle for fast initial load
 import HomePage from './pages/HomePage'
 import AuthPage from './pages/AuthPage'
 import PrivacyPolicy from './pages/PrivacyPolicy'
@@ -13,38 +15,42 @@ import PricingPage from './pages/PricingPage'
 import AboutPage from './pages/AboutPage'
 import ContactPage from './pages/ContactPage'
 import SupportPage from './pages/SupportPage'
-import CompanySetupPage from './pages/CompanySetupPage'
-import DashboardLayout from './components/layout/DashboardLayout'
-import Dashboard from './pages/Dashboard'
-import Warehouses from './pages/Warehouses'
-import StockList from './pages/StockList'
-import StockIn from './pages/StockIn'
-import StockOut from './pages/StockOut'
-import StockAdjust from './pages/StockAdjust'
-import StockMove from './pages/StockMove'
-import StockTransactions from './pages/StockTransactions'
-import Sales from './pages/Sales'
-import Purchases from './pages/Purchases'
-import SalesOrders from './pages/SalesOrders'
-import PurchaseOrders from './pages/PurchaseOrders'
-import DeliveryOut from './pages/DeliveryOut'
-import DeliveryIn from './pages/DeliveryIn'
-import Clients from './pages/Clients'
-import Suppliers from './pages/Suppliers'
-import Staff from './pages/Staff'
-import Settings from './pages/Settings'
-import AdminLayout from './layouts/AdminLayout'
-import AdminDashboard from './pages/admin/AdminDashboard'
-import CompanyManagement from './pages/admin/CompanyManagement'
-import UserManagement from './pages/admin/UserManagement'
 import OTPVerification from './pages/OTPVerification'
-import Reports from './pages/Reports'
-import AccountsReceivable from './pages/AccountsReceivable'
-import AccountsPayable from './pages/AccountsPayable'
-import EntriesRegister from './pages/EntriesRegister'
-import Cashbook from './pages/Cashbook'
-import WagesCalculator from './pages/WagesCalculator'
-import ManualEntry from './pages/ManualEntry'
+
+// Dashboard pages - lazy load to reduce initial bundle
+const CompanySetupPage = lazy(() => import('./pages/CompanySetupPage'))
+const DashboardLayout = lazy(() => import('./components/layout/DashboardLayout'))
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const Warehouses = lazy(() => import('./pages/Warehouses'))
+const StockList = lazy(() => import('./pages/StockList'))
+const StockIn = lazy(() => import('./pages/StockIn'))
+const StockOut = lazy(() => import('./pages/StockOut'))
+const StockAdjust = lazy(() => import('./pages/StockAdjust'))
+const StockMove = lazy(() => import('./pages/StockMove'))
+const StockTransactions = lazy(() => import('./pages/StockTransactions'))
+const Sales = lazy(() => import('./pages/Sales'))
+const Purchases = lazy(() => import('./pages/Purchases'))
+const SalesOrders = lazy(() => import('./pages/SalesOrders'))
+const PurchaseOrders = lazy(() => import('./pages/PurchaseOrders'))
+const DeliveryOut = lazy(() => import('./pages/DeliveryOut'))
+const DeliveryIn = lazy(() => import('./pages/DeliveryIn'))
+const Clients = lazy(() => import('./pages/Clients'))
+const Suppliers = lazy(() => import('./pages/Suppliers'))
+const Staff = lazy(() => import('./pages/Staff'))
+const Settings = lazy(() => import('./pages/Settings'))
+const Reports = lazy(() => import('./pages/Reports'))
+const AccountsReceivable = lazy(() => import('./pages/AccountsReceivable'))
+const AccountsPayable = lazy(() => import('./pages/AccountsPayable'))
+const EntriesRegister = lazy(() => import('./pages/EntriesRegister'))
+const Cashbook = lazy(() => import('./pages/Cashbook'))
+const WagesCalculator = lazy(() => import('./pages/WagesCalculator'))
+const ManualEntry = lazy(() => import('./pages/ManualEntry'))
+
+// Admin pages - lazy load
+const AdminLayout = lazy(() => import('./layouts/AdminLayout'))
+const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'))
+const CompanyManagement = lazy(() => import('./pages/admin/CompanyManagement'))
+const UserManagement = lazy(() => import('./pages/admin/UserManagement'))
 
 function App() {
   const { user, loading } = useAuth()
@@ -90,54 +96,60 @@ function App() {
     // Super admins don't need a company - redirect to admin panel
     if (user.role === 'super_admin') {
       return (
-        <Routes>
-          <Route path="/admin/*" element={<AdminRoutes />} />
-          <Route path="*" element={<Navigate to="/admin" replace />} />
-        </Routes>
+        <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>}>
+          <Routes>
+            <Route path="/admin/*" element={<AdminRoutes />} />
+            <Route path="*" element={<Navigate to="/admin" replace />} />
+          </Routes>
+        </Suspense>
       )
     }
 
     // Regular users need to set up company
     return (
-      <Routes>
-        <Route path="/company-setup" element={<CompanySetupPage />} />
-        <Route path="*" element={<Navigate to="/company-setup" replace />} />
-      </Routes>
+      <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>}>
+        <Routes>
+          <Route path="/company-setup" element={<CompanySetupPage />} />
+          <Route path="*" element={<Navigate to="/company-setup" replace />} />
+        </Routes>
+      </Suspense>
     )
   }
 
   // Authenticated with company
   return (
-    <DashboardLayout>
-      <Routes>
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/warehouses" element={<Warehouses />} />
-        <Route path="/stock" element={<StockList />} />
-        <Route path="/stock-in" element={<StockIn />} />
-        <Route path="/stock-out" element={<StockOut />} />
-        <Route path="/stock-adjust" element={<StockAdjust />} />
-        <Route path="/stock-move" element={<StockMove />} />
-        <Route path="/stock-transactions" element={<StockTransactions />} />
-        <Route path="/sales" element={<Sales />} />
-        <Route path="/purchases" element={<Purchases />} />
-        <Route path="/sales-orders" element={<SalesOrders />} />
-        <Route path="/purchase-orders" element={<PurchaseOrders />} />
-        <Route path="/delivery-out" element={<DeliveryOut />} />
-        <Route path="/delivery-in" element={<DeliveryIn />} />
-        <Route path="/clients" element={<Clients />} />
-        <Route path="/suppliers" element={<Suppliers />} />
-        <Route path="/staff" element={<Staff />} />
-        <Route path="/settings" element={<Settings />} />
-        <Route path="/reports" element={<Reports />} />
-        <Route path="/accounts-receivable" element={<AccountsReceivable />} />
-        <Route path="/accounts-payable" element={<AccountsPayable />} />
-        <Route path="/accounting/entries-register" element={<EntriesRegister />} />
-        <Route path="/accounting/cashbook" element={<Cashbook />} />
-        <Route path="/accounting/wages" element={<WagesCalculator />} />
-        <Route path="/accounting/manual-entry" element={<ManualEntry />} />
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
-      </Routes>
-    </DashboardLayout>
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>}>
+      <DashboardLayout>
+        <Routes>
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/warehouses" element={<Warehouses />} />
+          <Route path="/stock" element={<StockList />} />
+          <Route path="/stock-in" element={<StockIn />} />
+          <Route path="/stock-out" element={<StockOut />} />
+          <Route path="/stock-adjust" element={<StockAdjust />} />
+          <Route path="/stock-move" element={<StockMove />} />
+          <Route path="/stock-transactions" element={<StockTransactions />} />
+          <Route path="/sales" element={<Sales />} />
+          <Route path="/purchases" element={<Purchases />} />
+          <Route path="/sales-orders" element={<SalesOrders />} />
+          <Route path="/purchase-orders" element={<PurchaseOrders />} />
+          <Route path="/delivery-out" element={<DeliveryOut />} />
+          <Route path="/delivery-in" element={<DeliveryIn />} />
+          <Route path="/clients" element={<Clients />} />
+          <Route path="/suppliers" element={<Suppliers />} />
+          <Route path="/staff" element={<Staff />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="/reports" element={<Reports />} />
+          <Route path="/accounts-receivable" element={<AccountsReceivable />} />
+          <Route path="/accounts-payable" element={<AccountsPayable />} />
+          <Route path="/accounting/entries-register" element={<EntriesRegister />} />
+          <Route path="/accounting/cashbook" element={<Cashbook />} />
+          <Route path="/accounting/wages" element={<WagesCalculator />} />
+          <Route path="/accounting/manual-entry" element={<ManualEntry />} />
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
+      </DashboardLayout>
+    </Suspense>
   )
 }
 
