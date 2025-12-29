@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, ShoppingCart, Loader2, Trash2, Search, Eye } from 'lucide-react'
+import { Plus, ShoppingCart, Loader2, Trash2, Search, Eye, TrendingDown } from 'lucide-react'
 import { purchaseOrderAPI, stockAPI, supplierAPI } from '../lib/api'
 import { formatCurrency, formatDate } from '../lib/utils'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'

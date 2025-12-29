@@ -3,6 +3,7 @@ import DeliveryOut from '../models/DeliveryOut.js';
 import DeliveryIn from '../models/DeliveryIn.js';
 import StockItem from '../models/StockItem.js';
 import { authenticate } from '../middleware/auth.js';
+import { checkReportsAccess } from '../middleware/subscriptionMiddleware.js';
 import { generateSalesPDF, generatePurchasePDF, generateInventoryPDF } from '../utils/pdfGenerator.js';
 import { generateSalesReportExcel, generatePurchaseReportExcel, generateInventoryReportExcel } from '../utils/dataExport.js';
 
@@ -11,7 +12,7 @@ const router = express.Router();
 /**
  * Generate Sales Report - PDF
  */
-router.post('/sales/pdf', authenticate, async (req, res) => {
+router.post('/sales/pdf', authenticate, checkReportsAccess, async (req, res) => {
     try {
         const companyId = req.user.companyId?._id || req.user.companyId;
 
@@ -68,7 +69,7 @@ router.post('/sales/pdf', authenticate, async (req, res) => {
 /**
  * Generate Sales Report - Excel
  */
-router.post('/sales/excel', authenticate, async (req, res) => {
+router.post('/sales/excel', authenticate, checkReportsAccess, async (req, res) => {
     try {
         const companyId = req.user.companyId?._id || req.user.companyId;
 
@@ -125,7 +126,7 @@ router.post('/sales/excel', authenticate, async (req, res) => {
 /**
  * Generate Purchase Report - PDF
  */
-router.post('/purchases/pdf', authenticate, async (req, res) => {
+router.post('/purchases/pdf', authenticate, checkReportsAccess, async (req, res) => {
     try {
         const companyId = req.user.companyId?._id || req.user.companyId;
 
@@ -182,7 +183,7 @@ router.post('/purchases/pdf', authenticate, async (req, res) => {
 /**
  * Generate Purchase Report - Excel
  */
-router.post('/purchases/excel', authenticate, async (req, res) => {
+router.post('/purchases/excel', authenticate, checkReportsAccess, async (req, res) => {
     try {
         const companyId = req.user.companyId?._id || req.user.companyId;
 
@@ -239,7 +240,7 @@ router.post('/purchases/excel', authenticate, async (req, res) => {
 /**
  * Generate Inventory Report - PDF
  */
-router.post('/inventory/pdf', authenticate, async (req, res) => {
+router.post('/inventory/pdf', authenticate, checkReportsAccess, async (req, res) => {
     try {
         const companyId = req.user.companyId?._id || req.user.companyId;
 
@@ -286,7 +287,7 @@ router.post('/inventory/pdf', authenticate, async (req, res) => {
 /**
  * Generate Inventory Report - Excel
  */
-router.post('/inventory/excel', authenticate, async (req, res) => {
+router.post('/inventory/excel', authenticate, checkReportsAccess, async (req, res) => {
     try {
         const companyId = req.user.companyId?._id || req.user.companyId;
 

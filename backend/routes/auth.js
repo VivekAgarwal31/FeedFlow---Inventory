@@ -3,6 +3,8 @@ import jwt from 'jsonwebtoken';
 import { body, validationResult } from 'express-validator';
 import User from '../models/User.js';
 import OTP from '../models/OTP.js';
+import Plan from '../models/Plan.js';
+import UserSubscription from '../models/UserSubscription.js';
 import { authenticate } from '../middleware/auth.js';
 import { generateOTP, sendOTPEmail } from '../utils/email.js';
 
@@ -39,6 +41,19 @@ router.post('/register', [
     // Set default permissions for new_joinee
     user.setRolePermissions();
     await user.save();
+
+    // Create trial subscription for new user
+    try {
+      const trialPlan = await Plan.getByType('trial');
+      if (trialPlan) {
+        await UserSubscription.createTrialSubscription(user._id, trialPlan._id);
+      } else {
+        console.warn('Trial plan not found, user created without subscription');
+      }
+    } catch (subError) {
+      console.error('Failed to create trial subscription:', subError);
+      // Continue with registration even if subscription creation fails
+    }
 
     // Generate OTP for email verification
     const otpCode = generateOTP();

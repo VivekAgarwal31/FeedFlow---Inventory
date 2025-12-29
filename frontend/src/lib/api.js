@@ -202,7 +202,27 @@ export const dataManagementAPI = {
   getCleanupHistory: () => api.get('/data-management/cleanup/history')
 }
 
+// Subscription API
+export const subscriptionAPI = {
+  getCurrent: () => api.get('/subscription/current'),
+  getStatus: () => api.get('/subscription/status'),
+  getPlans: () => api.get('/subscription/plans'),
+  checkAccess: (feature, companyId) => api.post('/subscription/check-access', { feature, companyId })
+}
 
+// Admin Subscription API
+export const adminSubscriptionAPI = {
+  getAllSubscriptions: (params) => api.get('/admin/subscription/subscriptions', { params }),
+  getUserSubscription: (userId) => api.get(`/admin/subscription/subscriptions/${userId}`),
+  updateUserPlan: (userId, planType, notes) => api.put(`/admin/subscription/subscriptions/${userId}/plan`, { planType, notes }),
+  getStats: () => api.get('/admin/subscription/subscriptions-stats')
+}
+
+// Payment API (Razorpay)
+export const paymentAPI = {
+  createOrder: (planType) => api.post('/subscription-payments/create-order', { planType }),
+  verifyPayment: (data) => api.post('/subscription-payments/verify', data)
+}
 
 export default api
 

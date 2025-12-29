@@ -4,6 +4,7 @@ import Warehouse from '../models/Warehouse.js';
 import StockItem from '../models/StockItem.js';
 import { authenticate } from '../middleware/auth.js';
 import { requirePermission } from '../middleware/rbac.js';
+import { checkWarehouseLimit } from '../middleware/subscriptionMiddleware.js';
 
 const router = express.Router();
 
@@ -48,7 +49,7 @@ router.get('/:id', authenticate, async (req, res) => {
 });
 
 // Create warehouse
-router.post('/', authenticate, requirePermission('canManageInventory'), [
+router.post('/', authenticate, requirePermission('canManageInventory'), checkWarehouseLimit, [
     body('name').trim().isLength({ min: 2 }).withMessage('Name must be at least 2 characters'),
     body('location').optional().trim(),
     body('capacity').optional().isNumeric().withMessage('Capacity must be a number')

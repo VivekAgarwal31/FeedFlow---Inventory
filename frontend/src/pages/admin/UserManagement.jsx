@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, Search, Users, Eye, Edit, Trash2, Ban, CheckCircle, Loader2, Key } from 'lucide-react'
+import { Plus, Search, Users, Eye, Edit, Trash2, Ban, CheckCircle, Loader2, Key, Crown } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -9,8 +9,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
 import { Badge } from '../../components/ui/badge'
 import { adminAPI } from '../../lib/adminApi'
+import { adminSubscriptionAPI } from '../../lib/api'
 import { useToast } from '../../hooks/use-toast'
 import { formatDate } from '../../lib/utils'
+import PlanBadge from '../../components/PlanBadge'
 
 const UserManagement = () => {
     const [users, setUsers] = useState([])
@@ -22,7 +24,11 @@ const UserManagement = () => {
     const [selectedUser, setSelectedUser] = useState(null)
     const [dialogOpen, setDialogOpen] = useState(false)
     const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false)
+    const [planDialogOpen, setPlanDialogOpen] = useState(false)
     const [submitting, setSubmitting] = useState(false)
+    const [userSubscription, setUserSubscription] = useState(null)
+    const [selectedPlan, setSelectedPlan] = useState('')
+    const [planNotes, setPlanNotes] = useState('')
     const { toast } = useToast()
 
     const [form, setForm] = useState({
@@ -39,6 +45,13 @@ const UserManagement = () => {
     useEffect(() => {
         fetchUsers()
         fetchCompanies()
+    }, [])
+
+    // Separate effect for filters
+    useEffect(() => {
+        if (searchTerm || roleFilter !== 'all' || statusFilter !== 'all') {
+            fetchUsers()
+        }
     }, [searchTerm, roleFilter, statusFilter])
 
     const fetchUsers = async () => {
@@ -172,6 +185,57 @@ const UserManagement = () => {
                 description: error.response?.data?.message || 'Failed to delete user',
                 variant: 'destructive'
             })
+        }
+    }
+
+    const openPlanDialog = async (user) => {
+        try {
+            setSelectedUser(user)
+            setPlanDialogOpen(true)
+            setSubmitting(true)
+
+            // Fetch user's subscription
+            const response = await adminSubscriptionAPI.getUserSubscription(user._id)
+            setUserSubscription(response.data.subscription)
+            setSelectedPlan(response.data.subscription?.planId?.type || 'free')
+        } catch (error) {
+            // If no subscription found, default to free
+            setUserSubscription(null)
+            setSelectedPlan('free')
+        } finally {
+            setSubmitting(false)
+        }
+    }
+
+    const handlePlanChange = async () => {
+        if (!selectedPlan) {
+            toast({
+                title: 'Error',
+                description: 'Please select a plan',
+                variant: 'destructive'
+            })
+            return
+        }
+
+        try {
+            setSubmitting(true)
+            await adminSubscriptionAPI.updateUserPlan(selectedUser._id, selectedPlan, planNotes)
+            toast({
+                title: 'Success',
+                description: `User plan updated to ${selectedPlan} successfully`
+            })
+            setPlanDialogOpen(false)
+            setPlanNotes('')
+            setSelectedUser(null)
+            setUserSubscription(null)
+        } catch (error) {
+            toast({
+                title: 'Error',
+                description: error.response?.data?.message || 'Failed to update plan',
+                variant: 'destructive'
+            })
+        } finally {
+            setSubmitting(false)
         }
     }
 
@@ -395,6 +459,7 @@ const UserManagement = () => {
                                     <TableHead>Email</TableHead>
                                     <TableHead>Company</TableHead>
                                     <TableHead>Role</TableHead>
+                                    <TableHead>Plan</TableHead>
                                     <TableHead>Status</TableHead>
                                     <TableHead>Last Login</TableHead>
                                     <TableHead>Actions</TableHead>
@@ -403,19 +468,29 @@ const UserManagement = () => {
                             <TableBody>
                                 {users.map((user) => (
                                     <TableRow key={user._id}>
-                                        <TableCell className="font-medium">{user.fullName}</TableCell>
-                                        <TableCell>{user.email}</TableCell>
+                                        <TableCell className="font-medium">{user.fullName || 'N/A'}</TableCell>
+                                        <TableCell>{user.email || 'N/A'}</TableCell>
                                         <TableCell>
                                             {user.companyId?.name || 'N/A'}
                                             <br />
                                             <span className="text-xs text-gray-500 font-mono">
-                                                {user.companyId?.companyCode}
+                                                {user.companyId?.companyCode || ''}
                                             </span>
                                         </TableCell>
                                         <TableCell>
                                             <Badge className={getRoleBadgeColor(user.role)}>
-                                                {user.role}
+                                                {user.role || 'N/A'}
                                             </Badge>
+                                        </TableCell>
+                                        <TableCell>
+                                            {user.subscription ? (
+                                                <PlanBadge
+                                                    planType={user.subscription.planId?.type}
+                                                    planName={user.subscription.planId?.name}
+                                                />
+                                            ) : (
+                                                <span className="text-xs text-muted-foreground">No plan</span>
+                                            )}
                                         </TableCell>
                                         <TableCell>
                                             <Badge variant={user.isActive ? 'default' : 'secondary'}>
@@ -433,6 +508,14 @@ const UserManagement = () => {
                                                     onClick={() => openEditDialog(user)}
                                                 >
                                                     <Edit className="h-4 w-4" />
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => openPlanDialog(user)}
+                                                    title="Manage Plan"
+                                                >
+                                                    <Crown className="h-4 w-4 text-yellow-600" />
                                                 </Button>
                                                 <Button
                                                     variant="ghost"
@@ -518,6 +601,91 @@ const UserManagement = () => {
                                 onClick={() => {
                                     setResetPasswordDialogOpen(false)
                                     setNewPassword('')
+                                }}
+                                disabled={submitting}
+                            >
+                                Cancel
+                            </Button>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Plan Management Dialog */}
+            <Dialog open={planDialogOpen} onOpenChange={setPlanDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Manage User Plan</DialogTitle>
+                        <DialogDescription>
+                            Change subscription plan for {selectedUser?.fullName}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        {userSubscription && (
+                            <div className="p-4 bg-muted rounded-lg">
+                                <Label className="text-sm font-medium">Current Plan</Label>
+                                <div className="mt-2 flex items-center gap-2">
+                                    <PlanBadge
+                                        planType={userSubscription.planId?.type}
+                                        planName={userSubscription.planId?.name}
+                                    />
+                                    {userSubscription.trial?.isTrial && userSubscription.trial?.endsAt && (
+                                        <span className="text-sm text-muted-foreground">
+                                            (Ends: {formatDate(userSubscription.trial.endsAt)})
+                                        </span>
+                                    )}
+                                </div>
+                                {userSubscription.updatedByAdmin && (
+                                    <p className="text-xs text-muted-foreground mt-2">
+                                        ⚠️ Plan manually set by admin
+                                    </p>
+                                )}
+                            </div>
+                        )}
+
+                        <div>
+                            <Label>New Plan *</Label>
+                            <Select value={selectedPlan} onValueChange={setSelectedPlan}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select plan" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="free">Free Plan</SelectItem>
+                                    <SelectItem value="trial">Trial Plan (14 days)</SelectItem>
+                                    <SelectItem value="paid">Paid Plan</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div>
+                            <Label>Admin Notes (Optional)</Label>
+                            <Input
+                                value={planNotes}
+                                onChange={(e) => setPlanNotes(e.target.value)}
+                                placeholder="Reason for plan change..."
+                            />
+                        </div>
+
+                        <div className="flex gap-3">
+                            <Button
+                                onClick={handlePlanChange}
+                                disabled={submitting || !selectedPlan}
+                                className="flex-1"
+                            >
+                                {submitting ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Updating...
+                                    </>
+                                ) : (
+                                    'Update Plan'
+                                )}
+                            </Button>
+                            <Button
+                                variant="outline"
+                                onClick={() => {
+                                    setPlanDialogOpen(false)
+                                    setPlanNotes('')
                                 }}
                                 disabled={submitting}
                             >

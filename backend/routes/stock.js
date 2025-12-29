@@ -9,6 +9,7 @@ import Supplier from '../models/Supplier.js';
 import Client from '../models/Client.js';
 import { authenticate } from '../middleware/auth.js';
 import { requirePermission } from '../middleware/rbac.js';
+import { checkItemLimit } from '../middleware/subscriptionMiddleware.js';
 
 const router = express.Router();
 
@@ -34,7 +35,7 @@ router.get('/', authenticate, async (req, res) => {
 });
 
 // Create new stock item
-router.post('/', authenticate, requirePermission('canManageInventory'), [
+router.post('/', authenticate, requirePermission('canManageInventory'), checkItemLimit, [
     body('itemName').trim().isLength({ min: 2 }).withMessage('Item name is required'),
     body('warehouseId').notEmpty().withMessage('Warehouse is required'),
     body('bagSize').isFloat({ min: 0.01 }).withMessage('Bag size must be greater than 0'),

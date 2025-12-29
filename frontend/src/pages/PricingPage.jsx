@@ -95,51 +95,57 @@ const PricingPage = () => {
                         <div className="grid md:grid-cols-3 gap-6">
                             <Card className="bg-muted/30">
                                 <CardHeader>
-                                    <CardTitle>Starter Plan</CardTitle>
+                                    <CardTitle>Free Plan</CardTitle>
                                 </CardHeader>
                                 <CardContent>
                                     <p className="text-muted-foreground mb-4">
-                                        Perfect for small businesses just getting started with inventory management. Test all features with limited capacity.
+                                        Perfect for small businesses just getting started with basic inventory needs.
                                     </p>
                                     <p className="text-sm font-medium">Best for:</p>
                                     <ul className="text-sm text-muted-foreground space-y-1 mt-2">
                                         <li>• New businesses</li>
                                         <li>• Testing the platform</li>
-                                        <li>• Basic inventory needs</li>
+                                        <li>• Very small inventory (up to 5 items)</li>
+                                        <li>• Single or dual warehouse setup</li>
                                     </ul>
                                 </CardContent>
                             </Card>
 
                             <Card className="border-primary">
                                 <CardHeader>
-                                    <CardTitle>Professional Plan</CardTitle>
+                                    <CardTitle>14-Day Trial</CardTitle>
                                 </CardHeader>
                                 <CardContent>
                                     <p className="text-muted-foreground mb-4">
-                                        Ideal for growing businesses that need unlimited inventory, advanced features, and comprehensive reporting capabilities.
+                                        Try all premium features risk-free for 14 days. No credit card required.
                                     </p>
                                     <p className="text-sm font-medium">Best for:</p>
                                     <ul className="text-sm text-muted-foreground space-y-1 mt-2">
-                                        <li>• Growing businesses</li>
-                                        <li>• Multiple warehouses</li>
-                                        <li>• Advanced reporting needs</li>
+                                        <li>• Evaluating full platform capabilities</li>
+                                        <li>• Testing advanced features</li>
+                                        <li>• Migrating from another system</li>
+                                        <li>• All new signups (automatic)</li>
                                     </ul>
+                                    <p className="text-xs text-muted-foreground mt-4 italic">
+                                        * Automatically downgrades to Free plan after 14 days
+                                    </p>
                                 </CardContent>
                             </Card>
 
                             <Card className="bg-muted/30">
                                 <CardHeader>
-                                    <CardTitle>Enterprise Plan</CardTitle>
+                                    <CardTitle>Professional Plan</CardTitle>
                                 </CardHeader>
                                 <CardContent>
                                     <p className="text-muted-foreground mb-4">
-                                        Designed for established businesses requiring multi-company management, priority support, and custom solutions.
+                                        Ideal for growing businesses that need unlimited inventory, advanced features, and comprehensive reporting.
                                     </p>
                                     <p className="text-sm font-medium">Best for:</p>
                                     <ul className="text-sm text-muted-foreground space-y-1 mt-2">
-                                        <li>• Large businesses</li>
-                                        <li>• Multiple companies</li>
-                                        <li>• Custom requirements</li>
+                                        <li>• Growing businesses</li>
+                                        <li>• Multiple warehouses</li>
+                                        <li>• Large inventory</li>
+                                        <li>• Advanced reporting needs</li>
                                     </ul>
                                 </CardContent>
                             </Card>

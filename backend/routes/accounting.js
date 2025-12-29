@@ -11,6 +11,7 @@ import StockTransaction from '../models/StockTransaction.js';
 import Company from '../models/Company.js';
 import { authenticate } from '../middleware/auth.js';
 import { requirePermission } from '../middleware/rbac.js';
+import { checkAccountingAccess } from '../middleware/subscriptionMiddleware.js';
 import { createJournalEntry, initializeDefaultAccounts } from '../utils/journalEntry.js';
 
 const router = express.Router();
@@ -39,7 +40,7 @@ router.post('/accounts/initialize', authenticate, requirePermission('isOwner'), 
 });
 
 // Get all ledger accounts
-router.get('/accounts', authenticate, async (req, res) => {
+router.get('/accounts', authenticate, checkAccountingAccess, async (req, res) => {
     try {
         const companyId = req.user.companyId?._id || req.user.companyId;
 
@@ -83,7 +84,7 @@ router.post('/accounts', authenticate, requirePermission('canManageAccounting'),
 });
 
 // Get entries register for a date
-router.get('/entries-register', authenticate, async (req, res) => {
+router.get('/entries-register', authenticate, checkAccountingAccess, async (req, res) => {
     try {
         const companyId = req.user.companyId?._id || req.user.companyId;
         const date = req.query.date ? new Date(req.query.date) : new Date();
@@ -134,7 +135,7 @@ router.get('/entries-register', authenticate, async (req, res) => {
 });
 
 // Get cashbook for a date
-router.get('/cashbook', authenticate, async (req, res) => {
+router.get('/cashbook', authenticate, checkAccountingAccess, async (req, res) => {
     try {
         const companyId = req.user.companyId?._id || req.user.companyId;
         const date = req.query.date ? new Date(req.query.date) : new Date();

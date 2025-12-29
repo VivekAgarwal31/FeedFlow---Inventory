@@ -52,6 +52,7 @@ const AdminLayout = lazy(() => import('./layouts/AdminLayout'))
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'))
 const CompanyManagement = lazy(() => import('./pages/admin/CompanyManagement'))
 const UserManagement = lazy(() => import('./pages/admin/UserManagement'))
+const CheckoutPage = lazy(() => import('./pages/CheckoutPage'))
 
 function App() {
   const { user, loading } = useAuth()
@@ -150,6 +151,7 @@ function App() {
           <Route path="/accounting/cashbook" element={<Cashbook />} />
           <Route path="/accounting/wages" element={<WagesCalculator />} />
           <Route path="/accounting/manual-entry" element={<ManualEntry />} />
+          <Route path="/checkout" element={<CheckoutPage />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </DashboardLayout>

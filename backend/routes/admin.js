@@ -295,8 +295,24 @@ router.get('/users', async (req, res) => {
             User.countDocuments(query)
         ]);
 
+        // Import UserSubscription model
+        const UserSubscription = (await import('../models/UserSubscription.js')).default;
+
+        // Fetch subscriptions for all users
+        const usersWithSubscriptions = await Promise.all(
+            users.map(async (user) => {
+                const subscription = await UserSubscription.findOne({ userId: user._id })
+                    .populate('planId', 'name type')
+                    .lean();
+                return {
+                    ...user,
+                    subscription
+                };
+            })
+        );
+
         res.json({
-            users,
+            users: usersWithSubscriptions,
             pagination: {
                 total,
                 page: parseInt(page),

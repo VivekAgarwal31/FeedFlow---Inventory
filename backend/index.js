@@ -23,8 +23,12 @@ import paymentRoutes from './routes/payments.js';
 import invoiceRoutes from './routes/invoices.js';
 import accountsRoutes from './routes/accounts.js';
 import accountingRoutes from './routes/accounting.js';
+import subscriptionRoutes from './routes/subscription.js';
+import adminSubscriptionRoutes from './routes/adminSubscription.js';
+import subscriptionPaymentRoutes from './routes/subscriptionPayments.js';
 import { startHttpPing } from './utils/keepAlive.js';
 import { startDbPing } from './utils/dbPing.js';
+import { startTrialExpiryJob } from './jobs/trialExpiryJob.js';
 
 // Import models to register them with Mongoose
 import './models/User.js';
@@ -50,6 +54,9 @@ import './models/LedgerAccount.js';
 import './models/JournalEntry.js';
 import './models/JournalLine.js';
 import './models/CashbookBalance.js';
+import './models/Plan.js';
+import './models/UserSubscription.js';
+import './models/SubscriptionPayment.js';
 
 // Load environment variables (works both locally and on Render)
 dotenv.config();
@@ -126,9 +133,23 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/invoices', invoiceRoutes);
 app.use('/api/accounts', accountsRoutes);
 app.use('/api/accounting', accountingRoutes);
+app.use('/api/subscription', subscriptionRoutes);
+app.use('/api/admin/subscription', adminSubscriptionRoutes);
+app.use('/api/subscription-payments', subscriptionPaymentRoutes);
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
   // Start HTTP ping to keep Render service alive
   startHttpPing();
+  // Start trial expiry background job
+  startTrialExpiryJob();
+
+  // Initialize plans if they don't exist
+  try {
+    const Plan = (await import('./models/Plan.js')).default;
+    await Plan.initializePlans();
+    console.log('✅ Plans initialized');
+  } catch (error) {
+    console.error('❌ Failed to initialize plans:', error);
+  }
 });

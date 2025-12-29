@@ -4,14 +4,18 @@ import {
   Warehouse,
   Package,
   TrendingUp,
-  AlertCircle
+  AlertCircle,
+  Clock,
+  ArrowRight
 } from 'lucide-react'
-import { companyAPI, dashboardAPI } from '../lib/api'
+import { companyAPI, dashboardAPI, subscriptionAPI } from '../lib/api'
 import { formatCurrency } from '../lib/utils'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert'
 import { Badge } from '../components/ui/badge'
+import PlanBadge from '../components/PlanBadge'
+import { useNavigate } from 'react-router-dom'
 
 const Dashboard = () => {
   const [stats, setStats] = useState({
@@ -26,7 +30,9 @@ const Dashboard = () => {
     totalPayables: 0
   })
   const [company, setCompany] = useState(null)
+  const [subscription, setSubscription] = useState(null)
   const [loading, setLoading] = useState(true)
+  const navigate = useNavigate()
 
   useEffect(() => {
     const fetchData = async () => {
@@ -34,13 +40,17 @@ const Dashboard = () => {
         setLoading(true)
 
         // Fetch stats and company data in parallel
-        const [statsResponse, companyResponse] = await Promise.all([
+        const [statsResponse, companyResponse, subscriptionResponse] = await Promise.all([
           dashboardAPI.getStats(),
-          companyAPI.get()
+          companyAPI.get(),
+          subscriptionAPI.getStatus().catch(() => ({ data: { status: null } }))
         ])
 
         setStats(statsResponse.data.stats)
         setCompany(companyResponse.data.company)
+        // API returns subscription status directly in data, not nested
+        setSubscription(subscriptionResponse.data)
+        console.log('Subscription data:', subscriptionResponse.data)
       } catch (error) {
         console.error('Failed to fetch dashboard data:', error)
       } finally {
@@ -78,13 +88,49 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground mt-1">
-          Welcome back! Here's your business overview.
-        </p>
+      {/* Header with Company Name and Plan Badge */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">
+            {company?.name || 'Dashboard'}
+          </h1>
+          <p className="text-gray-600 mt-1">Welcome back! Here's your business overview.</p>
+        </div>
+        {subscription && (
+          <PlanBadge
+            planType={subscription.planType}
+            planName={subscription.planName}
+          />
+        )}
       </div>
+
+      {/* Trial Countdown Alert */}
+      {subscription?.isTrial && subscription?.daysRemaining !== undefined && (
+        <Alert className={subscription.daysRemaining <= 3 ? 'border-red-200 bg-red-50' : 'border-blue-200 bg-blue-50'}>
+          <Clock className={`h-4 w-4 ${subscription.daysRemaining <= 3 ? 'text-red-600' : 'text-blue-600'}`} />
+          <AlertTitle className={subscription.daysRemaining <= 3 ? 'text-red-900' : 'text-blue-900'}>
+            {subscription.daysRemaining > 0
+              ? `Trial ends in ${subscription.daysRemaining} day${subscription.daysRemaining !== 1 ? 's' : ''}`
+              : 'Trial has ended'
+            }
+          </AlertTitle>
+          <AlertDescription className={subscription.daysRemaining <= 3 ? 'text-red-700' : 'text-blue-700'}>
+            {subscription.daysRemaining > 0
+              ? `Upgrade now to continue enjoying unlimited access to all features.`
+              : 'Your account has been downgraded to the Free plan. Upgrade to regain full access.'
+            }
+            <Button
+              onClick={() => navigate('/checkout?plan=paid')}
+              size="sm"
+              className="ml-4"
+              variant={subscription.daysRemaining <= 3 ? 'destructive' : 'default'}
+            >
+              Upgrade Now
+              <ArrowRight className="w-4 h-4 ml-1" />
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Low Stock Alert */}
       {stats.lowStockCount > 0 && (

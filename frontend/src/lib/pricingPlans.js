@@ -1,27 +1,53 @@
 // Pricing plans configuration for Stockwise
-// This configuration is designed for future subscription integration
+// Updated to reflect Free, Trial, and Paid plan structure
 
 export const pricingPlans = [
     {
-        id: 'starter',
-        name: 'Starter',
+        id: 'free',
+        name: 'Free',
         price: 0,
-        priceLabel: 'Free',
+        priceLabel: 'Free Forever',
         description: 'Perfect for small businesses getting started',
         features: [
             'Up to 2 warehouses',
-            'Up to 100 stock items',
+            'Up to 5 stock items',
             'Basic inventory tracking',
             'Sales & purchase management',
-            'Basic reports',
             'Email support'
+        ],
+        limitations: [
+            'No backup functionality',
+            'No advanced reports',
+            'No accounting module'
         ],
         highlighted: false,
         ctaText: 'Get Started Free',
         ctaVariant: 'outline'
     },
     {
-        id: 'professional',
+        id: 'trial',
+        name: '14-Day Trial',
+        price: 0,
+        priceLabel: 'Free for 14 Days',
+        description: 'Try all features risk-free',
+        features: [
+            'Unlimited warehouses',
+            'Unlimited stock items',
+            'Advanced inventory tracking',
+            'Sales & purchase orders',
+            'Delivery management',
+            'Full accounting features',
+            'Advanced reports & analytics',
+            'Backup & restore',
+            'Priority support'
+        ],
+        trialInfo: 'Automatically downgrades to Free plan after 14 days',
+        highlighted: true,
+        ctaText: 'Start Free Trial',
+        ctaVariant: 'default'
+    },
+    {
+        id: 'paid',
         name: 'Professional',
         price: 999,
         priceLabel: '₹999/month',
@@ -34,32 +60,13 @@ export const pricingPlans = [
             'Delivery management',
             'Full accounting features',
             'Advanced reports & analytics',
+            'Backup & restore',
             'Priority email support',
             'Multi-user access'
         ],
-        highlighted: true,
-        ctaText: 'Start Free Trial',
-        ctaVariant: 'default'
-    },
-    {
-        id: 'enterprise',
-        name: 'Enterprise',
-        price: null,
-        priceLabel: 'Custom',
-        description: 'Custom solutions for large organizations',
-        features: [
-            'Everything in Professional',
-            'Custom integrations',
-            'Dedicated account manager',
-            'Custom training',
-            'SLA guarantee',
-            '24/7 phone support',
-            'Custom features',
-            'On-premise deployment option'
-        ],
         highlighted: false,
-        ctaText: 'Contact Sales',
-        ctaVariant: 'outline'
+        ctaText: 'Upgrade Now',
+        ctaVariant: 'default'
     }
 ]
 
@@ -68,5 +75,5 @@ export const getPlanById = (id) => {
 }
 
 export const getDefaultPlan = () => {
-    return pricingPlans[0] // Starter plan
+    return pricingPlans[0] // Free plan
 }

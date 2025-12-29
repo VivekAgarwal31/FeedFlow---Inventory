@@ -40,6 +40,13 @@ const CompanyManagement = () => {
 
     useEffect(() => {
         fetchCompanies()
+    }, [])
+
+    // Separate effect for filters
+    useEffect(() => {
+        if (searchTerm || statusFilter !== 'all') {
+            fetchCompanies()
+        }
     }, [searchTerm, statusFilter])
 
     const fetchCompanies = async () => {
@@ -395,16 +402,16 @@ const CompanyManagement = () => {
                             <TableBody>
                                 {companies.map((company) => (
                                     <TableRow key={company._id}>
-                                        <TableCell className="font-medium">{company.name}</TableCell>
-                                        <TableCell className="font-mono text-sm">{company.companyCode}</TableCell>
+                                        <TableCell className="font-medium">{company.name || 'N/A'}</TableCell>
+                                        <TableCell className="font-mono text-sm">{company.companyCode || 'N/A'}</TableCell>
                                         <TableCell>{company.ownerId?.fullName || 'N/A'}</TableCell>
                                         <TableCell>{company.userCount || 0}</TableCell>
                                         <TableCell>
                                             <Badge variant={company.status === 'active' ? 'default' : 'secondary'}>
-                                                {company.status}
+                                                {company.status || 'unknown'}
                                             </Badge>
                                         </TableCell>
-                                        <TableCell>{formatDate(company.createdAt)}</TableCell>
+                                        <TableCell>{company.createdAt ? formatDate(company.createdAt) : 'N/A'}</TableCell>
                                         <TableCell>
                                             <div className="flex gap-2">
                                                 <Button

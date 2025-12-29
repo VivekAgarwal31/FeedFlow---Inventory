@@ -1,6 +1,7 @@
 import express from 'express';
 import multer from 'multer';
 import { authenticate } from '../middleware/auth.js';
+import { checkBackupAccess } from '../middleware/subscriptionMiddleware.js';
 import { exportToCSV, exportToExcel, generateImportTemplate, getEntityFields } from '../utils/dataExport.js';
 import { parseCSV, parseExcel, validateImportData, mapImportHeaders, importWithTransaction } from '../utils/dataImport.js';
 import { createBackup, listBackups, restoreBackup, deleteBackup, getBackupFilePath } from '../utils/backup.js';
@@ -252,7 +253,7 @@ router.post('/import/:entity', authenticate, upload.single('file'), async (req, 
  * Create manual backup
  * POST /api/data-management/backup/create
  */
-router.post('/backup/create', authenticate, requireOwner, async (req, res) => {
+router.post('/backup/create', authenticate, requireOwner, checkBackupAccess, async (req, res) => {
     try {
         console.log('Starting backup creation...');
         const companyId = req.user.companyId._id;
@@ -291,7 +292,7 @@ router.post('/backup/create', authenticate, requireOwner, async (req, res) => {
  * List backups
  * GET /api/data-management/backup/list
  */
-router.get('/backup/list', authenticate, requireOwner, async (req, res) => {
+router.get('/backup/list', authenticate, requireOwner, checkBackupAccess, async (req, res) => {
     try {
         const companyId = req.user.companyId._id;
         const backups = await listBackups(companyId);
@@ -307,7 +308,7 @@ router.get('/backup/list', authenticate, requireOwner, async (req, res) => {
  * Download backup
  * GET /api/data-management/backup/download/:backupId
  */
-router.get('/backup/download/:backupId', authenticate, requireOwner, async (req, res) => {
+router.get('/backup/download/:backupId', authenticate, requireOwner, checkBackupAccess, async (req, res) => {
     try {
         const { backupId } = req.params;
         const filePath = await getBackupFilePath(backupId);
@@ -323,7 +324,7 @@ router.get('/backup/download/:backupId', authenticate, requireOwner, async (req,
  * Restore from backup
  * POST /api/data-management/backup/restore
  */
-router.post('/backup/restore', authenticate, requireOwner, async (req, res) => {
+router.post('/backup/restore', authenticate, requireOwner, checkBackupAccess, async (req, res) => {
     try {
         const { backupId } = req.body;
         const companyId = req.user.companyId._id;
