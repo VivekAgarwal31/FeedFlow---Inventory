@@ -6,6 +6,13 @@ import AuthPage from './pages/AuthPage'
 import PrivacyPolicy from './pages/PrivacyPolicy'
 import TermsAndConditions from './pages/TermsAndConditions'
 import RefundPolicy from './pages/RefundPolicy'
+import FeaturesPage from './pages/FeaturesPage'
+import InventoryManagement from './pages/InventoryManagement'
+import AccountingSoftware from './pages/AccountingSoftware'
+import PricingPage from './pages/PricingPage'
+import AboutPage from './pages/AboutPage'
+import ContactPage from './pages/ContactPage'
+import SupportPage from './pages/SupportPage'
 import CompanySetupPage from './pages/CompanySetupPage'
 import DashboardLayout from './components/layout/DashboardLayout'
 import Dashboard from './pages/Dashboard'
@@ -60,6 +67,13 @@ function App() {
         <Route path="/privacy-policy" element={<PrivacyPolicy />} />
         <Route path="/terms-and-conditions" element={<TermsAndConditions />} />
         <Route path="/refund-policy" element={<RefundPolicy />} />
+        <Route path="/features" element={<FeaturesPage />} />
+        <Route path="/features/inventory-management" element={<InventoryManagement />} />
+        <Route path="/features/accounting-software" element={<AccountingSoftware />} />
+        <Route path="/pricing" element={<PricingPage />} />
+        <Route path="/about" element={<AboutPage />} />
+        <Route path="/contact" element={<ContactPage />} />
+        <Route path="/support" element={<SupportPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     )

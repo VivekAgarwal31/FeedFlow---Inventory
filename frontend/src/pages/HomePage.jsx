@@ -674,19 +674,10 @@ const HomePage = () => {
                             <h3 className="font-semibold mb-4">Product</h3>
                             <ul className="space-y-2 text-sm text-muted-foreground">
                                 <li>
-                                    <button onClick={() => scrollToSection('features')} className="hover:text-foreground transition-colors">
-                                        Features
-                                    </button>
+                                    <Link to="/features" className="hover:text-foreground transition-colors">Features</Link>
                                 </li>
                                 <li>
-                                    <button onClick={() => scrollToSection('pricing')} className="hover:text-foreground transition-colors">
-                                        Pricing
-                                    </button>
-                                </li>
-                                <li>
-                                    <button onClick={() => scrollToSection('how-it-works')} className="hover:text-foreground transition-colors">
-                                        How It Works
-                                    </button>
+                                    <Link to="/pricing" className="hover:text-foreground transition-colors">Pricing</Link>
                                 </li>
                             </ul>
                         </div>
@@ -696,13 +687,13 @@ const HomePage = () => {
                             <h3 className="font-semibold mb-4">Company</h3>
                             <ul className="space-y-2 text-sm text-muted-foreground">
                                 <li>
-                                    <a href="#" className="hover:text-foreground transition-colors">About Us</a>
+                                    <Link to="/about" className="hover:text-foreground transition-colors">About Us</Link>
                                 </li>
                                 <li>
-                                    <a href="#" className="hover:text-foreground transition-colors">Contact</a>
+                                    <Link to="/contact" className="hover:text-foreground transition-colors">Contact</Link>
                                 </li>
                                 <li>
-                                    <a href="#" className="hover:text-foreground transition-colors">Support</a>
+                                    <Link to="/support" className="hover:text-foreground transition-colors">Support</Link>
                                 </li>
                             </ul>
                         </div>
