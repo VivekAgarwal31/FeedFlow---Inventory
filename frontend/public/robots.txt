@@ -3,37 +3,47 @@
 
 User-agent: *
 
-# Allow crawling of public pages
+# Allow crawling of public homepage
 Allow: /
 
-# Disallow authenticated/private pages
+# Disallow authentication and private pages
+Disallow: /auth
+Disallow: /verify-otp
+Disallow: /company-setup
+
+# Disallow all dashboard/internal app routes
 Disallow: /dashboard
 Disallow: /warehouses
 Disallow: /stock
+Disallow: /stock-in
+Disallow: /stock-out
 Disallow: /stock-adjust
 Disallow: /stock-move
 Disallow: /stock-transactions
+Disallow: /sales
+Disallow: /purchases
 Disallow: /sales-orders
+Disallow: /purchase-orders
 Disallow: /delivery-out
 Disallow: /delivery-in
 Disallow: /clients
 Disallow: /suppliers
-Disallow: /purchase-orders
+Disallow: /staff
 Disallow: /accounts-receivable
 Disallow: /accounts-payable
-Disallow: /cashbook
-Disallow: /entries-register
-Disallow: /wages-calculator
-Disallow: /ledger-accounts
+Disallow: /accounting/
+Disallow: /reports
 Disallow: /settings
+Disallow: /admin
 
 # Disallow API endpoints
 Disallow: /api/
 
 # Allow static assets
 Allow: /assets/
-Allow: /stockwise*.png
-Allow: /favicon*.png
+Allow: /*.png
+Allow: /*.jpg
+Allow: /*.svg
 Allow: /*.css
 Allow: /*.js
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { Package, Loader2, Mail } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { authAPI } from '../lib/api'
@@ -29,6 +29,8 @@ const AuthPage = () => {
     password: '',
     phone: ''
   })
+
+  const [acceptedTerms, setAcceptedTerms] = useState(false)
 
   const handleLogin = async (e) => {
     e.preventDefault()
@@ -83,6 +85,12 @@ const AuthPage = () => {
 
     if (signupForm.password.length < 6) {
       setError('Password must be at least 6 characters')
+      setLoading(false)
+      return
+    }
+
+    if (!acceptedTerms) {
+      setError('You must accept the Terms & Conditions and Privacy Policy')
       setLoading(false)
       return
     }
@@ -253,6 +261,29 @@ const AuthPage = () => {
                     required
                   />
                 </div>
+
+                {/* Terms Acceptance Checkbox */}
+                <div className="flex items-start space-x-2">
+                  <input
+                    type="checkbox"
+                    id="accept-terms"
+                    checked={acceptedTerms}
+                    onChange={(e) => setAcceptedTerms(e.target.checked)}
+                    className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                    required
+                  />
+                  <label htmlFor="accept-terms" className="text-sm text-muted-foreground leading-relaxed">
+                    I agree to the{' '}
+                    <Link to="/terms-and-conditions" target="_blank" className="text-primary hover:underline">
+                      Terms & Conditions
+                    </Link>
+                    {' '}and{' '}
+                    <Link to="/privacy-policy" target="_blank" className="text-primary hover:underline">
+                      Privacy Policy
+                    </Link>
+                  </label>
+                </div>
+
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading ? (
                     <>

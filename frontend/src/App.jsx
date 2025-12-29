@@ -3,6 +3,9 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './contexts/AuthContext'
 import HomePage from './pages/HomePage'
 import AuthPage from './pages/AuthPage'
+import PrivacyPolicy from './pages/PrivacyPolicy'
+import TermsAndConditions from './pages/TermsAndConditions'
+import RefundPolicy from './pages/RefundPolicy'
 import CompanySetupPage from './pages/CompanySetupPage'
 import DashboardLayout from './components/layout/DashboardLayout'
 import Dashboard from './pages/Dashboard'
@@ -54,6 +57,9 @@ function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/auth" element={<AuthPage />} />
         <Route path="/verify-otp" element={<OTPVerification />} />
+        <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+        <Route path="/terms-and-conditions" element={<TermsAndConditions />} />
+        <Route path="/refund-policy" element={<RefundPolicy />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     )

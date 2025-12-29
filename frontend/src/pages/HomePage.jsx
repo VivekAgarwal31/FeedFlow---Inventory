@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
+import { Helmet } from 'react-helmet'
 import {
     Package,
     TrendingUp,
@@ -41,32 +42,78 @@ const HomePage = () => {
         }
     }
 
+    // Structured data for SEO
+    const structuredData = {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Stockwise",
+        "applicationCategory": "BusinessApplication",
+        "description": "Smart inventory and accounting management system for modern businesses. Track stock, manage sales & purchases, and handle accounting in one platform.",
+        "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "INR"
+        },
+        "aggregateRating": {
+            "@type": "AggregateRating",
+            "ratingValue": "4.8",
+            "ratingCount": "100"
+        }
+    }
+
     return (
         <div className="min-h-screen bg-background">
+            {/* SEO Meta Tags */}
+            <Helmet>
+                <title>Stockwise - Smart Inventory & Accounting Management System</title>
+                <meta name="description" content="Streamline your business with Stockwise - comprehensive inventory management, sales tracking, purchase orders, delivery management, and integrated accounting in one powerful platform. Start free today!" />
+                <meta name="keywords" content="inventory management software, stock management system, accounting software, warehouse management, sales tracking, purchase orders, business management, inventory tracking, stockwise, inventory software India" />
+
+                {/* Open Graph / Facebook */}
+                <meta property="og:type" content="website" />
+                <meta property="og:url" content="https://bhagro.site/" />
+                <meta property="og:title" content="Stockwise - Smart Inventory & Accounting Management" />
+                <meta property="og:description" content="Streamline your business with comprehensive inventory management, sales tracking, and accounting in one platform. Start free today!" />
+                <meta property="og:site_name" content="Stockwise" />
+
+                {/* Twitter */}
+                <meta name="twitter:card" content="summary_large_image" />
+                <meta name="twitter:title" content="Stockwise - Smart Inventory & Accounting Management" />
+                <meta name="twitter:description" content="Streamline your business with comprehensive inventory management, sales tracking, and accounting in one platform." />
+
+                {/* Canonical URL */}
+                <link rel="canonical" href="https://bhagro.site/" />
+
+                {/* Structured Data */}
+                <script type="application/ld+json">
+                    {JSON.stringify(structuredData)}
+                </script>
+            </Helmet>
             {/* Navbar */}
             <nav className="sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border">
                 <div className="container mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex justify-between items-center h-16">
                         {/* Logo */}
-                        <div className="flex items-center space-x-2">
-                            <div className="h-10 w-10 bg-primary rounded-full flex items-center justify-center">
-                                <Package className="h-5 w-5 text-primary-foreground" />
-                            </div>
-                            <span className="text-xl font-bold">Stockwise</span>
+                        <div className="flex items-center">
+                            <img
+                                src="/stockwise black.png"
+                                alt="Stockwise Logo"
+                                className="h-12 w-auto"
+                            />
                         </div>
 
                         {/* Desktop Navigation */}
                         <div className="hidden md:flex items-center space-x-8">
-                            <button onClick={() => scrollToSection('features')} className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                            <button onClick={() => scrollToSection('features')} className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" aria-label="Navigate to Features section">
                                 Features
                             </button>
-                            <button onClick={() => scrollToSection('pricing')} className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                            <button onClick={() => scrollToSection('pricing')} className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" aria-label="Navigate to Pricing section">
                                 Pricing
                             </button>
-                            <button onClick={() => scrollToSection('how-it-works')} className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                            <button onClick={() => scrollToSection('how-it-works')} className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" aria-label="Navigate to How It Works section">
                                 How It Works
                             </button>
-                            <button onClick={() => scrollToSection('footer')} className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                            <button onClick={() => scrollToSection('footer')} className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" aria-label="Navigate to Contact section">
                                 Contact
                             </button>
                         </div>
@@ -83,8 +130,10 @@ const HomePage = () => {
 
                         {/* Mobile Menu Button */}
                         <button
-                            className="md:hidden p-2"
+                            className="md:hidden p-2 min-h-[44px] min-w-[44px] flex items-center justify-center"
                             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                            aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+                            aria-expanded={mobileMenuOpen}
                         >
                             {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
                         </button>
@@ -126,17 +175,17 @@ const HomePage = () => {
                         <div className="space-y-8">
                             <div className="space-y-4">
                                 <Badge className="mb-2">Smart Business Management</Badge>
-                                <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight">
+                                <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight leading-tight">
                                     Stockwise – Smart Inventory & Accounting Management
                                 </h1>
-                                <p className="text-lg sm:text-xl text-muted-foreground">
+                                <p className="text-base sm:text-lg md:text-xl text-muted-foreground leading-relaxed">
                                     Streamline your business operations with comprehensive inventory tracking, sales & purchase management, and integrated accounting – all in one powerful platform.
                                 </p>
                             </div>
 
                             <div className="flex flex-col sm:flex-row gap-4">
-                                <Link to="/auth">
-                                    <Button size="lg" className="w-full sm:w-auto">
+                                <Link to="/auth" className="w-full sm:w-auto">
+                                    <Button size="lg" className="w-full min-h-[48px]">
                                         Get Started Free
                                         <ArrowRight className="ml-2 h-4 w-4" />
                                     </Button>
@@ -144,7 +193,7 @@ const HomePage = () => {
                                 <Button
                                     size="lg"
                                     variant="outline"
-                                    className="w-full sm:w-auto"
+                                    className="w-full sm:w-auto min-h-[48px]"
                                     onClick={() => scrollToSection('features')}
                                 >
                                     View Features
@@ -608,11 +657,12 @@ const HomePage = () => {
                     <div className="grid md:grid-cols-4 gap-8">
                         {/* Brand */}
                         <div className="space-y-4">
-                            <div className="flex items-center space-x-2">
-                                <div className="h-8 w-8 bg-primary rounded-full flex items-center justify-center">
-                                    <Package className="h-4 w-4 text-primary-foreground" />
-                                </div>
-                                <span className="text-lg font-bold">Stockwise</span>
+                            <div className="flex items-center">
+                                <img
+                                    src="/stockwise black.png"
+                                    alt="Stockwise Logo"
+                                    className="h-10 w-auto"
+                                />
                             </div>
                             <p className="text-sm text-muted-foreground">
                                 Smart inventory and accounting management for modern businesses.
@@ -662,13 +712,13 @@ const HomePage = () => {
                             <h3 className="font-semibold mb-4">Legal</h3>
                             <ul className="space-y-2 text-sm text-muted-foreground">
                                 <li>
-                                    <a href="#" className="hover:text-foreground transition-colors">Privacy Policy</a>
+                                    <Link to="/privacy-policy" className="hover:text-foreground transition-colors">Privacy Policy</Link>
                                 </li>
                                 <li>
-                                    <a href="#" className="hover:text-foreground transition-colors">Terms of Service</a>
+                                    <Link to="/terms-and-conditions" className="hover:text-foreground transition-colors">Terms of Service</Link>
                                 </li>
                                 <li>
-                                    <a href="#" className="hover:text-foreground transition-colors">Cookie Policy</a>
+                                    <Link to="/refund-policy" className="hover:text-foreground transition-colors">Refund Policy</Link>
                                 </li>
                             </ul>
                         </div>
