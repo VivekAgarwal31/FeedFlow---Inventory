@@ -1,0 +1,41 @@
+# robots.txt for Stockwise - Smart Inventory Management System
+# https://bhagro.site
+
+User-agent: *
+
+# Allow crawling of public pages
+Allow: /
+
+# Disallow authenticated/private pages
+Disallow: /dashboard
+Disallow: /warehouses
+Disallow: /stock
+Disallow: /stock-adjust
+Disallow: /stock-move
+Disallow: /stock-transactions
+Disallow: /sales-orders
+Disallow: /delivery-out
+Disallow: /delivery-in
+Disallow: /clients
+Disallow: /suppliers
+Disallow: /purchase-orders
+Disallow: /accounts-receivable
+Disallow: /accounts-payable
+Disallow: /cashbook
+Disallow: /entries-register
+Disallow: /wages-calculator
+Disallow: /ledger-accounts
+Disallow: /settings
+
+# Disallow API endpoints
+Disallow: /api/
+
+# Allow static assets
+Allow: /assets/
+Allow: /stockwise*.png
+Allow: /favicon*.png
+Allow: /*.css
+Allow: /*.js
+
+# Sitemap location
+Sitemap: https://bhagro.site/sitemap.xml
