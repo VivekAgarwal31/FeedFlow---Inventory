@@ -50,9 +50,9 @@ backend/scripts/updateSuperAdminRole.js
 backend/scripts/markCompaniesActive.js
 backend/scripts/migrateStaffNames.js
 backend/scripts/migrate-to-order-delivery.js
-backend\cleanup-superadmin-subscription.js
-backend\migrate-user-subscriptions.js
-backend\check-subscriptions.js
+backend/cleanup-superadmin-subscription.js
+backend/migrate-user-subscriptions.js
+backend/check-subscriptions.js
 
 # Migration scripts (one-time use)
 backend/migrate-email-verified.js

@@ -9,6 +9,7 @@
   <!-- Performance Optimizations -->
   <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
   <link rel="dns-prefetch" href="https://bhagro.site">
+  <link rel="dns-prefetch" href="https://www.googletagmanager.com">
   <link rel="preload" as="image" href="/stockwise black.webp" fetchpriority="high">
 
   <!-- SEO Meta Tags -->
@@ -27,22 +28,32 @@
 
   <!-- Robots -->
   <meta name="robots" content="index, follow" />
-
-  <!-- Google Analytics 4 - Async loaded to avoid blocking render -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-ESD5TQR17N"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag() { dataLayer.push(arguments); }
-    gtag('js', new Date());
-    gtag('config', 'G-ESD5TQR17N', {
-      send_page_view: false // Disable auto page view for SPA
-    });
-  </script>
 </head>
 
 <body>
   <div id="root"></div>
   <script type="module" src="/src/main.jsx"></script>
+
+  <!-- Google Analytics 4 - Deferred to avoid blocking render -->
+  <script>
+    // Load GA4 after page is interactive to avoid blocking critical render path
+    window.addEventListener('load', function () {
+      // Create and inject GA4 script
+      var script = document.createElement('script');
+      script.async = true;
+      script.src = 'https://www.googletagmanager.com/gtag/js?id=G-ESD5TQR17N';
+      document.head.appendChild(script);
+
+      // Initialize dataLayer
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { dataLayer.push(arguments); }
+      window.gtag = gtag;
+      gtag('js', new Date());
+      gtag('config', 'G-ESD5TQR17N', {
+        send_page_view: false // Disable auto page view for SPA
+      });
+    });
+  </script>
 </body>
 
 </html>

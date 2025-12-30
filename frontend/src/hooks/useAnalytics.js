@@ -5,6 +5,7 @@ import { useLocation } from 'react-router-dom';
  * Custom hook for Google Analytics 4 tracking
  * Handles SPA-safe page view tracking and event tracking
  * Only tracks on public pages (not dashboard)
+ * Safely handles deferred GA4 loading
  */
 export const useAnalytics = () => {
     const location = useLocation();
@@ -15,13 +16,25 @@ export const useAnalytics = () => {
             location.pathname.startsWith('/admin') ||
             location.pathname.startsWith('/company-setup');
 
-        if (!isDashboard && typeof window.gtag !== 'undefined') {
-            // Track page view for SPA navigation
-            window.gtag('event', 'page_view', {
-                page_path: location.pathname + location.search,
-                page_location: window.location.href,
-                page_title: document.title
-            });
+        if (!isDashboard) {
+            // Wait for gtag to be available (deferred loading)
+            const trackPageView = () => {
+                if (typeof window.gtag !== 'undefined') {
+                    window.gtag('event', 'page_view', {
+                        page_path: location.pathname + location.search,
+                        page_location: window.location.href,
+                        page_title: document.title
+                    });
+                }
+            };
+
+            // Try immediately or wait for load event
+            if (typeof window.gtag !== 'undefined') {
+                trackPageView();
+            } else {
+                window.addEventListener('load', trackPageView);
+                return () => window.removeEventListener('load', trackPageView);
+            }
         }
     }, [location]);
 };
@@ -32,8 +45,16 @@ export const useAnalytics = () => {
  * @param {object} eventParams - Additional parameters
  */
 export const trackEvent = (eventName, eventParams = {}) => {
+    // Queue event if gtag not ready yet
     if (typeof window.gtag !== 'undefined') {
         window.gtag('event', eventName, eventParams);
+    } else {
+        // Queue for when GA4 loads
+        window.addEventListener('load', () => {
+            if (typeof window.gtag !== 'undefined') {
+                window.gtag('event', eventName, eventParams);
+            }
+        }, { once: true });
     }
 };
 
