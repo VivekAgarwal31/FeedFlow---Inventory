@@ -274,6 +274,7 @@ export const getSubscriptionStatus = async (userId) => {
         // Add trial info if applicable - check the trial object properly
         if (subscription.trial && subscription.trial.isTrial === true) {
             const now = new Date();
+            now.setHours(0, 0, 0, 0); // Start of today for accurate day counting
             const endsAt = new Date(subscription.trial.endsAt);
             const daysRemaining = Math.ceil((endsAt - now) / (1000 * 60 * 60 * 24));
 

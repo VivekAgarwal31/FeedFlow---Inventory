@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import { Plus, Search, Users, Eye, Edit, Trash2, Ban, CheckCircle, Loader2, Key, Crown } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
@@ -15,6 +16,7 @@ import { formatDate } from '../../lib/utils'
 import PlanBadge from '../../components/PlanBadge'
 
 const UserManagement = () => {
+    const location = useLocation()
     const [users, setUsers] = useState([])
     const [companies, setCompanies] = useState([])
     const [loading, setLoading] = useState(true)
@@ -42,17 +44,20 @@ const UserManagement = () => {
 
     const [newPassword, setNewPassword] = useState('')
 
+    // Fetch users on mount and when location changes (navigation)
     useEffect(() => {
         fetchUsers()
+    }, [location.pathname])
+
+    // Refetch when filters change
+    useEffect(() => {
+        fetchUsers()
+    }, [searchTerm, roleFilter, statusFilter])
+
+    // Fetch companies only once on mount
+    useEffect(() => {
         fetchCompanies()
     }, [])
-
-    // Separate effect for filters
-    useEffect(() => {
-        if (searchTerm || roleFilter !== 'all' || statusFilter !== 'all') {
-            fetchUsers()
-        }
-    }, [searchTerm, roleFilter, statusFilter])
 
     const fetchUsers = async () => {
         try {
@@ -487,6 +492,7 @@ const UserManagement = () => {
                                                 <PlanBadge
                                                     planType={user.subscription.planId?.type}
                                                     planName={user.subscription.planId?.name}
+                                                    trialEndsAt={user.subscription.trial?.endsAt}
                                                 />
                                             ) : (
                                                 <span className="text-xs text-muted-foreground">No plan</span>
@@ -628,6 +634,7 @@ const UserManagement = () => {
                                     <PlanBadge
                                         planType={userSubscription.planId?.type}
                                         planName={userSubscription.planId?.name}
+                                        trialEndsAt={userSubscription.trial?.endsAt}
                                     />
                                     {userSubscription.trial?.isTrial && userSubscription.trial?.endsAt && (
                                         <span className="text-sm text-muted-foreground">

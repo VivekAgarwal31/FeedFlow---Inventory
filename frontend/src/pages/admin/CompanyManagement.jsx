@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import { Plus, Search, Building2, Eye, Edit, Trash2, Ban, CheckCircle, Loader2 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
@@ -14,6 +15,7 @@ import { useToast } from '../../hooks/use-toast'
 import { formatDate } from '../../lib/utils'
 
 const CompanyManagement = () => {
+    const location = useLocation()
     const [companies, setCompanies] = useState([])
     const [loading, setLoading] = useState(true)
     const [searchTerm, setSearchTerm] = useState('')
@@ -38,15 +40,14 @@ const CompanyManagement = () => {
         ownerPassword: ''
     })
 
+    // Fetch on mount and when location changes (navigation)
     useEffect(() => {
         fetchCompanies()
-    }, [])
+    }, [location.pathname])
 
-    // Separate effect for filters
+    // Refetch when filters change
     useEffect(() => {
-        if (searchTerm || statusFilter !== 'all') {
-            fetchCompanies()
-        }
+        fetchCompanies()
     }, [searchTerm, statusFilter])
 
     const fetchCompanies = async () => {

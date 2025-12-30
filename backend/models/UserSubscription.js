@@ -82,6 +82,8 @@ userSubscriptionSchema.statics.createTrialSubscription = async function (userId,
     const now = new Date();
     const trialEnd = new Date(now);
     trialEnd.setDate(trialEnd.getDate() + 14); // 14 days from now
+    // Set to end of day (23:59:59.999) for consistent day counting
+    trialEnd.setHours(23, 59, 59, 999);
 
     return await this.create({
         userId,

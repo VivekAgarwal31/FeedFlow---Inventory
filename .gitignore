@@ -58,6 +58,7 @@ backend/check-subscriptions.js
 backend/migrate-email-verified.js
 backend/migrate-permissions.js
 backend/migrate-payment-tracking.js
+backend/fix-trial-dates.js
 
 # Test scripts (development only)
 backend/test-email.js

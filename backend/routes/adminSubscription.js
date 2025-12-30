@@ -81,6 +81,7 @@ router.get('/subscriptions', authenticate, requireSuperAdmin, async (req, res) =
                 // Calculate days remaining for trial
                 if (subscription.trial?.isTrial && subscription.trial?.endsAt) {
                     const now = new Date();
+                    now.setHours(0, 0, 0, 0); // Start of today for accurate day counting
                     const daysRemaining = Math.ceil((subscription.trial.endsAt - now) / (1000 * 60 * 60 * 24));
                     planInfo.daysRemaining = Math.max(0, daysRemaining);
                 }
@@ -197,6 +198,8 @@ router.put('/subscriptions/:userId/plan', authenticate, requireSuperAdmin, [
         if (planType === 'trial') {
             const trialEnd = new Date(now);
             trialEnd.setDate(trialEnd.getDate() + 14);
+            // Set to end of day (23:59:59.999) for consistent day counting
+            trialEnd.setHours(23, 59, 59, 999);
 
             trialInfo = {
                 isTrial: true,
