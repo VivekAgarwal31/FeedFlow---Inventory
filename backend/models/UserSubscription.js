@@ -81,7 +81,9 @@ userSubscriptionSchema.methods.isTrialExpired = function () {
 userSubscriptionSchema.statics.createTrialSubscription = async function (userId, trialPlanId) {
     const now = new Date();
     const trialEnd = new Date(now);
-    trialEnd.setDate(trialEnd.getDate() + 14); // 14 days from now
+    // Add 13 days (not 14) because day calculation counts from start of today
+    // Today = Day 1, so 13 more days = Day 14 total
+    trialEnd.setDate(trialEnd.getDate() + 13);
     // Set to end of day (23:59:59.999) for consistent day counting
     trialEnd.setHours(23, 59, 59, 999);
 

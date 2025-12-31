@@ -16,7 +16,10 @@ router.use(authenticate);
 // Record a new payment
 router.post('/record', async (req, res) => {
     try {
-        const { transactionType, transactionId, amount, paymentMethod, paymentDate, referenceNumber, notes } = req.body;
+        // AUDIT FIX - TASK 4: Backward compatibility for paymentMode
+        // Accept both paymentMethod (canonical) and paymentMode (legacy) for backward compatibility
+        const { transactionType, transactionId, amount, paymentMethod, paymentMode, paymentDate, referenceNumber, notes } = req.body;
+        const normalizedPaymentMethod = paymentMethod || paymentMode || 'cash';
 
         // Validate input
         if (!transactionType || !transactionId || !amount) {
@@ -61,7 +64,7 @@ router.post('/record', async (req, res) => {
             partyModel: partyType === 'client' ? 'Client' : 'Supplier',
             partyName,
             amount,
-            paymentMethod: paymentMethod || 'cash',
+            paymentMethod: normalizedPaymentMethod,
             paymentDate: paymentDate || new Date(),
             referenceNumber,
             notes,
@@ -96,14 +99,8 @@ router.post('/record', async (req, res) => {
             }
         }
 
-        // Create journal entry for accounting
-        console.log('Creating payment journal entry:', {
-            transactionType,
-            amount,
-            partyName,
-            paymentMethod,
-            accountName: (paymentMethod === 'cash') ? 'Cash' : 'Bank'
-        });
+        // AUDIT FIX - TASK 6: Improved journal entry error handling
+        // Create journal entry for accounting and track its status
         try {
             // Check if accounts are initialized, if not, initialize them
             const accountCount = await LedgerAccount.countDocuments({ companyId: userCompanyId });
@@ -111,7 +108,7 @@ router.post('/record', async (req, res) => {
                 await initializeDefaultAccounts(userCompanyId);
             }
 
-            const accountName = (paymentMethod === 'cash') ? 'Cash' : 'Bank';
+            const accountName = (normalizedPaymentMethod === 'cash') ? 'Cash' : 'Bank';
 
             if (transactionType === 'sale') {
                 // Customer payment: Debit Cash/Bank, Credit Accounts Receivable
@@ -144,17 +141,29 @@ router.post('/record', async (req, res) => {
                     createdBy: req.user._id
                 });
             }
+
+            // Mark journal entry as successful
+            payment.journalEntryStatus = 'success';
+            await payment.save();
+
         } catch (journalError) {
-            console.error('Journal entry creation error for payment:', {
-                error: journalError.message,
+            // AUDIT FIX - TASK 6: Track journal entry failure in payment record
+            console.error('❌ JOURNAL ENTRY FAILED for payment:', {
                 paymentId: payment._id,
                 transactionType,
                 amount,
                 partyName,
+                error: journalError.message,
                 stack: journalError.stack
             });
-            // Don't fail the payment if journal entry fails
-            // But log it prominently so it can be investigated
+
+            // Update payment record to track failure
+            payment.journalEntryStatus = 'failed';
+            payment.journalEntryError = journalError.message;
+            await payment.save();
+
+            // Don't fail the payment transaction, but ensure visibility
+            console.warn('⚠️  Payment recorded successfully but journal entry failed - manual reconciliation may be needed');
         }
 
         res.status(201).json({
@@ -240,7 +249,9 @@ router.get('/party/:id', async (req, res) => {
 // Record client-level payment (auto-allocates across bills)
 router.post('/record-client-payment', async (req, res) => {
     try {
-        const { clientId, amount, paymentMode, paymentDate, referenceNumber, notes } = req.body;
+        // AUDIT FIX - TASK 4: Backward compatibility for paymentMode
+        const { clientId, amount, paymentMode, paymentMethod, paymentDate, referenceNumber, notes } = req.body;
+        const normalizedPaymentMethod = paymentMethod || paymentMode || 'cash';
         const userCompanyId = req.user.companyId?._id || req.user.companyId;
 
         // Validate input
@@ -326,7 +337,7 @@ router.post('/record-client-payment', async (req, res) => {
             partyModel: 'Client',
             partyName: client.name,
             amount: parseFloat(amount),
-            paymentMode: paymentMode || 'cash',
+            paymentMethod: normalizedPaymentMethod,
             paymentDate: paymentDate || new Date(),
             referenceNumber,
             notes,
@@ -344,7 +355,7 @@ router.post('/record-client-payment', async (req, res) => {
                 await initializeDefaultAccounts(userCompanyId);
             }
 
-            const accountName = (paymentMode === 'cash') ? 'Cash' : 'Bank';
+            const accountName = (normalizedPaymentMethod === 'cash') ? 'Cash' : 'Bank';
 
             // Customer payment: Debit Cash/Bank, Credit Accounts Receivable
             await createJournalEntry({
@@ -410,7 +421,9 @@ router.post('/record-client-payment', async (req, res) => {
 // Record supplier-level payment (auto-allocates across bills)
 router.post('/record-supplier-payment', async (req, res) => {
     try {
-        const { supplierId, amount, paymentMode, paymentDate, referenceNumber, notes } = req.body;
+        // AUDIT FIX - TASK 4: Backward compatibility for paymentMode
+        const { supplierId, amount, paymentMode, paymentMethod, paymentDate, referenceNumber, notes } = req.body;
+        const normalizedPaymentMethod = paymentMethod || paymentMode || 'cash';
         const userCompanyId = req.user.companyId?._id || req.user.companyId;
 
         // Validate input
@@ -491,7 +504,7 @@ router.post('/record-supplier-payment', async (req, res) => {
             partyModel: 'Supplier',
             partyName: supplier.name,
             amount: parseFloat(amount),
-            paymentMode: paymentMode || 'cash',
+            paymentMethod: normalizedPaymentMethod,
             paymentDate: paymentDate || new Date(),
             referenceNumber,
             notes,
@@ -509,7 +522,7 @@ router.post('/record-supplier-payment', async (req, res) => {
                 await initializeDefaultAccounts(userCompanyId);
             }
 
-            const accountName = (paymentMode === 'cash') ? 'Cash' : 'Bank';
+            const accountName = (normalizedPaymentMethod === 'cash') ? 'Cash' : 'Bank';
 
             // Supplier payment: Debit Accounts Payable, Credit Cash/Bank
             await createJournalEntry({

@@ -86,7 +86,17 @@ const paymentSchema = new mongoose.Schema({
             type: String,
             enum: ['cleared', 'partial']
         }
-    }]
+    }],
+    // AUDIT FIX - TASK 6: Track journal entry creation status
+    journalEntryStatus: {
+        type: String,
+        enum: ['success', 'failed', 'pending'],
+        default: 'pending'
+    },
+    journalEntryError: {
+        type: String,
+        trim: true
+    }
 }, {
     timestamps: true
 });

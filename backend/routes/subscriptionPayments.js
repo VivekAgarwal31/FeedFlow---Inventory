@@ -99,13 +99,27 @@ router.post('/verify', authenticate, async (req, res) => {
     try {
         const { orderId, paymentId, signature } = req.body;
 
-        // Verify signature
+        // SECURITY HARDENING: Verify signature using timing-safe comparison
+        // This prevents timing attacks on signature validation
         const generatedSignature = crypto
             .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
             .update(`${orderId}|${paymentId}`)
             .digest('hex');
 
-        if (generatedSignature !== signature) {
+        // Use timingSafeEqual to prevent timing attacks
+        const isValid = crypto.timingSafeEqual(
+            Buffer.from(generatedSignature, 'utf8'),
+            Buffer.from(signature, 'utf8')
+        );
+
+        if (!isValid) {
+            // SECURITY: Log failed verification attempts for audit
+            console.warn('⚠️  SECURITY: Razorpay signature verification failed', {
+                orderId,
+                timestamp: new Date().toISOString(),
+                userId: req.user._id
+            });
+
             // Update payment status to failed
             await SubscriptionPayment.findOneAndUpdate(
                 { orderId },
@@ -118,6 +132,16 @@ router.post('/verify', authenticate, async (req, res) => {
         const payment = await SubscriptionPayment.findOne({ orderId });
         if (!payment) {
             return res.status(404).json({ message: 'Payment record not found' });
+        }
+
+        // AUDIT FIX - TASK 7: Idempotency check
+        // Prevent duplicate payment verification and subscription updates
+        if (payment.status === 'success') {
+            return res.status(200).json({
+                success: true,
+                message: 'Payment already verified',
+                subscription: await UserSubscription.findOne({ userId: req.user._id }).populate('planId')
+            });
         }
 
         // Update payment record

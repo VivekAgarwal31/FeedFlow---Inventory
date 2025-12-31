@@ -1,4 +1,6 @@
 import mongoose from 'mongoose';
+// AUDIT FIX - TASK 3: Import shared payment calculation utilities
+import { calculatePaymentStatus, calculateAmountDue } from '../utils/paymentCalculations.js';
 
 const salesOrderItemSchema = new mongoose.Schema({
     itemId: {
@@ -171,18 +173,14 @@ salesOrderSchema.methods.updateOrderStatus = function () {
     }
 };
 
+// AUDIT FIX - TASK 3: Use shared payment calculation utilities
 // Calculate amount due before saving
 salesOrderSchema.pre('save', function (next) {
-    this.amountDue = this.totalAmount - this.amountPaid;
+    // Use shared utility for consistent calculation across all models
+    this.amountDue = calculateAmountDue(this.totalAmount, this.amountPaid);
 
-    // Auto-update payment status
-    if (this.amountPaid === 0) {
-        this.paymentStatus = 'pending';
-    } else if (this.amountPaid >= this.totalAmount) {
-        this.paymentStatus = 'paid';
-    } else {
-        this.paymentStatus = 'partial';
-    }
+    // Use shared utility for consistent payment status logic
+    this.paymentStatus = calculatePaymentStatus(this.amountPaid, this.totalAmount);
 
     // Check if overdue
     if (this.dueDate && this.amountDue > 0) {

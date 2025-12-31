@@ -105,6 +105,18 @@ const Reports = () => {
 
     const generateReport = async () => {
         try {
+            // Validate date range for sales and purchase reports
+            if (reportType !== 'inventory') {
+                if (!startDate || !endDate) {
+                    toast({
+                        title: 'Date Range Required',
+                        description: 'Please select both start and end dates for this report.',
+                        variant: 'destructive'
+                    });
+                    return;
+                }
+            }
+
             setLoading(true);
 
             // Build request body based on report type
@@ -232,7 +244,7 @@ const Reports = () => {
                     {reportType !== 'inventory' && (
                         <div className="space-y-4">
                             <div>
-                                <Label className="text-sm font-medium mb-2 block">Date Range Presets</Label>
+                                <Label className="text-sm font-medium mb-2 block">Date Range (Required)</Label>
                                 <div className="flex flex-wrap gap-2">
                                     <Button
                                         variant="outline"
@@ -281,7 +293,7 @@ const Reports = () => {
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <Label htmlFor="startDate">Start Date</Label>
+                                    <Label htmlFor="startDate">Start Date *</Label>
                                     <Input
                                         id="startDate"
                                         type="date"
@@ -291,7 +303,7 @@ const Reports = () => {
                                     />
                                 </div>
                                 <div>
-                                    <Label htmlFor="endDate">End Date</Label>
+                                    <Label htmlFor="endDate">End Date *</Label>
                                     <Input
                                         id="endDate"
                                         type="date"

@@ -61,6 +61,25 @@ import './models/SubscriptionPayment.js';
 // Load environment variables (works both locally and on Render)
 dotenv.config();
 
+// AUDIT FIX - TASK 1: Environment Variable Validation
+// Validate required environment variables on startup to prevent runtime failures
+const requiredEnvVars = ['MONGO_URI', 'JWT_SECRET'];
+const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+if (missingVars.length > 0) {
+  console.error('❌ FATAL: Missing required environment variables:', missingVars.join(', '));
+  console.error('Please ensure these variables are set in your .env file');
+  process.exit(1);
+}
+
+// Warn about optional but recommended variables
+const recommendedVars = ['RAZORPAY_KEY_ID', 'RAZORPAY_KEY_SECRET', 'RESEND_API_KEY'];
+const missingRecommended = recommendedVars.filter(varName => !process.env[varName]);
+if (missingRecommended.length > 0) {
+  console.warn('⚠️  WARNING: Missing recommended environment variables:', missingRecommended.join(', '));
+  console.warn('Some features may not work correctly without these variables');
+}
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 

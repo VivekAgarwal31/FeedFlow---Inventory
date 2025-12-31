@@ -20,7 +20,7 @@ router.post('/sales/pdf', authenticate, checkReportsAccess, async (req, res) => 
             return res.status(400).json({ message: 'No company associated with user' });
         }
 
-        const { startDate, endDate, clientName, paymentStatus } = req.body;
+        const { startDate, endDate, clientId, clientName, paymentStatus } = req.body;
 
         // Build query
         const query = { companyId };
@@ -35,7 +35,10 @@ router.post('/sales/pdf', authenticate, checkReportsAccess, async (req, res) => 
             }
         }
 
-        if (clientName) {
+        // Filter by client - prefer ID over name for data integrity
+        if (clientId) {
+            query.clientId = clientId;
+        } else if (clientName) {
             query.clientName = clientName;
         }
 
@@ -77,7 +80,7 @@ router.post('/sales/excel', authenticate, checkReportsAccess, async (req, res) =
             return res.status(400).json({ message: 'No company associated with user' });
         }
 
-        const { startDate, endDate, clientName, paymentStatus } = req.body;
+        const { startDate, endDate, clientId, clientName, paymentStatus } = req.body;
 
         // Build query
         const query = { companyId };
@@ -92,7 +95,10 @@ router.post('/sales/excel', authenticate, checkReportsAccess, async (req, res) =
             }
         }
 
-        if (clientName) {
+        // Filter by client - prefer ID over name for data integrity
+        if (clientId) {
+            query.clientId = clientId;
+        } else if (clientName) {
             query.clientName = clientName;
         }
 
@@ -134,7 +140,7 @@ router.post('/purchases/pdf', authenticate, checkReportsAccess, async (req, res)
             return res.status(400).json({ message: 'No company associated with user' });
         }
 
-        const { startDate, endDate, supplierName, paymentStatus } = req.body;
+        const { startDate, endDate, supplierId, supplierName, paymentStatus } = req.body;
 
         // Build query
         const query = { companyId };
@@ -149,7 +155,10 @@ router.post('/purchases/pdf', authenticate, checkReportsAccess, async (req, res)
             }
         }
 
-        if (supplierName) {
+        // Filter by supplier - prefer ID over name for data integrity
+        if (supplierId) {
+            query.supplierId = supplierId;
+        } else if (supplierName) {
             query.supplierName = supplierName;
         }
 
@@ -191,7 +200,7 @@ router.post('/purchases/excel', authenticate, checkReportsAccess, async (req, re
             return res.status(400).json({ message: 'No company associated with user' });
         }
 
-        const { startDate, endDate, supplierName, paymentStatus } = req.body;
+        const { startDate, endDate, supplierId, supplierName, paymentStatus } = req.body;
 
         // Build query
         const query = { companyId };
@@ -206,7 +215,10 @@ router.post('/purchases/excel', authenticate, checkReportsAccess, async (req, re
             }
         }
 
-        if (supplierName) {
+        // Filter by supplier - prefer ID over name for data integrity
+        if (supplierId) {
+            query.supplierId = supplierId;
+        } else if (supplierName) {
             query.supplierName = supplierName;
         }
 
