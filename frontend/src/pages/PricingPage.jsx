@@ -25,6 +25,12 @@ const PricingPage = () => {
                             <img src="/stockwise black.webp" alt="Stockwise Logo" width="150" height="40" className="h-10 w-auto" />
                         </Link>
                         <div className="flex items-center space-x-4">
+                            <Link to="/features" className="hidden sm:inline-block text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                                Features
+                            </Link>
+                            <Link to="/blog" className="hidden sm:inline-block text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                                Blog
+                            </Link>
                             <Link to="/auth">
                                 <Button size="sm">Get Started Free</Button>
                             </Link>

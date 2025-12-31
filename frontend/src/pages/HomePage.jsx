@@ -116,6 +116,9 @@ const HomePage = () => {
                             <button onClick={() => scrollToSection('how-it-works')} className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" aria-label="Navigate to How It Works section">
                                 How It Works
                             </button>
+                            <Link to="/blog" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                                Blog
+                            </Link>
                             <button onClick={() => scrollToSection('footer')} className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" aria-label="Navigate to Contact section">
                                 Contact
                             </button>
@@ -154,6 +157,9 @@ const HomePage = () => {
                             <button onClick={() => scrollToSection('how-it-works')} className="block w-full text-left px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors">
                                 How It Works
                             </button>
+                            <Link to="/blog" className="block w-full text-left px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors" onClick={() => setMobileMenuOpen(false)}>
+                                Blog
+                            </Link>
                             <button onClick={() => scrollToSection('footer')} className="block w-full text-left px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors">
                                 Contact
                             </button>
@@ -701,6 +707,9 @@ const HomePage = () => {
                             <ul className="space-y-2 text-sm text-muted-foreground">
                                 <li>
                                     <Link to="/about" className="hover:text-foreground transition-colors">About Us</Link>
+                                </li>
+                                <li>
+                                    <Link to="/blog" className="hover:text-foreground transition-colors">Blog</Link>
                                 </li>
                                 <li>
                                     <Link to="/contact" className="hover:text-foreground transition-colors">Contact</Link>
