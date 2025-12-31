@@ -14,7 +14,7 @@ const PricingPage = () => {
                 <title>Pricing - Simple and Transparent Plans | Stockwise</title>
                 <meta name="description" content="Transparent pricing for Stockwise inventory and accounting software. Start free, upgrade as you grow. No hidden costs, cancel anytime." />
                 <meta name="keywords" content="inventory software pricing, accounting software cost, business management pricing, SaaS pricing plans" />
-                <link rel="canonical" href="https://bhagro.site/pricing" />
+                <link rel="canonical" href="https://stock-wise.in/pricing" />
             </Helmet>
 
             {/* Header */}

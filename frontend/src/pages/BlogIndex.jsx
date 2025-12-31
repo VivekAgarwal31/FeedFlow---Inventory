@@ -24,13 +24,13 @@ const BlogIndex = () => {
         "@type": "Blog",
         "name": "Stockwise Blog",
         "description": "Inventory management tips, accounting best practices, and business insights for small businesses",
-        "url": "https://bhagro.site/blog",
+        "url": "https://stock-wise.in/blog",
         "publisher": {
             "@type": "Organization",
             "name": "Stockwise",
             "logo": {
                 "@type": "ImageObject",
-                "url": "https://bhagro.site/stockwise%20black.webp"
+                "url": "https://stock-wise.in/stockwise%20black.webp"
             }
         }
     }
@@ -41,11 +41,11 @@ const BlogIndex = () => {
                 <title>Blog - Inventory Management Tips & Business Insights | Stockwise</title>
                 <meta name="description" content="Expert tips on inventory management, accounting best practices, and business growth strategies for small businesses. Learn how to optimize your operations with Stockwise." />
                 <meta name="keywords" content="inventory management blog, small business tips, accounting advice, inventory best practices, business management" />
-                <link rel="canonical" href="https://bhagro.site/blog" />
+                <link rel="canonical" href="https://stock-wise.in/blog" />
 
                 {/* Open Graph */}
                 <meta property="og:type" content="website" />
-                <meta property="og:url" content="https://bhagro.site/blog" />
+                <meta property="og:url" content="https://stock-wise.in/blog" />
                 <meta property="og:title" content="Blog - Inventory Management Tips & Business Insights | Stockwise" />
                 <meta property="og:description" content="Expert tips on inventory management, accounting best practices, and business growth strategies for small businesses." />
 

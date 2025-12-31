@@ -12,7 +12,7 @@ const AccountingSoftware = () => {
                 <title>Simple Accounting Software for Growing Businesses | Stockwise</title>
                 <meta name="description" content="Integrated accounting software for SMEs. Manage receivables, payables, cashbook, and financial reports. Seamlessly connected with inventory management." />
                 <meta name="keywords" content="accounting software, small business accounting, accounts receivable, accounts payable, cashbook software, financial reporting, SME accounting" />
-                <link rel="canonical" href="https://bhagro.site/features/accounting-software" />
+                <link rel="canonical" href="https://stock-wise.in/features/accounting-software" />
             </Helmet>
 
             {/* Header */}

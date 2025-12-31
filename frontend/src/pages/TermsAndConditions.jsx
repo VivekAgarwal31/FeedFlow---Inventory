@@ -10,7 +10,7 @@ const TermsAndConditions = () => {
             <Helmet>
                 <title>Terms & Conditions - Stockwise</title>
                 <meta name="description" content="Terms and Conditions for using Stockwise inventory and accounting management platform. Read about user responsibilities, service terms, and legal agreements." />
-                <link rel="canonical" href="https://bhagro.site/terms-and-conditions" />
+                <link rel="canonical" href="https://stock-wise.in/terms-and-conditions" />
             </Helmet>
 
             {/* Header */}

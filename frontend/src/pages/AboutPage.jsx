@@ -11,7 +11,7 @@ const AboutPage = () => {
             <Helmet>
                 <title>About Stockwise - Smart Inventory & Accounting Management</title>
                 <meta name="description" content="Learn about Stockwise's mission to provide simple, reliable inventory and accounting software for growing businesses. Built for SMEs who need professional tools without complexity." />
-                <link rel="canonical" href="https://bhagro.site/about" />
+                <link rel="canonical" href="https://stock-wise.in/about" />
             </Helmet>
 
             {/* Header */}

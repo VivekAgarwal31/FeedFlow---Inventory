@@ -2,7 +2,7 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <!-- Public Homepage -->
   <url>
-    <loc>https://bhagro.site/</loc>
+    <loc>https://stock-wise.in/</loc>
     <lastmod>2025-12-29</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
@@ -10,7 +10,7 @@
   
   <!-- Authentication Page -->
   <url>
-    <loc>https://bhagro.site/auth</loc>
+    <loc>https://stock-wise.in/auth</loc>
     <lastmod>2025-12-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
@@ -18,7 +18,7 @@
   
   <!-- Features Landing Page -->
   <url>
-    <loc>https://bhagro.site/features</loc>
+    <loc>https://stock-wise.in/features</loc>
     <lastmod>2025-12-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
@@ -26,14 +26,14 @@
   
   <!-- Feature Pages -->
   <url>
-    <loc>https://bhagro.site/features/inventory-management</loc>
+    <loc>https://stock-wise.in/features/inventory-management</loc>
     <lastmod>2025-12-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   
   <url>
-    <loc>https://bhagro.site/features/accounting-software</loc>
+    <loc>https://stock-wise.in/features/accounting-software</loc>
     <lastmod>2025-12-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
@@ -41,28 +41,28 @@
   
   <!-- Core Pages -->
   <url>
-    <loc>https://bhagro.site/pricing</loc>
+    <loc>https://stock-wise.in/pricing</loc>
     <lastmod>2025-12-29</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
   
   <url>
-    <loc>https://bhagro.site/about</loc>
+    <loc>https://stock-wise.in/about</loc>
     <lastmod>2025-12-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   
   <url>
-    <loc>https://bhagro.site/contact</loc>
+    <loc>https://stock-wise.in/contact</loc>
     <lastmod>2025-12-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   
   <url>
-    <loc>https://bhagro.site/support</loc>
+    <loc>https://stock-wise.in/support</loc>
     <lastmod>2025-12-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
@@ -70,21 +70,21 @@
   
   <!-- Legal Pages -->
   <url>
-    <loc>https://bhagro.site/privacy-policy</loc>
+    <loc>https://stock-wise.in/privacy-policy</loc>
     <lastmod>2025-12-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   
   <url>
-    <loc>https://bhagro.site/terms-and-conditions</loc>
+    <loc>https://stock-wise.in/terms-and-conditions</loc>
     <lastmod>2025-12-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   
   <url>
-    <loc>https://bhagro.site/refund-policy</loc>
+    <loc>https://stock-wise.in/refund-policy</loc>
     <lastmod>2025-12-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
@@ -92,14 +92,14 @@
   
   <!-- Blog Pages -->
   <url>
-    <loc>https://bhagro.site/blog</loc>
+    <loc>https://stock-wise.in/blog</loc>
     <lastmod>2025-12-31</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   
   <url>
-    <loc>https://bhagro.site/blog/how-to-manage-inventory-for-small-businesses</loc>
+    <loc>https://stock-wise.in/blog/how-to-manage-inventory-for-small-businesses</loc>
     <lastmod>2025-12-31</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>

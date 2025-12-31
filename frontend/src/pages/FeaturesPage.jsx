@@ -12,7 +12,7 @@ const FeaturesPage = () => {
                 <title>Features - Inventory & Accounting Management | Stockwise</title>
                 <meta name="description" content="Explore Stockwise features: comprehensive inventory management, integrated accounting software, sales tracking, purchase management, and financial reporting for growing businesses." />
                 <meta name="keywords" content="inventory features, accounting features, stock management, business management software, inventory tracking, financial management" />
-                <link rel="canonical" href="https://bhagro.site/features" />
+                <link rel="canonical" href="https://stock-wise.in/features" />
             </Helmet>
 
             {/* Header */}

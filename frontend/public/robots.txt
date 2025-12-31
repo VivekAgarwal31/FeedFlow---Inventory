@@ -1,5 +1,5 @@
 # robots.txt for Stockwise - Smart Inventory Management System
-# https://bhagro.site
+# https://stock-wise.in
 
 User-agent: *
 
@@ -48,4 +48,4 @@ Allow: /*.css
 Allow: /*.js
 
 # Sitemap location
-Sitemap: https://bhagro.site/sitemap.xml
+Sitemap: https://stock-wise.in/sitemap.xml

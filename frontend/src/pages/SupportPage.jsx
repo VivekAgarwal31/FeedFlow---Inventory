@@ -11,7 +11,7 @@ const SupportPage = () => {
             <Helmet>
                 <title>Support & Help - Stockwise Documentation</title>
                 <meta name="description" content="Get help with Stockwise inventory and accounting software. Find guides, tutorials, and answers to common questions about using our platform." />
-                <link rel="canonical" href="https://bhagro.site/support" />
+                <link rel="canonical" href="https://stock-wise.in/support" />
             </Helmet>
 
             {/* Header */}

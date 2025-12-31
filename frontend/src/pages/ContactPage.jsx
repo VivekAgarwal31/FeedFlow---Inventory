@@ -37,7 +37,7 @@ const ContactPage = () => {
             <Helmet>
                 <title>Contact Us - Stockwise Support</title>
                 <meta name="description" content="Get in touch with Stockwise. Contact our support team for questions, feedback, or assistance with inventory and accounting software." />
-                <link rel="canonical" href="https://bhagro.site/contact" />
+                <link rel="canonical" href="https://stock-wise.in/contact" />
             </Helmet>
 
             {/* Header */}

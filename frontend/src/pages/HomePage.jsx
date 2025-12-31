@@ -43,7 +43,7 @@ const HomePage = () => {
         }
     }
 
-    // Structured data for SEO
+    // Structured data for SEO - SoftwareApplication
     const structuredData = {
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
@@ -62,6 +62,15 @@ const HomePage = () => {
         }
     }
 
+    // WebSite structured data for brand recognition
+    const websiteStructuredData = {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "Stockwise",
+        "alternateName": "Stockwise Inventory Management",
+        "url": "https://stock-wise.in"
+    }
+
     return (
         <div className="min-h-screen bg-background">
             {/* SEO Meta Tags */}
@@ -72,7 +81,7 @@ const HomePage = () => {
 
                 {/* Open Graph / Facebook */}
                 <meta property="og:type" content="website" />
-                <meta property="og:url" content="https://bhagro.site/" />
+                <meta property="og:url" content="https://stock-wise.in/" />
                 <meta property="og:title" content="Stockwise - Smart Inventory & Accounting Management" />
                 <meta property="og:description" content="Streamline your business with comprehensive inventory management, sales tracking, and accounting in one platform. Start free today!" />
                 <meta property="og:site_name" content="Stockwise" />
@@ -83,9 +92,14 @@ const HomePage = () => {
                 <meta name="twitter:description" content="Streamline your business with comprehensive inventory management, sales tracking, and accounting in one platform." />
 
                 {/* Canonical URL */}
-                <link rel="canonical" href="https://bhagro.site/" />
+                <link rel="canonical" href="https://stock-wise.in/" />
 
-                {/* Structured Data */}
+                {/* Structured Data - WebSite */}
+                <script type="application/ld+json">
+                    {JSON.stringify(websiteStructuredData)}
+                </script>
+
+                {/* Structured Data - SoftwareApplication */}
                 <script type="application/ld+json">
                     {JSON.stringify(structuredData)}
                 </script>

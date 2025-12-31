@@ -10,7 +10,7 @@ const RefundPolicy = () => {
             <Helmet>
                 <title>Refund & Cancellation Policy - Stockwise</title>
                 <meta name="description" content="Refund and Cancellation Policy for Stockwise subscriptions. Learn about our refund terms, cancellation process, and billing policies." />
-                <link rel="canonical" href="https://bhagro.site/refund-policy" />
+                <link rel="canonical" href="https://stock-wise.in/refund-policy" />
             </Helmet>
 
             {/* Header */}

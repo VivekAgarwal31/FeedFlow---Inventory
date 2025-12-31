@@ -44,12 +44,12 @@ const BlogPost = () => {
             "name": "Stockwise",
             "logo": {
                 "@type": "ImageObject",
-                "url": "https://bhagro.site/stockwise%20black.webp"
+                "url": "https://stock-wise.in/stockwise%20black.webp"
             }
         },
         "mainEntityOfPage": {
             "@type": "WebPage",
-            "@id": `https://bhagro.site/blog/${slug}`
+            "@id": `https://stock-wise.in/blog/${slug}`
         }
     }
 
@@ -59,11 +59,11 @@ const BlogPost = () => {
                 <title>{post.title} | Stockwise Blog</title>
                 <meta name="description" content={post.description} />
                 <meta name="keywords" content="inventory management for small businesses, inventory tracking, stock management, small business inventory, inventory best practices" />
-                <link rel="canonical" href={`https://bhagro.site/blog/${slug}`} />
+                <link rel="canonical" href={`https://stock-wise.in/blog/${slug}`} />
 
                 {/* Open Graph */}
                 <meta property="og:type" content="article" />
-                <meta property="og:url" content={`https://bhagro.site/blog/${slug}`} />
+                <meta property="og:url" content={`https://stock-wise.in/blog/${slug}`} />
                 <meta property="og:title" content={post.title} />
                 <meta property="og:description" content={post.description} />
                 <meta property="article:published_time" content={post.date} />

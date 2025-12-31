@@ -10,7 +10,7 @@ const PrivacyPolicy = () => {
             <Helmet>
                 <title>Privacy Policy - Stockwise</title>
                 <meta name="description" content="Privacy Policy for Stockwise - Learn how we collect, use, and protect your data in our inventory and accounting management platform." />
-                <link rel="canonical" href="https://bhagro.site/privacy-policy" />
+                <link rel="canonical" href="https://stock-wise.in/privacy-policy" />
             </Helmet>
 
             {/* Header */}

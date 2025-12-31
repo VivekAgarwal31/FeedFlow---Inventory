@@ -12,7 +12,7 @@ const InventoryManagement = () => {
                 <title>Inventory Management Software for Modern Businesses | Stockwise</title>
                 <meta name="description" content="Streamline your inventory with Stockwise's cloud-based inventory management software. Real-time tracking, stock alerts, and automated updates for growing businesses." />
                 <meta name="keywords" content="inventory management software, stock management, inventory tracking, warehouse management, inventory control system, stock tracking software" />
-                <link rel="canonical" href="https://bhagro.site/features/inventory-management" />
+                <link rel="canonical" href="https://stock-wise.in/features/inventory-management" />
             </Helmet>
 
             {/* Header */}
