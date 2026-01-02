@@ -91,7 +91,7 @@ const DashboardLayout = ({ children }) => {
       group: 'sales',
       items: [
         { title: 'Sales Orders', icon: FileBarChart, path: '/sales-orders' },
-        { title: 'Delivery Out', icon: ArrowUpFromLine, path: '/delivery-out' },
+        { title: 'Stock Out', icon: ArrowUpFromLine, path: '/delivery-out' }, // UI label only, route unchanged
         { title: 'Clients', icon: Users, path: '/clients' },
         { title: 'Receivables', icon: DollarSign, path: '/accounts-receivable' }
       ]
@@ -102,7 +102,7 @@ const DashboardLayout = ({ children }) => {
       group: 'purchases',
       items: [
         { title: 'Purchase Orders', icon: FileBarChart, path: '/purchase-orders' },
-        { title: 'Delivery In (GRN)', icon: ArrowDownToLine, path: '/delivery-in' },
+        { title: 'Stock In (GRN)', icon: ArrowDownToLine, path: '/delivery-in' }, // UI label only, route unchanged
         { title: 'Suppliers', icon: Truck, path: '/suppliers' },
         { title: 'Payables', icon: DollarSign, path: '/accounts-payable' }
       ]

@@ -1,4 +1,4 @@
-import PDFDocument from 'pdfkit';
+﻿import PDFDocument from 'pdfkit';
 
 /**
  * Generate PDF report header with company information
@@ -170,9 +170,16 @@ export const generateSalesPDF = async (sales, company, filters = {}) => {
             const paidSales = sales.filter(s => s.paymentStatus === 'paid').length;
             const pendingSales = sales.filter(s => s.paymentStatus === 'pending').length;
 
+            // Calculate payment totals for summary
+            const totalPaid = sales.reduce((sum, sale) => sum + (sale.paidAmount || 0), 0);
+            const totalPending = sales.reduce((sum, sale) => sum + (sale.pendingAmount || 0), 0);
+
             // Add summary
             yPos = addSummary(doc, yPos, {
-                'Total Sales': totalSales
+                'Total Sales': totalSales,
+                'Total Revenue': `â‚¹${totalRevenue.toFixed(2)}`,
+                'Total Paid': `â‚¹${totalPaid.toFixed(2)}`,
+                'Total Pending': `â‚¹${totalPending.toFixed(2)}`
             });
 
             yPos += 20;
@@ -185,23 +192,19 @@ export const generateSalesPDF = async (sales, company, filters = {}) => {
 
                 yPos += 25;
 
-                const headers = ['Date', 'Client', 'Staff Name', 'Items (Warehouse - Quantity)'];
-                const columnWidths = [70, 80, 80, 265]; // Total: 495pt (fits in A4 with margins)
+                const headers = ['Date', 'Client', 'Staff', 'Items', 'Total', 'Status', 'Paid', 'Pending'];
+                const columnWidths = [50, 60, 50, 140, 45, 45, 45, 45]; // Total: 480pt
 
                 const rows = sales.map(sale => {
-                    // Format items with warehouse and quantity
-                    let itemsText = 'N/A';
-                    if (sale.items && sale.items.length > 0) {
-                        itemsText = sale.items.map(item =>
-                            `${item.itemName || 'Unknown'} (${item.warehouseName || 'Unknown'} - ${item.quantity || 0} bags)`
-                        ).join(', ');
-                    }
-
                     return [
-                        new Date(sale.saleDate).toLocaleDateString(),
+                        sale.saleDate ? new Date(sale.saleDate).toLocaleDateString() : 'N/A',
                         sale.clientName || 'N/A',
                         sale.staffName || 'N/A',
-                        itemsText
+                        sale.items || 'N/A',
+                        `â‚¹${(sale.totalAmount || 0).toFixed(0)}`,
+                        sale.paymentStatus || 'pending',
+                        `â‚¹${(sale.paidAmount || 0).toFixed(0)}`,
+                        `â‚¹${(sale.pendingAmount || 0).toFixed(0)}`
                     ];
                 });
 
@@ -249,9 +252,16 @@ export const generatePurchasePDF = async (purchases, company, filters = {}) => {
             const paidPurchases = purchases.filter(p => p.paymentStatus === 'paid').length;
             const pendingPurchases = purchases.filter(p => p.paymentStatus === 'pending').length;
 
+            // Calculate payment totals for summary
+            const totalPaid = purchases.reduce((sum, purchase) => sum + (purchase.paidAmount || 0), 0);
+            const totalPending = purchases.reduce((sum, purchase) => sum + (purchase.pendingAmount || 0), 0);
+
             // Add summary
             yPos = addSummary(doc, yPos, {
-                'Total Purchases': totalPurchases
+                'Total Purchases': totalPurchases,
+                'Total Amount': `â‚¹${totalAmount.toFixed(2)}`,
+                'Total Paid': `â‚¹${totalPaid.toFixed(2)}`,
+                'Total Pending': `â‚¹${totalPending.toFixed(2)}`
             });
 
             yPos += 20;
@@ -264,23 +274,19 @@ export const generatePurchasePDF = async (purchases, company, filters = {}) => {
 
                 yPos += 25;
 
-                const headers = ['Date', 'Supplier', 'Staff Name', 'Items (Warehouse - Quantity)'];
-                const columnWidths = [70, 80, 80, 265]; // Total: 495pt (fits in A4 with margins)
+                const headers = ['Date', 'Supplier', 'Staff', 'Items', 'Total', 'Status', 'Paid', 'Pending'];
+                const columnWidths = [50, 60, 50, 140, 45, 45, 45, 45]; // Total: 480pt
 
                 const rows = purchases.map(purchase => {
-                    // Format items with warehouse and quantity
-                    let itemsText = 'N/A';
-                    if (purchase.items && purchase.items.length > 0) {
-                        itemsText = purchase.items.map(item =>
-                            `${item.itemName || 'Unknown'} (${item.warehouseName || 'Unknown'} - ${item.quantity || 0} bags)`
-                        ).join(', ');
-                    }
-
                     return [
-                        new Date(purchase.purchaseDate).toLocaleDateString(),
+                        purchase.purchaseDate ? new Date(purchase.purchaseDate).toLocaleDateString() : 'N/A',
                         purchase.supplierName || 'N/A',
                         purchase.staffName || 'N/A',
-                        itemsText
+                        purchase.items || 'N/A',
+                        `â‚¹${(purchase.totalAmount || 0).toFixed(0)}`,
+                        purchase.paymentStatus || 'pending',
+                        `â‚¹${(purchase.paidAmount || 0).toFixed(0)}`,
+                        `â‚¹${(purchase.pendingAmount || 0).toFixed(0)}`
                     ];
                 });
 
@@ -315,8 +321,8 @@ export const generateInventoryPDF = async (stockItems, company, filters = {}) =>
             doc.on('end', () => resolve(Buffer.concat(chunks)));
             doc.on('error', reject);
 
-            // Add header
-            let yPos = addReportHeader(doc, company, 'Inventory Report', {});
+            // Detect if single warehouse is selected
+            const isSingleWarehouse = !!filters.warehouseId;
 
             // Group items by itemName and collect warehouse quantities
             const itemsMap = new Map();
@@ -344,16 +350,35 @@ export const generateInventoryPDF = async (stockItems, company, filters = {}) =>
             const warehouses = Array.from(warehousesSet).sort();
             const consolidatedItems = Array.from(itemsMap.values());
 
+            // Determine warehouse name for single warehouse case
+            const selectedWarehouseName = isSingleWarehouse && warehouses.length > 0 ? warehouses[0] : 'all warehouse';
+
+            // Adapt title based on warehouse selection
+            const reportTitle = isSingleWarehouse
+                ? `Inventory report for ${selectedWarehouseName} for ${company.name || 'Company'}`
+                : `Inventory report of all warehouse for ${company.name || 'Company'}`;
+
+            // Add header with dynamic title
+            let yPos = addReportHeader(doc, company, reportTitle, {});
+
             // Calculate summary
             const totalUniqueItems = consolidatedItems.length;
             const totalQuantity = consolidatedItems.reduce((sum, item) => sum + item.totalQuantity, 0);
 
+            // Adapt summary based on warehouse selection
+            const summaryData = isSingleWarehouse
+                ? {
+                    'Total Unique Items': totalUniqueItems,
+                    'Total Quantity': totalQuantity
+                }
+                : {
+                    'Total Unique Items': totalUniqueItems,
+                    'Total Quantity': totalQuantity,
+                    'Warehouses': warehouses.length
+                };
+
             // Add summary
-            yPos = addSummary(doc, yPos, {
-                'Total Unique Items': totalUniqueItems,
-                'Total Quantity': totalQuantity,
-                'Warehouses': warehouses.length
-            });
+            yPos = addSummary(doc, yPos, summaryData);
 
             yPos += 20;
 
@@ -365,35 +390,198 @@ export const generateInventoryPDF = async (stockItems, company, filters = {}) =>
 
                 yPos += 25;
 
-                // Build headers: Item Name, Total Quantity, then each warehouse
-                const headers = ['Item Name', 'Total Qty', ...warehouses];
+                let headers, columnWidths, rows;
 
-                // Calculate column widths dynamically
-                const itemNameWidth = 150;
-                const totalQtyWidth = 80;
-                const warehouseWidth = Math.min(100, Math.floor((750 - itemNameWidth - totalQtyWidth) / warehouses.length));
-                const columnWidths = [itemNameWidth, totalQtyWidth, ...warehouses.map(() => warehouseWidth)];
+                if (isSingleWarehouse) {
+                    // SINGLE WAREHOUSE: Show only Item Name and Quantity
+                    headers = ['Item Name', 'Quantity'];
+                    columnWidths = [400, 150]; // Wider columns for simpler layout
 
-                // Build rows
-                const rows = consolidatedItems.map(item => {
-                    const row = [
+                    rows = consolidatedItems.map(item => [
                         item.itemName,
-                        item.totalQuantity.toString()
-                    ];
+                        item.totalQuantity.toString() // This is the warehouse-specific quantity
+                    ]);
+                } else {
+                    // ALL WAREHOUSES: Show Item Name, Total Qty, and warehouse columns
+                    headers = ['Item Name', 'Total Qty', ...warehouses];
 
-                    // Add warehouse quantities
-                    warehouses.forEach(warehouse => {
-                        row.push((item.warehouses[warehouse] || 0).toString());
+                    // Calculate column widths dynamically
+                    const itemNameWidth = 150;
+                    const totalQtyWidth = 80;
+                    const warehouseWidth = Math.min(100, Math.floor((750 - itemNameWidth - totalQtyWidth) / warehouses.length));
+                    columnWidths = [itemNameWidth, totalQtyWidth, ...warehouses.map(() => warehouseWidth)];
+
+                    // Build rows
+                    rows = consolidatedItems.map(item => {
+                        const row = [
+                            item.itemName,
+                            item.totalQuantity.toString()
+                        ];
+
+                        // Add warehouse quantities
+                        warehouses.forEach(warehouse => {
+                            row.push((item.warehouses[warehouse] || 0).toString());
+                        });
+
+                        return row;
                     });
-
-                    return row;
-                });
+                }
 
                 addTable(doc, yPos, headers, rows, columnWidths);
             } else {
                 doc.fontSize(10)
                     .font('Helvetica')
                     .text('No inventory data found.', 50, yPos);
+            }
+
+            doc.end();
+        } catch (error) {
+            reject(error);
+        }
+    });
+};
+
+/**
+ * Generate Client Report PDF
+ * @param {Array} clients - Client financial summary data
+ * @param {Object} company - Company information
+ * @param {Object} filters - Report filters
+ * @returns {Promise<Buffer>} PDF buffer
+ */
+export const generateClientReportPDF = async (clients, company, filters = {}) => {
+    return new Promise((resolve, reject) => {
+        try {
+            const doc = new PDFDocument({ margin: 50, size: 'A4' });
+            const chunks = [];
+
+            doc.on('data', chunk => chunks.push(chunk));
+            doc.on('end', () => resolve(Buffer.concat(chunks)));
+            doc.on('error', reject);
+
+            // Add header
+            let yPos = addReportHeader(doc, company, 'Client Financial Report', {
+                startDate: filters.startDate,
+                endDate: filters.endDate
+            });
+
+            // Calculate summary
+            const totalClients = clients.length;
+            const totalBills = clients.reduce((sum, client) => sum + (client.totalBills || 0), 0);
+            const totalReceivable = clients.reduce((sum, client) => sum + (client.totalReceivable || 0), 0);
+            const totalReceived = clients.reduce((sum, client) => sum + (client.totalReceived || 0), 0);
+
+            // Add summary
+            yPos = addSummary(doc, yPos, {
+                'Total Clients': totalClients,
+                'Total Bills': totalBills,
+                'Total Receivable': `₹${totalReceivable.toFixed(2)}`,
+                'Total Received': `₹${totalReceived.toFixed(2)}`
+            });
+
+            yPos += 20;
+
+            // Add client table
+            if (clients.length > 0) {
+                doc.fontSize(12)
+                    .font('Helvetica-Bold')
+                    .text('Client Details', 50, yPos);
+
+                yPos += 25;
+
+                const headers = ['Client', 'Bills', 'Paid', 'Unpaid', 'Receivable', 'Received'];
+                const columnWidths = [120, 50, 50, 50, 80, 80]; // Total: 430pt
+
+                const rows = clients.map(client => {
+                    return [
+                        client.clientName || 'N/A',
+                        (client.totalBills || 0).toString(),
+                        (client.paidBills || 0).toString(),
+                        (client.unpaidBills || 0).toString(),
+                        `₹${(client.totalReceivable || 0).toFixed(0)}`,
+                        `₹${(client.totalReceived || 0).toFixed(0)}`
+                    ];
+                });
+
+                addTable(doc, yPos, headers, rows, columnWidths);
+            } else {
+                doc.fontSize(10)
+                    .font('Helvetica')
+                    .text('No client data found for the selected period.', 50, yPos);
+            }
+
+            doc.end();
+        } catch (error) {
+            reject(error);
+        }
+    });
+};
+
+/**
+ * Generate Supplier Report PDF
+ * @param {Array} suppliers - Supplier financial summary data
+ * @param {Object} company - Company information
+ * @param {Object} filters - Report filters
+ * @returns {Promise<Buffer>} PDF buffer
+ */
+export const generateSupplierReportPDF = async (suppliers, company, filters = {}) => {
+    return new Promise((resolve, reject) => {
+        try {
+            const doc = new PDFDocument({ margin: 50, size: 'A4' });
+            const chunks = [];
+
+            doc.on('data', chunk => chunks.push(chunk));
+            doc.on('end', () => resolve(Buffer.concat(chunks)));
+            doc.on('error', reject);
+
+            // Add header
+            let yPos = addReportHeader(doc, company, 'Supplier Financial Report', {
+                startDate: filters.startDate,
+                endDate: filters.endDate
+            });
+
+            // Calculate summary
+            const totalSuppliers = suppliers.length;
+            const totalBills = suppliers.reduce((sum, supplier) => sum + (supplier.totalBills || 0), 0);
+            const totalPayable = suppliers.reduce((sum, supplier) => sum + (supplier.totalPayable || 0), 0);
+            const totalPaid = suppliers.reduce((sum, supplier) => sum + (supplier.totalPaid || 0), 0);
+
+            // Add summary
+            yPos = addSummary(doc, yPos, {
+                'Total Suppliers': totalSuppliers,
+                'Total Bills': totalBills,
+                'Total Payable': `₹${totalPayable.toFixed(2)}`,
+                'Total Paid': `₹${totalPaid.toFixed(2)}`
+            });
+
+            yPos += 20;
+
+            // Add supplier table
+            if (suppliers.length > 0) {
+                doc.fontSize(12)
+                    .font('Helvetica-Bold')
+                    .text('Supplier Details', 50, yPos);
+
+                yPos += 25;
+
+                const headers = ['Supplier', 'Bills', 'Paid', 'Unpaid', 'Payable', 'Paid Amt'];
+                const columnWidths = [120, 50, 50, 50, 80, 80]; // Total: 430pt
+
+                const rows = suppliers.map(supplier => {
+                    return [
+                        supplier.supplierName || 'N/A',
+                        (supplier.totalBills || 0).toString(),
+                        (supplier.paidBills || 0).toString(),
+                        (supplier.unpaidBills || 0).toString(),
+                        `₹${(supplier.totalPayable || 0).toFixed(0)}`,
+                        `₹${(supplier.totalPaid || 0).toFixed(0)}`
+                    ];
+                });
+
+                addTable(doc, yPos, headers, rows, columnWidths);
+            } else {
+                doc.fontSize(10)
+                    .font('Helvetica')
+                    .text('No supplier data found for the selected period.', 50, yPos);
             }
 
             doc.end();

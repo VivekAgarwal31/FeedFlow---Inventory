@@ -5,6 +5,8 @@ import { authenticate } from '../middleware/auth.js';
 import Plan from '../models/Plan.js';
 import UserSubscription from '../models/UserSubscription.js';
 import SubscriptionPayment from '../models/SubscriptionPayment.js';
+import Coupon from '../models/Coupon.js';
+import CouponUsage from '../models/CouponUsage.js';
 
 const router = express.Router();
 
@@ -91,6 +93,208 @@ router.post('/create-order', authenticate, async (req, res) => {
     } catch (error) {
         console.error('Create order error:', error);
         res.status(500).json({ message: 'Failed to create order' });
+    }
+});
+
+/**
+ * Validate and apply coupon code
+ * POST /subscription-payments/validate-coupon
+ */
+router.post('/validate-coupon', authenticate, async (req, res) => {
+    try {
+        const { code, planType } = req.body;
+
+        if (!code || !planType) {
+            return res.status(400).json({ message: 'Coupon code and plan type are required' });
+        }
+
+        // Find coupon (case-insensitive)
+        const coupon = await Coupon.findOne({ code: code.toUpperCase() });
+        if (!coupon) {
+            return res.status(404).json({
+                valid: false,
+                message: 'Invalid coupon code'
+            });
+        }
+
+        // Check if coupon is valid
+        const validityCheck = coupon.isValid();
+        if (!validityCheck.valid) {
+            return res.status(400).json({
+                valid: false,
+                message: validityCheck.reason
+            });
+        }
+
+        // Check if plan is applicable
+        if (!coupon.applicablePlans.includes(planType)) {
+            return res.status(400).json({
+                valid: false,
+                message: `This coupon is not applicable to ${planType} plan`
+            });
+        }
+
+        // Check per-user usage limit
+        if (coupon.usageLimit.perUser) {
+            const userUsageCount = await CouponUsage.countDocuments({
+                couponId: coupon._id,
+                userId: req.user._id
+            });
+
+            if (userUsageCount >= coupon.usageLimit.total) {
+                return res.status(400).json({
+                    valid: false,
+                    message: 'You have already used this coupon'
+                });
+            }
+        }
+
+        // Get plan price
+        const plan = await Plan.findOne({ type: planType, isActive: true });
+        if (!plan) {
+            return res.status(404).json({ message: 'Plan not found' });
+        }
+
+        // Calculate discount
+        const originalAmount = plan.price;
+        const discountAmount = coupon.calculateDiscount(originalAmount);
+        const finalAmount = Math.max(0, originalAmount - discountAmount);
+
+        res.json({
+            valid: true,
+            coupon: {
+                code: coupon.code,
+                type: coupon.type,
+                value: coupon.value
+            },
+            originalAmount,
+            discountAmount,
+            finalAmount,
+            isFree: finalAmount === 0
+        });
+    } catch (error) {
+        console.error('Validate coupon error:', error);
+        res.status(500).json({ message: 'Failed to validate coupon' });
+    }
+});
+
+/**
+ * Activate free plan with coupon (skip Razorpay)
+ * POST /subscription-payments/activate-free
+ */
+router.post('/activate-free', authenticate, async (req, res) => {
+    try {
+        const { planType, couponCode } = req.body;
+
+        if (!couponCode) {
+            return res.status(400).json({ message: 'Coupon code is required for free activation' });
+        }
+
+        // Find and validate coupon
+        const coupon = await Coupon.findOne({ code: couponCode.toUpperCase() });
+        if (!coupon) {
+            return res.status(404).json({ message: 'Invalid coupon code' });
+        }
+
+        const validityCheck = coupon.isValid();
+        if (!validityCheck.valid) {
+            return res.status(400).json({ message: validityCheck.reason });
+        }
+
+        if (!coupon.applicablePlans.includes(planType)) {
+            return res.status(400).json({ message: 'Coupon not applicable to this plan' });
+        }
+
+        // Check per-user usage
+        if (coupon.usageLimit.perUser) {
+            const userUsageCount = await CouponUsage.countDocuments({
+                couponId: coupon._id,
+                userId: req.user._id
+            });
+
+            if (userUsageCount >= coupon.usageLimit.total) {
+                return res.status(400).json({ message: 'You have already used this coupon' });
+            }
+        }
+
+        // Get plan
+        const plan = await Plan.findOne({ type: planType, isActive: true });
+        if (!plan) {
+            return res.status(404).json({ message: 'Plan not found' });
+        }
+
+        // Verify discount makes it free
+        const originalAmount = plan.price;
+        const discountAmount = coupon.calculateDiscount(originalAmount);
+        const finalAmount = Math.max(0, originalAmount - discountAmount);
+
+        if (finalAmount > 0) {
+            return res.status(400).json({
+                message: 'This coupon does not make the plan free. Please proceed with payment.'
+            });
+        }
+
+        // Check if user already has paid plan
+        const currentSubscription = await UserSubscription.findOne({ userId: req.user._id })
+            .populate('planId');
+
+        if (currentSubscription && currentSubscription.planId.type === 'paid') {
+            return res.status(400).json({ message: 'You already have a paid plan' });
+        }
+
+        // Update subscription
+        if (currentSubscription) {
+            currentSubscription.planId = plan._id;
+            currentSubscription.status = 'active';
+            currentSubscription.trial.isTrial = false;
+            currentSubscription.trial.endsAt = null;
+            currentSubscription.expiresAt = null;
+            currentSubscription.updatedByAdmin = false;
+            await currentSubscription.save();
+        } else {
+            await UserSubscription.create({
+                userId: req.user._id,
+                planId: plan._id,
+                status: 'active',
+                trial: {
+                    isTrial: false,
+                    endsAt: null
+                },
+                expiresAt: null,
+                updatedByAdmin: false
+            });
+        }
+
+        // Record coupon usage
+        await CouponUsage.create({
+            couponId: coupon._id,
+            couponCode: coupon.code,
+            userId: req.user._id,
+            companyId: req.user.companyId || null,
+            planId: plan._id.toString(),
+            originalAmount,
+            discountAmount,
+            finalAmount: 0
+        });
+
+        // Increment coupon usage count
+        coupon.usedCount += 1;
+        await coupon.save();
+
+        // Fetch updated subscription
+        const updatedSubscription = await UserSubscription.findOne({ userId: req.user._id })
+            .populate('planId');
+
+        res.json({
+            success: true,
+            message: '🎁 Congratulations! You\'ve been gifted a Pro plan!',
+            subscription: updatedSubscription,
+            couponApplied: true,
+            skipPayment: true
+        });
+    } catch (error) {
+        console.error('Activate free plan error:', error);
+        res.status(500).json({ message: 'Failed to activate free plan' });
     }
 });
 

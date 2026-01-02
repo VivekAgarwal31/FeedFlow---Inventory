@@ -221,7 +221,9 @@ export const adminSubscriptionAPI = {
 // Payment API (Razorpay)
 export const paymentAPI = {
   createOrder: (planType) => api.post('/subscription-payments/create-order', { planType }),
-  verifyPayment: (data) => api.post('/subscription-payments/verify', data)
+  verifyPayment: (data) => api.post('/subscription-payments/verify', data),
+  validateCoupon: (data) => api.post('/subscription-payments/validate-coupon', data),
+  activateFreePlan: (data) => api.post('/subscription-payments/activate-free', data)
 }
 
 export default api

@@ -1,5 +1,6 @@
 import express from 'express';
 import multer from 'multer';
+import mongoose from 'mongoose';
 import { authenticate } from '../middleware/auth.js';
 import { checkBackupAccess } from '../middleware/subscriptionMiddleware.js';
 import { exportToCSV, exportToExcel, generateImportTemplate, getEntityFields } from '../utils/dataExport.js';
@@ -92,6 +93,66 @@ router.get('/export/:entity', authenticate, async (req, res) => {
         if (entity === 'stockItems') {
             // Populate warehouse for stock items
             data = await Model.find({ companyId }).populate('warehouseId', 'name').lean();
+        } else if (entity === 'sales') {
+            // For sales, we need to fetch DeliveryOut and populate salesOrderId for payment data
+            const DeliveryOut = mongoose.model('DeliveryOut');
+            data = await DeliveryOut.find({ companyId })
+                .populate('salesOrderId')
+                .sort({ deliveryDate: -1 })
+                .lean();
+
+            // Transform data to match export format
+            data = data.map(delivery => {
+                const salesOrder = delivery.salesOrderId;
+
+                // Format items as "ItemName (Warehouse - Quantity)"
+                const itemsText = delivery.items && delivery.items.length > 0
+                    ? delivery.items.map(item =>
+                        `${item.itemName || 'Unknown'} (${item.warehouseName || 'Unknown'} - ${item.quantity || 0} bags)`
+                    ).join(', ')
+                    : 'N/A';
+
+                return {
+                    saleDate: delivery.deliveryDate,
+                    clientName: delivery.clientName || 'N/A',
+                    staffName: delivery.staffName || 'N/A',
+                    items: itemsText,
+                    totalAmount: delivery.totalAmount || 0,
+                    paymentStatus: salesOrder?.paymentStatus || 'pending',
+                    paidAmount: salesOrder?.amountPaid || 0,
+                    pendingAmount: salesOrder?.amountDue || delivery.totalAmount || 0
+                };
+            });
+        } else if (entity === 'purchases') {
+            // For purchases, we need to fetch DeliveryIn and populate purchaseOrderId for payment data
+            const DeliveryIn = mongoose.model('DeliveryIn');
+            data = await DeliveryIn.find({ companyId })
+                .populate('purchaseOrderId')
+                .sort({ receiptDate: -1 })
+                .lean();
+
+            // Transform data to match export format
+            data = data.map(delivery => {
+                const purchaseOrder = delivery.purchaseOrderId;
+
+                // Format items as "ItemName (Warehouse - Quantity)"
+                const itemsText = delivery.items && delivery.items.length > 0
+                    ? delivery.items.map(item =>
+                        `${item.itemName || 'Unknown'} (${item.warehouseName || 'Unknown'} - ${item.quantity || 0} bags)`
+                    ).join(', ')
+                    : 'N/A';
+
+                return {
+                    purchaseDate: delivery.receiptDate,
+                    supplierName: delivery.supplierName || 'N/A',
+                    staffName: delivery.staffName || 'N/A',
+                    items: itemsText,
+                    totalAmount: delivery.totalAmount || 0,
+                    paymentStatus: purchaseOrder?.paymentStatus || 'pending',
+                    paidAmount: purchaseOrder?.amountPaid || 0,
+                    pendingAmount: purchaseOrder?.amountDue || delivery.totalAmount || 0
+                };
+            });
         } else {
             data = await Model.find({ companyId }).lean();
         }

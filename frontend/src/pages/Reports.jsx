@@ -105,7 +105,7 @@ const Reports = () => {
 
     const generateReport = async () => {
         try {
-            // Validate date range for sales and purchase reports
+            // Validate date range for sales, purchase, client, and supplier reports
             if (reportType !== 'inventory') {
                 if (!startDate || !endDate) {
                     toast({
@@ -133,6 +133,10 @@ const Reports = () => {
                 if (paymentStatus && paymentStatus !== '') requestBody.paymentStatus = paymentStatus;
             } else if (reportType === 'inventory') {
                 if (selectedWarehouse && selectedWarehouse !== '') requestBody.warehouseId = selectedWarehouse;
+            } else if (reportType === 'deliveries-out') {
+                if (selectedClient && selectedClient !== '') requestBody.clientId = selectedClient;
+            } else if (reportType === 'deliveries-in') {
+                if (selectedSupplier && selectedSupplier !== '') requestBody.supplierId = selectedSupplier;
             }
 
             // Make API request
@@ -174,10 +178,10 @@ const Reports = () => {
 
     return (
         <div className="space-y-6">
-            <div>
-                <h1 className="text-3xl font-bold">Reports</h1>
-                <p className="text-muted-foreground mt-2">
-                    Generate comprehensive reports for sales, purchases, and inventory
+            <div className="mb-8">
+                <h1 className="text-3xl font-bold mb-2">Reports</h1>
+                <p className="text-muted-foreground">
+                    Generate comprehensive reports for sales, purchases, deliveries, inventory, clients, and suppliers.
                 </p>
             </div>
 
@@ -227,6 +231,54 @@ const Reports = () => {
                         <div>
                             <h3 className="font-semibold">Inventory Report</h3>
                             <p className="text-sm text-muted-foreground">Current stock levels</p>
+                        </div>
+                    </div>
+                </Card>
+
+                <Card
+                    className={`p-6 cursor-pointer transition-all hover:shadow-md ${reportType === 'clients' ? 'ring-2 ring-primary' : ''
+                        }`}
+                    onClick={() => setReportType('clients')}
+                >
+                    <div className="flex items-center gap-4">
+                        <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+                            <FileText className="h-6 w-6 text-primary" />
+                        </div>
+                        <div>
+                            <h3 className="font-semibold">Client Report</h3>
+                            <p className="text-sm text-muted-foreground">Financial summary per client</p>
+                        </div>
+                    </div>
+                </Card>
+
+                <Card
+                    className={`p-6 cursor-pointer transition-all hover:shadow-md ${reportType === 'suppliers' ? 'ring-2 ring-primary' : ''
+                        }`}
+                    onClick={() => setReportType('suppliers')}
+                >
+                    <div className="flex items-center gap-4">
+                        <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+                            <FileText className="h-6 w-6 text-primary" />
+                        </div>
+                        <div>
+                            <h3 className="font-semibold">Supplier Report</h3>
+                            <p className="text-sm text-muted-foreground">Financial summary per supplier</p>
+                        </div>
+                    </div>
+                </Card>
+
+                <Card
+                    className={`p-6 cursor-pointer transition-all hover:shadow-md ${reportType === 'deliveries-out' || reportType === 'deliveries-in' ? 'ring-2 ring-primary' : ''
+                        }`}
+                    onClick={() => setReportType('deliveries-out')}
+                >
+                    <div className="flex items-center gap-4">
+                        <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+                            <FileText className="h-6 w-6 text-primary" />
+                        </div>
+                        <div>
+                            <h3 className="font-semibold">Delivery Reports</h3>
+                            <p className="text-sm text-muted-foreground">Incoming and outgoing deliveries</p>
                         </div>
                     </div>
                 </Card>
@@ -312,6 +364,31 @@ const Reports = () => {
                                         className="mt-1"
                                     />
                                 </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Delivery Type Selector - Only for delivery reports */}
+                    {(reportType === 'deliveries-out' || reportType === 'deliveries-in') && (
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Delivery Type</label>
+                            <div className="flex gap-2">
+                                <Button
+                                    variant={reportType === 'deliveries-out' ? 'default' : 'outline'}
+                                    size="sm"
+                                    onClick={() => setReportType('deliveries-out')}
+                                    className="flex-1"
+                                >
+                                    Delivery Out
+                                </Button>
+                                <Button
+                                    variant={reportType === 'deliveries-in' ? 'default' : 'outline'}
+                                    size="sm"
+                                    onClick={() => setReportType('deliveries-in')}
+                                    className="flex-1"
+                                >
+                                    Delivery In
+                                </Button>
                             </div>
                         </div>
                     )}

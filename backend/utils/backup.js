@@ -73,14 +73,39 @@ export const createBackup = async (companyId, companyName) => {
             }
         }
 
-        // Create metadata file
+        // Export company metadata
+        const Company = mongoose.model('Company');
+        const companyData = await Company.findById(companyId).lean();
+        if (companyData) {
+            const companyFilePath = path.join(tempDir, 'company.json');
+            fs.writeFileSync(companyFilePath, JSON.stringify(companyData, null, 2));
+            console.log('Saved company metadata');
+        }
+
+        // Create enhanced metadata file
         const metadata = {
             backupId,
             companyId,
             companyName,
             timestamp: new Date().toISOString(),
+            version: '2.0', // Enhanced version
+            backupType: 'full_company',
+            sections: [
+                'company',
+                'users',
+                'warehouses',
+                'stockitems',
+                'clients',
+                'suppliers',
+                'salesorders',
+                'purchaseorders',
+                'deliveryins',
+                'deliveryouts',
+                'payments',
+                'stocktransactions'
+            ],
             recordCounts,
-            version: '1.0'
+            description: 'Full company backup including all data and settings'
         };
 
         fs.writeFileSync(
@@ -306,4 +331,188 @@ export const getBackupFilePath = async (backupId) => {
     }
 
     return backup.filePath;
+};
+
+/**
+ * Import company from ZIP backup (for new user or re-import)
+ * @param {String} zipFilePath - Path to uploaded ZIP file
+ * @param {String} importingUserId - ID of user importing the company
+ * @returns {Promise<Object>} Import result with new company ID and record counts
+ */
+export const importCompanyFromZip = async (zipFilePath, importingUserId) => {
+    const tempDir = path.join(BACKUP_DIR, `import_${Date.now()}`);
+
+    try {
+        // Step 1: Extract ZIP
+        console.log('Extracting ZIP...');
+        await extract(zipFilePath, { dir: tempDir });
+
+        // Step 2: Validate manifest
+        const metadataPath = path.join(tempDir, 'metadata.json');
+        if (!fs.existsSync(metadataPath)) {
+            throw new Error('Invalid backup: metadata.json not found');
+        }
+
+        const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
+        console.log('Backup metadata:', metadata);
+
+        // Step 3: Validate company.json exists
+        const companyPath = path.join(tempDir, 'company.json');
+        if (!fs.existsSync(companyPath)) {
+            throw new Error('Invalid backup: company.json not found');
+        }
+
+        const backupCompanyData = JSON.parse(fs.readFileSync(companyPath, 'utf-8'));
+
+        // Step 4: Validate required sections
+        const requiredSections = ['warehouses', 'stockitems', 'clients', 'suppliers'];
+        for (const section of requiredSections) {
+            const filePath = path.join(tempDir, `${section}.json`);
+            if (!fs.existsSync(filePath)) {
+                console.warn(`Optional section ${section}.json not found, will skip`);
+            }
+        }
+
+        // Step 5: Start transaction for atomic import
+        const session = await mongoose.startSession();
+        session.startTransaction();
+
+        try {
+            // Step 6: Create new company with importing user as owner
+            const Company = mongoose.model('Company');
+            const newCompany = new Company({
+                name: backupCompanyData.name,
+                ownerId: importingUserId,
+                industry: backupCompanyData.industry,
+                address: backupCompanyData.address,
+                phone: backupCompanyData.phone,
+                email: backupCompanyData.email,
+                website: backupCompanyData.website,
+                taxId: backupCompanyData.taxId,
+                logo: backupCompanyData.logo,
+                settings: backupCompanyData.settings || {}
+            });
+
+            await newCompany.save({ session });
+            const newCompanyId = newCompany._id;
+            console.log('Created new company:', newCompanyId);
+
+            // Step 7: Initialize ID mapping
+            const idMapping = new Map();
+            idMapping.set(metadata.companyId.toString(), newCompanyId.toString());
+
+            // Step 8: Define collections to import with their models
+            const collections = [
+                { collection: 'warehouses', model: 'Warehouse', refs: [] },
+                { collection: 'stockitems', model: 'StockItem', refs: ['warehouseId'] },
+                { collection: 'clients', model: 'Client', refs: [] },
+                { collection: 'suppliers', model: 'Supplier', refs: [] },
+                { collection: 'salesorders', model: 'SalesOrder', refs: ['clientId'] },
+                { collection: 'purchaseorders', model: 'PurchaseOrder', refs: ['supplierId'] },
+                { collection: 'deliveryins', model: 'DeliveryIn', refs: ['supplierId', 'purchaseOrderId'] },
+                { collection: 'deliveryouts', model: 'DeliveryOut', refs: ['clientId', 'salesOrderId'] },
+                { collection: 'payments', model: 'Payment', refs: ['partyId', 'transactionId'] },
+                { collection: 'stocktransactions', model: 'StockTransaction', refs: ['warehouseId', 'itemId'] }
+            ];
+
+            const importedCounts = {};
+
+            // Step 9: Import each collection with ID remapping
+            for (const { collection, model: modelName, refs } of collections) {
+                const filePath = path.join(tempDir, `${collection}.json`);
+
+                if (!fs.existsSync(filePath)) {
+                    console.log(`Skipping ${collection} - file not found`);
+                    importedCounts[collection] = 0;
+                    continue;
+                }
+
+                const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+                console.log(`Importing ${data.length} records from ${collection}...`);
+
+                if (data.length === 0) {
+                    importedCounts[collection] = 0;
+                    continue;
+                }
+
+                const model = mongoose.model(modelName);
+                const remappedData = [];
+
+                // Remap IDs for each document
+                for (const doc of data) {
+                    const oldId = doc._id.toString();
+                    const newId = new mongoose.Types.ObjectId();
+                    idMapping.set(oldId, newId.toString());
+
+                    // Create new document with remapped ID
+                    const newDoc = {
+                        ...doc,
+                        _id: newId,
+                        companyId: newCompanyId
+                    };
+
+                    // Remap reference fields
+                    for (const refField of refs) {
+                        if (doc[refField]) {
+                            const oldRefId = doc[refField].toString();
+                            const newRefId = idMapping.get(oldRefId);
+                            if (newRefId) {
+                                newDoc[refField] = newRefId;
+                            } else {
+                                console.warn(`Reference ${refField} not found in mapping for ${collection}`);
+                            }
+                        }
+                    }
+
+                    // Special handling for items array in deliveries
+                    if (newDoc.items && Array.isArray(newDoc.items)) {
+                        newDoc.items = newDoc.items.map(item => ({
+                            ...item,
+                            _id: new mongoose.Types.ObjectId(),
+                            warehouseId: item.warehouseId ? idMapping.get(item.warehouseId.toString()) || item.warehouseId : item.warehouseId,
+                            itemId: item.itemId ? idMapping.get(item.itemId.toString()) || item.itemId : item.itemId
+                        }));
+                    }
+
+                    remappedData.push(newDoc);
+                }
+
+                // Insert remapped data
+                await model.insertMany(remappedData, { session });
+                importedCounts[collection] = remappedData.length;
+                console.log(`Imported ${remappedData.length} ${collection}`);
+            }
+
+            // Step 10: Commit transaction
+            await session.commitTransaction();
+            console.log('Import completed successfully');
+
+            return {
+                success: true,
+                companyId: newCompanyId,
+                companyName: newCompany.name,
+                importedCounts,
+                metadata: {
+                    originalBackupId: metadata.backupId,
+                    originalCompanyName: metadata.companyName,
+                    backupTimestamp: metadata.timestamp,
+                    backupVersion: metadata.version
+                }
+            };
+
+        } catch (error) {
+            // Rollback on error
+            await session.abortTransaction();
+            console.error('Import failed, transaction rolled back:', error);
+            throw error;
+        } finally {
+            session.endSession();
+        }
+
+    } finally {
+        // Clean up temp directory
+        if (fs.existsSync(tempDir)) {
+            fs.rmSync(tempDir, { recursive: true, force: true });
+        }
+    }
 };

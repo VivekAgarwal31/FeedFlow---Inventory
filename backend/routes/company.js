@@ -1,10 +1,28 @@
 import express from 'express';
+import multer from 'multer';
 import { body, validationResult } from 'express-validator';
 import Company from '../models/Company.js';
 import User from '../models/User.js';
 import { authenticate } from '../middleware/auth.js';
+import { requirePermission } from '../middleware/rbac.js';
+import { importCompanyFromZip } from '../utils/backup.js';
 
 const router = express.Router();
+
+// Configure multer for ZIP file uploads
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 50 * 1024 * 1024 // 50MB limit for ZIP backups
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'application/zip' || file.mimetype === 'application/x-zip-compressed') {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only ZIP files are allowed.'));
+    }
+  }
+});
 
 // Create company
 router.post('/create', authenticate, [
@@ -118,6 +136,73 @@ router.post('/join', authenticate, [
   }
 });
 
+// Import company from ZIP backup
+router.post('/import', authenticate, upload.single('backup'), async (req, res) => {
+  try {
+    // Check if user already has a company
+    if (req.user.companyId) {
+      return res.status(400).json({ message: 'User already belongs to a company. Please leave your current company before importing.' });
+    }
+
+    // Validate file upload
+    if (!req.file) {
+      return res.status(400).json({ message: 'No backup file provided' });
+    }
+
+    // Save uploaded file temporarily
+    const fs = await import('fs');
+    const path = await import('path');
+    const tempFilePath = path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'temp', `import_${Date.now()}.zip`);
+
+    // Ensure temp directory exists
+    const tempDir = path.dirname(tempFilePath);
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+
+    fs.writeFileSync(tempFilePath, req.file.buffer);
+
+    try {
+      // Import company
+      const result = await importCompanyFromZip(tempFilePath, req.user._id);
+
+      // Update user with new company and owner role
+      const user = await User.findById(req.user._id);
+      user.companyId = result.companyId;
+      user.role = 'owner';
+      user.setRolePermissions();
+      await user.save();
+
+      // Clean up temp file
+      fs.unlinkSync(tempFilePath);
+
+      res.status(201).json({
+        message: 'Company imported successfully',
+        company: {
+          id: result.companyId,
+          name: result.companyName
+        },
+        importedCounts: result.importedCounts,
+        metadata: result.metadata
+      });
+
+    } catch (importError) {
+      // Clean up temp file on error
+      if (fs.existsSync(tempFilePath)) {
+        fs.unlinkSync(tempFilePath);
+      }
+      throw importError;
+    }
+
+  } catch (error) {
+    console.error('Import company error:', error);
+    res.status(500).json({
+      message: 'Failed to import company',
+      error: error.message
+    });
+  }
+});
+
 // Get company details
 router.get('/', authenticate, async (req, res) => {
   try {
@@ -145,7 +230,7 @@ router.get('/', authenticate, async (req, res) => {
 });
 
 // Update company
-router.put('/', authenticate, [
+router.put('/', authenticate, requirePermission('canManageSettings'), [
   body('name').optional().trim().isLength({ min: 2 }).withMessage('Company name must be at least 2 characters'),
   body('address').optional().trim(),
   body('phone').optional().trim(),

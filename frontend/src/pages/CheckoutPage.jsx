@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2, CheckCircle, AlertCircle, CreditCard, Shield } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert';
 import { Badge } from '../components/ui/badge';
 import { useToast } from '../hooks/use-toast';
@@ -20,6 +21,14 @@ const CheckoutPage = () => {
     const [processing, setProcessing] = useState(false);
     const [subscription, setSubscription] = useState(null);
     const [error, setError] = useState(null);
+
+    // Coupon state
+    const [couponCode, setCouponCode] = useState('');
+    const [couponApplied, setCouponApplied] = useState(false);
+    const [couponData, setCouponData] = useState(null);
+    const [discount, setDiscount] = useState(0);
+    const [finalAmount, setFinalAmount] = useState(planPrice);
+    const [applyingCoupon, setApplyingCoupon] = useState(false);
 
     const planType = searchParams.get('plan') || 'paid';
     const planPrice = 999; // ₹999 for paid plan
@@ -54,10 +63,76 @@ const CheckoutPage = () => {
         }
     };
 
+    const applyCoupon = async () => {
+        if (!couponCode.trim()) {
+            toast({
+                title: 'Invalid Input',
+                description: 'Please enter a coupon code',
+                variant: 'destructive'
+            });
+            return;
+        }
+
+        try {
+            setApplyingCoupon(true);
+            setError(null);
+
+            const response = await paymentAPI.validateCoupon({
+                code: couponCode,
+                planType
+            });
+
+            if (response.data.valid) {
+                setCouponApplied(true);
+                setCouponData(response.data.coupon);
+                setDiscount(response.data.discountAmount);
+                setFinalAmount(response.data.finalAmount);
+
+                toast({
+                    title: 'Coupon Applied!',
+                    description: `You saved ₹${response.data.discountAmount}`,
+                });
+            }
+        } catch (error) {
+            toast({
+                title: 'Invalid Coupon',
+                description: error.response?.data?.message || 'This coupon code is not valid',
+                variant: 'destructive'
+            });
+        } finally {
+            setApplyingCoupon(false);
+        }
+    };
+
+    const removeCoupon = () => {
+        setCouponCode('');
+        setCouponApplied(false);
+        setCouponData(null);
+        setDiscount(0);
+        setFinalAmount(planPrice);
+    };
+
     const handlePayment = async () => {
         try {
             setProcessing(true);
             setError(null);
+
+            // If final amount is 0 (free plan), activate directly
+            if (finalAmount === 0 && couponApplied) {
+                const response = await paymentAPI.activateFreePlan({
+                    planType,
+                    couponCode
+                });
+
+                if (response.data.success) {
+                    toast({
+                        title: response.data.message,
+                        description: 'Your plan has been activated successfully',
+                    });
+                    navigate('/dashboard');
+                }
+                return;
+            }
 
             // Load Razorpay script
             const scriptLoaded = await loadRazorpayScript();
@@ -65,15 +140,18 @@ const CheckoutPage = () => {
                 throw new Error('Failed to load payment gateway. Please try again.');
             }
 
-            // Create order
+            // Create order with final amount (after discount)
             const orderResponse = await paymentAPI.createOrder(planType);
             const { orderId, amount, currency, keyId } = orderResponse.data;
+
+            // Use discounted amount if coupon applied
+            const payableAmount = couponApplied ? finalAmount * 100 : amount;
 
             // Open Razorpay checkout
             openRazorpayCheckout({
                 keyId,
                 orderId,
-                amount,
+                amount: payableAmount,
                 currency,
                 name: 'Stockwise',
                 description: 'Paid Plan Subscription',
@@ -216,6 +294,60 @@ const CheckoutPage = () => {
                     </Card>
                 </div>
 
+                {/* Coupon Section */}
+                <Card className="mt-6">
+                    <CardHeader>
+                        <CardTitle className="text-lg">Have a Coupon Code?</CardTitle>
+                        <CardDescription>Apply a discount code to your purchase</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {!couponApplied ? (
+                            <div className="flex gap-2">
+                                <Input
+                                    placeholder="Enter coupon code"
+                                    value={couponCode}
+                                    onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                                    onKeyPress={(e) => e.key === 'Enter' && applyCoupon()}
+                                    disabled={applyingCoupon}
+                                    className="flex-1"
+                                />
+                                <Button
+                                    onClick={applyCoupon}
+                                    disabled={applyingCoupon || !couponCode.trim()}
+                                    variant="outline"
+                                >
+                                    {applyingCoupon ? (
+                                        <>
+                                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                            Applying...
+                                        </>
+                                    ) : (
+                                        'Apply'
+                                    )}
+                                </Button>
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                <Alert className="bg-green-50 border-green-200">
+                                    <CheckCircle className="h-4 w-4 text-green-600" />
+                                    <AlertTitle className="text-green-800">Coupon Applied!</AlertTitle>
+                                    <AlertDescription className="text-green-700">
+                                        Code: <strong>{couponData?.code}</strong> - You saved ₹{discount}
+                                    </AlertDescription>
+                                </Alert>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={removeCoupon}
+                                    className="w-full"
+                                >
+                                    Remove Coupon
+                                </Button>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+
                 {/* Billing Summary */}
                 <Card className="mt-6">
                     <CardHeader>
@@ -227,6 +359,12 @@ const CheckoutPage = () => {
                                 <span className="text-gray-600">Paid Plan</span>
                                 <span className="font-medium">{formatCurrency(planPrice)}</span>
                             </div>
+                            {couponApplied && discount > 0 && (
+                                <div className="flex justify-between text-sm text-green-600">
+                                    <span>Discount ({couponData?.code})</span>
+                                    <span className="font-medium">-{formatCurrency(discount)}</span>
+                                </div>
+                            )}
                             <div className="flex justify-between text-sm">
                                 <span className="text-gray-600">Tax</span>
                                 <span className="font-medium">Included</span>
@@ -234,9 +372,16 @@ const CheckoutPage = () => {
                             <div className="border-t pt-3 flex justify-between">
                                 <span className="font-semibold">Total Amount</span>
                                 <span className="text-2xl font-bold text-blue-600">
-                                    {formatCurrency(planPrice)}
+                                    {formatCurrency(finalAmount)}
                                 </span>
                             </div>
+                            {finalAmount === 0 && couponApplied && (
+                                <Alert className="bg-blue-50 border-blue-200">
+                                    <AlertDescription className="text-blue-800 text-center">
+                                        🎁 This plan is FREE with your coupon!
+                                    </AlertDescription>
+                                </Alert>
+                            )}
                         </div>
                     </CardContent>
                 </Card>

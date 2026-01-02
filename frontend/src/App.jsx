@@ -54,6 +54,7 @@ const AdminLayout = lazy(() => import('./layouts/AdminLayout'))
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'))
 const CompanyManagement = lazy(() => import('./pages/admin/CompanyManagement'))
 const UserManagement = lazy(() => import('./pages/admin/UserManagement'))
+const AdminCoupons = lazy(() => import('./pages/admin/AdminCoupons'))
 const CheckoutPage = lazy(() => import('./pages/CheckoutPage'))
 
 function App() {
@@ -171,6 +172,7 @@ function AdminRoutes() {
         <Route index element={<AdminDashboard />} />
         <Route path="companies" element={<CompanyManagement />} />
         <Route path="users" element={<UserManagement />} />
+        <Route path="coupons" element={<AdminCoupons />} />
       </Route>
       <Route path="*" element={<Navigate to="/admin" replace />} />
     </Routes>

@@ -26,6 +26,7 @@ import accountingRoutes from './routes/accounting.js';
 import subscriptionRoutes from './routes/subscription.js';
 import adminSubscriptionRoutes from './routes/adminSubscription.js';
 import subscriptionPaymentRoutes from './routes/subscriptionPayments.js';
+import adminCouponRoutes from './routes/admin/coupons.js';
 import { startHttpPing } from './utils/keepAlive.js';
 import { startDbPing } from './utils/dbPing.js';
 import { startTrialExpiryJob } from './jobs/trialExpiryJob.js';
@@ -57,6 +58,8 @@ import './models/CashbookBalance.js';
 import './models/Plan.js';
 import './models/UserSubscription.js';
 import './models/SubscriptionPayment.js';
+import './models/Coupon.js';
+import './models/CouponUsage.js';
 
 // Load environment variables (works both locally and on Render)
 dotenv.config();
@@ -154,6 +157,7 @@ app.use('/api/accounts', accountsRoutes);
 app.use('/api/accounting', accountingRoutes);
 app.use('/api/subscription', subscriptionRoutes);
 app.use('/api/admin/subscription', adminSubscriptionRoutes);
+app.use('/api/admin/coupons', adminCouponRoutes);
 app.use('/api/subscription-payments', subscriptionPaymentRoutes);
 
 app.listen(PORT, async () => {

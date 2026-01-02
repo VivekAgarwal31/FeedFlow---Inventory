@@ -4,15 +4,16 @@ import DeliveryIn from '../models/DeliveryIn.js';
 import StockItem from '../models/StockItem.js';
 import { authenticate } from '../middleware/auth.js';
 import { checkReportsAccess } from '../middleware/subscriptionMiddleware.js';
-import { generateSalesPDF, generatePurchasePDF, generateInventoryPDF } from '../utils/pdfGenerator.js';
-import { generateSalesReportExcel, generatePurchaseReportExcel, generateInventoryReportExcel } from '../utils/dataExport.js';
+import { requirePermission } from '../middleware/rbac.js';
+import { generateSalesPDF, generatePurchasePDF, generateInventoryPDF, generateClientReportPDF, generateSupplierReportPDF } from '../utils/pdfGenerator.js';
+import { generateSalesReportExcel, generatePurchaseReportExcel, generateInventoryReportExcel, generateClientReportExcel, generateSupplierReportExcel } from '../utils/dataExport.js';
 
 const router = express.Router();
 
 /**
  * Generate Sales Report - PDF
  */
-router.post('/sales/pdf', authenticate, checkReportsAccess, async (req, res) => {
+router.post('/sales/pdf', authenticate, requirePermission('canViewReports'), checkReportsAccess, async (req, res) => {
     try {
         const companyId = req.user.companyId?._id || req.user.companyId;
 
@@ -22,16 +23,16 @@ router.post('/sales/pdf', authenticate, checkReportsAccess, async (req, res) => 
 
         const { startDate, endDate, clientId, clientName, paymentStatus } = req.body;
 
-        // Build query
+        // Build query for SalesOrder (not DeliveryOut)
         const query = { companyId };
 
         if (startDate || endDate) {
-            query.deliveryDate = {};
-            if (startDate) query.deliveryDate.$gte = new Date(startDate);
+            query.orderDate = {}; // Use orderDate for SalesOrder
+            if (startDate) query.orderDate.$gte = new Date(startDate);
             if (endDate) {
                 const end = new Date(endDate);
                 end.setHours(23, 59, 59, 999);
-                query.deliveryDate.$lte = end;
+                query.orderDate.$lte = end;
             }
         }
 
@@ -46,8 +47,31 @@ router.post('/sales/pdf', authenticate, checkReportsAccess, async (req, res) => 
             query.paymentStatus = paymentStatus;
         }
 
-        // Fetch delivery data
-        const sales = await DeliveryOut.find(query).sort({ deliveryDate: -1 }).lean();
+        // Fetch SalesOrder data (not DeliveryOut)
+        const salesOrders = await SalesOrder.find(query)
+            .sort({ orderDate: -1 })
+            .lean();
+
+        // Transform data to match sales export format
+        const sales = salesOrders.map(order => {
+            // Format items as "ItemName (Warehouse - Quantity bags)"
+            const itemsText = order.items && order.items.length > 0
+                ? order.items.map(item =>
+                    `${item.itemName || 'Unknown'} (${item.warehouseName || 'Unknown'} - ${item.quantity || 0} bags)`
+                ).join(', ')
+                : 'N/A';
+
+            return {
+                saleDate: order.orderDate,
+                clientName: order.clientName || 'N/A',
+                staffName: order.staffName || 'N/A',
+                items: itemsText,
+                totalAmount: order.totalAmount || 0,
+                paymentStatus: order.paymentStatus || 'pending',
+                paidAmount: order.amountPaid || 0,
+                pendingAmount: order.amountDue || 0
+            };
+        });
 
         // Generate PDF
         const pdfBuffer = await generateSalesPDF(sales, req.user.companyId, { startDate, endDate });
@@ -72,7 +96,7 @@ router.post('/sales/pdf', authenticate, checkReportsAccess, async (req, res) => 
 /**
  * Generate Sales Report - Excel
  */
-router.post('/sales/excel', authenticate, checkReportsAccess, async (req, res) => {
+router.post('/sales/excel', authenticate, requirePermission('canViewReports'), checkReportsAccess, async (req, res) => {
     try {
         const companyId = req.user.companyId?._id || req.user.companyId;
 
@@ -82,16 +106,16 @@ router.post('/sales/excel', authenticate, checkReportsAccess, async (req, res) =
 
         const { startDate, endDate, clientId, clientName, paymentStatus } = req.body;
 
-        // Build query
+        // Build query for SalesOrder (not DeliveryOut)
         const query = { companyId };
 
         if (startDate || endDate) {
-            query.deliveryDate = {};
-            if (startDate) query.deliveryDate.$gte = new Date(startDate);
+            query.orderDate = {}; // Use orderDate for SalesOrder
+            if (startDate) query.orderDate.$gte = new Date(startDate);
             if (endDate) {
                 const end = new Date(endDate);
                 end.setHours(23, 59, 59, 999);
-                query.deliveryDate.$lte = end;
+                query.orderDate.$lte = end;
             }
         }
 
@@ -106,8 +130,31 @@ router.post('/sales/excel', authenticate, checkReportsAccess, async (req, res) =
             query.paymentStatus = paymentStatus;
         }
 
-        // Fetch delivery data
-        const sales = await DeliveryOut.find(query).sort({ deliveryDate: -1 }).lean();
+        // Fetch SalesOrder data (not DeliveryOut)
+        const salesOrders = await SalesOrder.find(query)
+            .sort({ orderDate: -1 })
+            .lean();
+
+        // Transform data to match sales export format
+        const sales = salesOrders.map(order => {
+            // Format items as "ItemName (Warehouse - Quantity bags)"
+            const itemsText = order.items && order.items.length > 0
+                ? order.items.map(item =>
+                    `${item.itemName || 'Unknown'} (${item.warehouseName || 'Unknown'} - ${item.quantity || 0} bags)`
+                ).join(', ')
+                : 'N/A';
+
+            return {
+                saleDate: order.orderDate,
+                clientName: order.clientName || 'N/A',
+                staffName: order.staffName || 'N/A',
+                items: itemsText,
+                totalAmount: order.totalAmount || 0,
+                paymentStatus: order.paymentStatus || 'pending',
+                paidAmount: order.amountPaid || 0,
+                pendingAmount: order.amountDue || 0
+            };
+        });
 
         // Generate Excel
         const excelBuffer = await generateSalesReportExcel(sales, req.user.companyId, { startDate, endDate });
@@ -132,7 +179,7 @@ router.post('/sales/excel', authenticate, checkReportsAccess, async (req, res) =
 /**
  * Generate Purchase Report - PDF
  */
-router.post('/purchases/pdf', authenticate, checkReportsAccess, async (req, res) => {
+router.post('/purchases/pdf', authenticate, requirePermission('canViewReports'), checkReportsAccess, async (req, res) => {
     try {
         const companyId = req.user.companyId?._id || req.user.companyId;
 
@@ -142,16 +189,16 @@ router.post('/purchases/pdf', authenticate, checkReportsAccess, async (req, res)
 
         const { startDate, endDate, supplierId, supplierName, paymentStatus } = req.body;
 
-        // Build query
+        // Build query for PurchaseOrder (not DeliveryIn)
         const query = { companyId };
 
         if (startDate || endDate) {
-            query.receiptDate = {};
-            if (startDate) query.receiptDate.$gte = new Date(startDate);
+            query.orderDate = {}; // Use orderDate for PurchaseOrder
+            if (startDate) query.orderDate.$gte = new Date(startDate);
             if (endDate) {
                 const end = new Date(endDate);
                 end.setHours(23, 59, 59, 999);
-                query.receiptDate.$lte = end;
+                query.orderDate.$lte = end;
             }
         }
 
@@ -166,8 +213,31 @@ router.post('/purchases/pdf', authenticate, checkReportsAccess, async (req, res)
             query.paymentStatus = paymentStatus;
         }
 
-        // Fetch delivery data
-        const purchases = await DeliveryIn.find(query).sort({ receiptDate: -1 }).lean();
+        // Fetch PurchaseOrder data (not DeliveryIn)
+        const purchaseOrders = await PurchaseOrder.find(query)
+            .sort({ orderDate: -1 })
+            .lean();
+
+        // Transform data to match purchase export format
+        const purchases = purchaseOrders.map(order => {
+            // Format items as "ItemName (Warehouse - Quantity bags)"
+            const itemsText = order.items && order.items.length > 0
+                ? order.items.map(item =>
+                    `${item.itemName || 'Unknown'} (${item.warehouseName || 'Unknown'} - ${item.quantity || 0} bags)`
+                ).join(', ')
+                : 'N/A';
+
+            return {
+                purchaseDate: order.orderDate,
+                supplierName: order.supplierName || 'N/A',
+                staffName: order.staffName || 'N/A',
+                items: itemsText,
+                totalAmount: order.totalAmount || 0,
+                paymentStatus: order.paymentStatus || 'pending',
+                paidAmount: order.amountPaid || 0,
+                pendingAmount: order.amountDue || 0
+            };
+        });
 
         // Generate PDF
         const pdfBuffer = await generatePurchasePDF(purchases, req.user.companyId, { startDate, endDate });
@@ -192,7 +262,7 @@ router.post('/purchases/pdf', authenticate, checkReportsAccess, async (req, res)
 /**
  * Generate Purchase Report - Excel
  */
-router.post('/purchases/excel', authenticate, checkReportsAccess, async (req, res) => {
+router.post('/purchases/excel', authenticate, requirePermission('canViewReports'), checkReportsAccess, async (req, res) => {
     try {
         const companyId = req.user.companyId?._id || req.user.companyId;
 
@@ -202,16 +272,16 @@ router.post('/purchases/excel', authenticate, checkReportsAccess, async (req, re
 
         const { startDate, endDate, supplierId, supplierName, paymentStatus } = req.body;
 
-        // Build query
+        // Build query for PurchaseOrder (not DeliveryIn)
         const query = { companyId };
 
         if (startDate || endDate) {
-            query.receiptDate = {};
-            if (startDate) query.receiptDate.$gte = new Date(startDate);
+            query.orderDate = {}; // Use orderDate for PurchaseOrder
+            if (startDate) query.orderDate.$gte = new Date(startDate);
             if (endDate) {
                 const end = new Date(endDate);
                 end.setHours(23, 59, 59, 999);
-                query.receiptDate.$lte = end;
+                query.orderDate.$lte = end;
             }
         }
 
@@ -226,8 +296,31 @@ router.post('/purchases/excel', authenticate, checkReportsAccess, async (req, re
             query.paymentStatus = paymentStatus;
         }
 
-        // Fetch delivery data
-        const purchases = await DeliveryIn.find(query).sort({ receiptDate: -1 }).lean();
+        // Fetch PurchaseOrder data (not DeliveryIn)
+        const purchaseOrders = await PurchaseOrder.find(query)
+            .sort({ orderDate: -1 })
+            .lean();
+
+        // Transform data to match purchase export format
+        const purchases = purchaseOrders.map(order => {
+            // Format items as "ItemName (Warehouse - Quantity bags)"
+            const itemsText = order.items && order.items.length > 0
+                ? order.items.map(item =>
+                    `${item.itemName || 'Unknown'} (${item.warehouseName || 'Unknown'} - ${item.quantity || 0} bags)`
+                ).join(', ')
+                : 'N/A';
+
+            return {
+                purchaseDate: order.orderDate,
+                supplierName: order.supplierName || 'N/A',
+                staffName: order.staffName || 'N/A',
+                items: itemsText,
+                totalAmount: order.totalAmount || 0,
+                paymentStatus: order.paymentStatus || 'pending',
+                paidAmount: order.amountPaid || 0,
+                pendingAmount: order.amountDue || 0
+            };
+        });
 
         // Generate Excel
         const excelBuffer = await generatePurchaseReportExcel(purchases, req.user.companyId, { startDate, endDate });
@@ -252,7 +345,7 @@ router.post('/purchases/excel', authenticate, checkReportsAccess, async (req, re
 /**
  * Generate Inventory Report - PDF
  */
-router.post('/inventory/pdf', authenticate, checkReportsAccess, async (req, res) => {
+router.post('/inventory/pdf', authenticate, requirePermission('canViewReports'), checkReportsAccess, async (req, res) => {
     try {
         const companyId = req.user.companyId?._id || req.user.companyId;
 
@@ -299,7 +392,7 @@ router.post('/inventory/pdf', authenticate, checkReportsAccess, async (req, res)
 /**
  * Generate Inventory Report - Excel
  */
-router.post('/inventory/excel', authenticate, checkReportsAccess, async (req, res) => {
+router.post('/inventory/excel', authenticate, requirePermission('canViewReports'), checkReportsAccess, async (req, res) => {
     try {
         const companyId = req.user.companyId?._id || req.user.companyId;
 
@@ -336,11 +429,606 @@ router.post('/inventory/excel', authenticate, checkReportsAccess, async (req, re
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         res.send(excelBuffer);
-
     } catch (error) {
         console.error('Generate inventory Excel error:', error);
         res.status(500).json({ message: 'Error generating inventory report', error: error.message });
     }
 });
 
+/**
+ * Generate Client Report - PDF
+ */
+router.post('/clients/pdf', authenticate, requirePermission('canViewReports'), checkReportsAccess, async (req, res) => {
+    try {
+        const companyId = req.user.companyId?._id || req.user.companyId;
+
+        if (!companyId) {
+            return res.status(400).json({ message: 'No company associated with user' });
+        }
+
+        const { startDate, endDate } = req.body;
+        const SalesOrder = (await import('../models/SalesOrder.js')).default;
+
+        // Build query for date filtering
+        const query = { companyId };
+        if (startDate || endDate) {
+            query.orderDate = {};
+            if (startDate) query.orderDate.$gte = new Date(startDate);
+            if (endDate) {
+                const end = new Date(endDate);
+                end.setHours(23, 59, 59, 999);
+                query.orderDate.$lte = end;
+            }
+        }
+
+        // Aggregate client financial data from sales orders
+        const clientData = await SalesOrder.aggregate([
+            { $match: query },
+            {
+                $group: {
+                    _id: '$clientId',
+                    clientName: { $first: '$clientName' },
+                    totalBills: { $sum: 1 },
+                    paidBills: {
+                        $sum: {
+                            $cond: [{ $eq: ['$paymentStatus', 'paid'] }, 1, 0]
+                        }
+                    },
+                    unpaidBills: {
+                        $sum: {
+                            $cond: [{ $ne: ['$paymentStatus', 'paid'] }, 1, 0]
+                        }
+                    },
+                    totalReceivable: { $sum: '$amountDue' },
+                    totalReceived: { $sum: '$amountPaid' }
+                }
+            },
+            { $sort: { totalReceivable: -1 } }
+        ]);
+
+        // Generate PDF
+        const pdfBuffer = await generateClientReportPDF(clientData, req.user.companyId, { startDate, endDate });
+
+        // Generate filename
+        const dateStr = startDate && endDate
+            ? `${new Date(startDate).toISOString().split('T')[0]}_to_${new Date(endDate).toISOString().split('T')[0]}`
+            : 'all_time';
+        const filename = `client_report_${dateStr}_${Date.now()}.pdf`;
+
+        // Send PDF
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(pdfBuffer);
+
+    } catch (error) {
+        console.error('Generate client PDF error:', error);
+        res.status(500).json({ message: 'Error generating client report', error: error.message });
+    }
+});
+
+/**
+ * Generate Client Report - Excel
+ */
+router.post('/clients/excel', authenticate, requirePermission('canViewReports'), checkReportsAccess, async (req, res) => {
+    try {
+        const companyId = req.user.companyId?._id || req.user.companyId;
+
+        if (!companyId) {
+            return res.status(400).json({ message: 'No company associated with user' });
+        }
+
+        const { startDate, endDate } = req.body;
+        const SalesOrder = (await import('../models/SalesOrder.js')).default;
+
+        // Build query for date filtering
+        const query = { companyId };
+        if (startDate || endDate) {
+            query.orderDate = {};
+            if (startDate) query.orderDate.$gte = new Date(startDate);
+            if (endDate) {
+                const end = new Date(endDate);
+                end.setHours(23, 59, 59, 999);
+                query.orderDate.$lte = end;
+            }
+        }
+
+        // Aggregate client financial data from sales orders
+        const clientData = await SalesOrder.aggregate([
+            { $match: query },
+            {
+                $group: {
+                    _id: '$clientId',
+                    clientName: { $first: '$clientName' },
+                    totalBills: { $sum: 1 },
+                    paidBills: {
+                        $sum: {
+                            $cond: [{ $eq: ['$paymentStatus', 'paid'] }, 1, 0]
+                        }
+                    },
+                    unpaidBills: {
+                        $sum: {
+                            $cond: [{ $ne: ['$paymentStatus', 'paid'] }, 1, 0]
+                        }
+                    },
+                    totalReceivable: { $sum: '$amountDue' },
+                    totalReceived: { $sum: '$amountPaid' }
+                }
+            },
+            { $sort: { totalReceivable: -1 } }
+        ]);
+
+        // Generate Excel
+        const excelBuffer = await generateClientReportExcel(clientData, req.user.companyId, { startDate, endDate });
+
+        // Generate filename
+        const dateStr = startDate && endDate
+            ? `${new Date(startDate).toISOString().split('T')[0]}_to_${new Date(endDate).toISOString().split('T')[0]}`
+            : 'all_time';
+        const filename = `client_report_${dateStr}_${Date.now()}.xlsx`;
+
+        // Send Excel
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(excelBuffer);
+
+    } catch (error) {
+        console.error('Generate client Excel error:', error);
+        res.status(500).json({ message: 'Error generating client report', error: error.message });
+    }
+});
+
+/**
+ * Generate Supplier Report - PDF
+ */
+router.post('/suppliers/pdf', authenticate, requirePermission('canViewReports'), checkReportsAccess, async (req, res) => {
+    try {
+        const companyId = req.user.companyId?._id || req.user.companyId;
+
+        if (!companyId) {
+            return res.status(400).json({ message: 'No company associated with user' });
+        }
+
+        const { startDate, endDate } = req.body;
+        const PurchaseOrder = (await import('../models/PurchaseOrder.js')).default;
+
+        // Build query for date filtering
+        const query = { companyId };
+        if (startDate || endDate) {
+            query.orderDate = {};
+            if (startDate) query.orderDate.$gte = new Date(startDate);
+            if (endDate) {
+                const end = new Date(endDate);
+                end.setHours(23, 59, 59, 999);
+                query.orderDate.$lte = end;
+            }
+        }
+
+        // Aggregate supplier financial data from purchase orders
+        const supplierData = await PurchaseOrder.aggregate([
+            { $match: query },
+            {
+                $group: {
+                    _id: '$supplierId',
+                    supplierName: { $first: '$supplierName' },
+                    totalBills: { $sum: 1 },
+                    paidBills: {
+                        $sum: {
+                            $cond: [{ $eq: ['$paymentStatus', 'paid'] }, 1, 0]
+                        }
+                    },
+                    unpaidBills: {
+                        $sum: {
+                            $cond: [{ $ne: ['$paymentStatus', 'paid'] }, 1, 0]
+                        }
+                    },
+                    totalPayable: { $sum: '$amountDue' },
+                    totalPaid: { $sum: '$amountPaid' }
+                }
+            },
+            { $sort: { totalPayable: -1 } }
+        ]);
+
+        // Generate PDF
+        const pdfBuffer = await generateSupplierReportPDF(supplierData, req.user.companyId, { startDate, endDate });
+
+        // Generate filename
+        const dateStr = startDate && endDate
+            ? `${new Date(startDate).toISOString().split('T')[0]}_to_${new Date(endDate).toISOString().split('T')[0]}`
+            : 'all_time';
+        const filename = `supplier_report_${dateStr}_${Date.now()}.pdf`;
+
+        // Send PDF
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(pdfBuffer);
+
+    } catch (error) {
+        console.error('Generate supplier PDF error:', error);
+        res.status(500).json({ message: 'Error generating supplier report', error: error.message });
+    }
+});
+
+/**
+ * Generate Supplier Report - Excel
+ */
+router.post('/suppliers/excel', authenticate, requirePermission('canViewReports'), checkReportsAccess, async (req, res) => {
+    try {
+        const companyId = req.user.companyId?._id || req.user.companyId;
+
+        if (!companyId) {
+            return res.status(400).json({ message: 'No company associated with user' });
+        }
+
+        const { startDate, endDate } = req.body;
+        const PurchaseOrder = (await import('../models/PurchaseOrder.js')).default;
+
+        // Build query for date filtering
+        const query = { companyId };
+        if (startDate || endDate) {
+            query.orderDate = {};
+            if (startDate) query.orderDate.$gte = new Date(startDate);
+            if (endDate) {
+                const end = new Date(endDate);
+                end.setHours(23, 59, 59, 999);
+                query.orderDate.$lte = end;
+            }
+        }
+
+        // Aggregate supplier financial data from purchase orders
+        const supplierData = await PurchaseOrder.aggregate([
+            { $match: query },
+            {
+                $group: {
+                    _id: '$supplierId',
+                    supplierName: { $first: '$supplierName' },
+                    totalBills: { $sum: 1 },
+                    paidBills: {
+                        $sum: {
+                            $cond: [{ $eq: ['$paymentStatus', 'paid'] }, 1, 0]
+                        }
+                    },
+                    unpaidBills: {
+                        $sum: {
+                            $cond: [{ $ne: ['$paymentStatus', 'paid'] }, 1, 0]
+                        }
+                    },
+                    totalPayable: { $sum: '$amountDue' },
+                    totalPaid: { $sum: '$amountPaid' }
+                }
+            },
+            { $sort: { totalPayable: -1 } }
+        ]);
+
+        // Generate Excel
+        const excelBuffer = await generateSupplierReportExcel(supplierData, req.user.companyId, { startDate, endDate });
+
+        // Generate filename
+        const dateStr = startDate && endDate
+            ? `${new Date(startDate).toISOString().split('T')[0]}_to_${new Date(endDate).toISOString().split('T')[0]}`
+            : 'all_time';
+        const filename = `supplier_report_${dateStr}_${Date.now()}.xlsx`;
+
+        // Send Excel
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(excelBuffer);
+
+    } catch (error) {
+        console.error('Generate supplier Excel error:', error);
+        res.status(500).json({ message: 'Error generating supplier report', error: error.message });
+    }
+});
+
 export default router;
+
+/**
+ * Generate Delivery Out Report - PDF
+ */
+router.post('/deliveries-out/pdf', authenticate, requirePermission('canViewReports'), checkReportsAccess, async (req, res) => {
+    try {
+        const companyId = req.user.companyId?._id || req.user.companyId;
+
+        if (!companyId) {
+            return res.status(400).json({ message: 'No company associated with user' });
+        }
+
+        const { startDate, endDate, clientId, clientName } = req.body;
+
+        // Build query for DeliveryOut
+        const query = { companyId };
+
+        if (startDate || endDate) {
+            query.deliveryDate = {};
+            if (startDate) query.deliveryDate.$gte = new Date(startDate);
+            if (endDate) {
+                const end = new Date(endDate);
+                end.setHours(23, 59, 59, 999);
+                query.deliveryDate.$lte = end;
+            }
+        }
+
+        // Filter by client
+        if (clientId) {
+            query.clientId = clientId;
+        } else if (clientName) {
+            query.clientName = clientName;
+        }
+
+        // Fetch DeliveryOut data
+        const deliveries = await DeliveryOut.find(query)
+            .sort({ deliveryDate: -1 })
+            .lean();
+
+        // Transform data for report
+        const deliveryData = deliveries.map(delivery => {
+            const itemsText = delivery.items && delivery.items.length > 0
+                ? delivery.items.map(item =>
+                    `${item.itemName || 'Unknown'} (${item.warehouseName || 'Unknown'} - ${item.quantity || 0} bags)`
+                ).join(', ')
+                : 'N/A';
+
+            return {
+                deliveryDate: delivery.deliveryDate,
+                deliveryNumber: delivery.deliveryNumber || 'N/A',
+                clientName: delivery.clientName || 'N/A',
+                staffName: delivery.staffName || 'N/A',
+                items: itemsText,
+                totalAmount: delivery.totalAmount || 0
+            };
+        });
+
+        // Generate PDF (reuse sales PDF generator with modified data)
+        const pdfBuffer = await generateSalesPDF(deliveryData, req.user.companyId, {
+            startDate,
+            endDate,
+            reportTitle: 'Delivery Out Report'
+        });
+
+        const dateStr = startDate && endDate
+            ? `${new Date(startDate).toISOString().split('T')[0]}_to_${new Date(endDate).toISOString().split('T')[0]}`
+            : 'all_time';
+        const filename = `delivery_out_report_${dateStr}_${Date.now()}.pdf`;
+
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(pdfBuffer);
+
+    } catch (error) {
+        console.error('Generate delivery out PDF error:', error);
+        res.status(500).json({ message: 'Error generating delivery out report', error: error.message });
+    }
+});
+
+/**
+ * Generate Delivery Out Report - Excel
+ */
+router.post('/deliveries-out/excel', authenticate, requirePermission('canViewReports'), checkReportsAccess, async (req, res) => {
+    try {
+        const companyId = req.user.companyId?._id || req.user.companyId;
+
+        if (!companyId) {
+            return res.status(400).json({ message: 'No company associated with user' });
+        }
+
+        const { startDate, endDate, clientId, clientName } = req.body;
+
+        // Build query for DeliveryOut
+        const query = { companyId };
+
+        if (startDate || endDate) {
+            query.deliveryDate = {};
+            if (startDate) query.deliveryDate.$gte = new Date(startDate);
+            if (endDate) {
+                const end = new Date(endDate);
+                end.setHours(23, 59, 59, 999);
+                query.deliveryDate.$lte = end;
+            }
+        }
+
+        // Filter by client
+        if (clientId) {
+            query.clientId = clientId;
+        } else if (clientName) {
+            query.clientName = clientName;
+        }
+
+        // Fetch DeliveryOut data
+        const deliveries = await DeliveryOut.find(query)
+            .sort({ deliveryDate: -1 })
+            .lean();
+
+        // Transform data for report
+        const deliveryData = deliveries.map(delivery => {
+            const itemsText = delivery.items && delivery.items.length > 0
+                ? delivery.items.map(item =>
+                    `${item.itemName || 'Unknown'} (${item.warehouseName || 'Unknown'} - ${item.quantity || 0} bags)`
+                ).join(', ')
+                : 'N/A';
+
+            return {
+                deliveryDate: delivery.deliveryDate,
+                deliveryNumber: delivery.deliveryNumber || 'N/A',
+                clientName: delivery.clientName || 'N/A',
+                staffName: delivery.staffName || 'N/A',
+                items: itemsText,
+                totalAmount: delivery.totalAmount || 0
+            };
+        });
+
+        // Generate Excel (reuse sales Excel generator)
+        const excelBuffer = await generateSalesReportExcel(deliveryData, req.user.companyId, {
+            startDate,
+            endDate,
+            reportTitle: 'Delivery Out Report'
+        });
+
+        const dateStr = startDate && endDate
+            ? `${new Date(startDate).toISOString().split('T')[0]}_to_${new Date(endDate).toISOString().split('T')[0]}`
+            : 'all_time';
+        const filename = `delivery_out_report_${dateStr}_${Date.now()}.xlsx`;
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(excelBuffer);
+
+    } catch (error) {
+        console.error('Generate delivery out Excel error:', error);
+        res.status(500).json({ message: 'Error generating delivery out report', error: error.message });
+    }
+});
+
+/**
+ * Generate Delivery In Report - PDF
+ */
+router.post('/deliveries-in/pdf', authenticate, requirePermission('canViewReports'), checkReportsAccess, async (req, res) => {
+    try {
+        const companyId = req.user.companyId?._id || req.user.companyId;
+
+        if (!companyId) {
+            return res.status(400).json({ message: 'No company associated with user' });
+        }
+
+        const { startDate, endDate, supplierId, supplierName } = req.body;
+
+        // Build query for DeliveryIn
+        const query = { companyId };
+
+        if (startDate || endDate) {
+            query.receiptDate = {};
+            if (startDate) query.receiptDate.$gte = new Date(startDate);
+            if (endDate) {
+                const end = new Date(endDate);
+                end.setHours(23, 59, 59, 999);
+                query.receiptDate.$lte = end;
+            }
+        }
+
+        // Filter by supplier
+        if (supplierId) {
+            query.supplierId = supplierId;
+        } else if (supplierName) {
+            query.supplierName = supplierName;
+        }
+
+        // Fetch DeliveryIn data
+        const deliveries = await DeliveryIn.find(query)
+            .sort({ receiptDate: -1 })
+            .lean();
+
+        // Transform data for report
+        const deliveryData = deliveries.map(delivery => {
+            const itemsText = delivery.items && delivery.items.length > 0
+                ? delivery.items.map(item =>
+                    `${item.itemName || 'Unknown'} (${item.warehouseName || 'Unknown'} - ${item.quantity || 0} bags)`
+                ).join(', ')
+                : 'N/A';
+
+            return {
+                purchaseDate: delivery.receiptDate,
+                grnNumber: delivery.grnNumber || 'N/A',
+                supplierName: delivery.supplierName || 'N/A',
+                staffName: delivery.staffName || 'N/A',
+                items: itemsText,
+                totalAmount: delivery.totalAmount || 0
+            };
+        });
+
+        // Generate PDF (reuse purchase PDF generator)
+        const pdfBuffer = await generatePurchasePDF(deliveryData, req.user.companyId, {
+            startDate,
+            endDate,
+            reportTitle: 'Delivery In Report'
+        });
+
+        const dateStr = startDate && endDate
+            ? `${new Date(startDate).toISOString().split('T')[0]}_to_${new Date(endDate).toISOString().split('T')[0]}`
+            : 'all_time';
+        const filename = `delivery_in_report_${dateStr}_${Date.now()}.pdf`;
+
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(pdfBuffer);
+
+    } catch (error) {
+        console.error('Generate delivery in PDF error:', error);
+        res.status(500).json({ message: 'Error generating delivery in report', error: error.message });
+    }
+});
+
+/**
+ * Generate Delivery In Report - Excel
+ */
+router.post('/deliveries-in/excel', authenticate, requirePermission('canViewReports'), checkReportsAccess, async (req, res) => {
+    try {
+        const companyId = req.user.companyId?._id || req.user.companyId;
+
+        if (!companyId) {
+            return res.status(400).json({ message: 'No company associated with user' });
+        }
+
+        const { startDate, endDate, supplierId, supplierName } = req.body;
+
+        // Build query for DeliveryIn
+        const query = { companyId };
+
+        if (startDate || endDate) {
+            query.receiptDate = {};
+            if (startDate) query.receiptDate.$gte = new Date(startDate);
+            if (endDate) {
+                const end = new Date(endDate);
+                end.setHours(23, 59, 59, 999);
+                query.receiptDate.$lte = end;
+            }
+        }
+
+        // Filter by supplier
+        if (supplierId) {
+            query.supplierId = supplierId;
+        } else if (supplierName) {
+            query.supplierName = supplierName;
+        }
+
+        // Fetch DeliveryIn data
+        const deliveries = await DeliveryIn.find(query)
+            .sort({ receiptDate: -1 })
+            .lean();
+
+        // Transform data for report
+        const deliveryData = deliveries.map(delivery => {
+            const itemsText = delivery.items && delivery.items.length > 0
+                ? delivery.items.map(item =>
+                    `${item.itemName || 'Unknown'} (${item.warehouseName || 'Unknown'} - ${item.quantity || 0} bags)`
+                ).join(', ')
+                : 'N/A';
+
+            return {
+                purchaseDate: delivery.receiptDate,
+                grnNumber: delivery.grnNumber || 'N/A',
+                supplierName: delivery.supplierName || 'N/A',
+                staffName: delivery.staffName || 'N/A',
+                items: itemsText,
+                totalAmount: delivery.totalAmount || 0
+            };
+        });
+
+        // Generate Excel (reuse purchase Excel generator)
+        const excelBuffer = await generatePurchaseReportExcel(deliveryData, req.user.companyId, {
+            startDate,
+            endDate,
+            reportTitle: 'Delivery In Report'
+        });
+
+        const dateStr = startDate && endDate
+            ? `${new Date(startDate).toISOString().split('T')[0]}_to_${new Date(endDate).toISOString().split('T')[0]}`
+            : 'all_time';
+        const filename = `delivery_in_report_${dateStr}_${Date.now()}.xlsx`;
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(excelBuffer);
+
+    } catch (error) {
+        console.error('Generate delivery in Excel error:', error);
+        res.status(500).json({ message: 'Error generating delivery in report', error: error.message });
+    }
+});
