@@ -99,14 +99,27 @@ export default function AdminCoupons() {
             }
 
             const payload = {
-                ...formData,
                 code: formData.code.toUpperCase(),
+                type: formData.type,
                 value: formData.type === 'free_plan' ? 0 : parseFloat(formData.value),
+                applicablePlans: formData.applicablePlans,
                 usageLimit: {
-                    total: formData.usageLimit.total ? parseInt(formData.usageLimit.total) : null,
-                    perUser: formData.usageLimit.perUser
-                }
+                    perUser: Boolean(formData.usageLimit.perUser)
+                },
+                description: formData.description || ''
             };
+
+            // Only add expiryDate if it's provided
+            if (formData.expiryDate) {
+                payload.expiryDate = formData.expiryDate;
+            }
+
+            // Only add usageLimit.total if it's provided
+            if (formData.usageLimit.total) {
+                payload.usageLimit.total = parseInt(formData.usageLimit.total);
+            }
+
+            console.log('Creating coupon with payload:', payload);
 
             await api.post('/admin/coupons', payload);
 
@@ -121,6 +134,15 @@ export default function AdminCoupons() {
         } catch (error) {
             console.error('Coupon creation error:', error);
             console.error('Error response:', error.response?.data);
+            console.error('Validation errors:', error.response?.data?.errors);
+
+            // Show detailed error messages
+            if (error.response?.data?.errors) {
+                error.response.data.errors.forEach((err, index) => {
+                    console.error(`Error ${index + 1}:`, err.path, '-', err.msg);
+                });
+            }
+
             toast({
                 title: 'Error',
                 description: error.response?.data?.message || error.response?.data?.errors?.[0]?.msg || 'Failed to create coupon',

@@ -22,6 +22,9 @@ const CheckoutPage = () => {
     const [subscription, setSubscription] = useState(null);
     const [error, setError] = useState(null);
 
+    const planType = searchParams.get('plan') || 'paid';
+    const planPrice = 999; // ₹999 for paid plan
+
     // Coupon state
     const [couponCode, setCouponCode] = useState('');
     const [couponApplied, setCouponApplied] = useState(false);
@@ -29,9 +32,6 @@ const CheckoutPage = () => {
     const [discount, setDiscount] = useState(0);
     const [finalAmount, setFinalAmount] = useState(planPrice);
     const [applyingCoupon, setApplyingCoupon] = useState(false);
-
-    const planType = searchParams.get('plan') || 'paid';
-    const planPrice = 999; // ₹999 for paid plan
 
     useEffect(() => {
         checkEligibility();

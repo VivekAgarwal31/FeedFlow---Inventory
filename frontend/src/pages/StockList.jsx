@@ -167,6 +167,13 @@ const StockList = () => {
     setSuccess('')
 
     try {
+      // Check if warehouses exist
+      if (!warehouses || warehouses.length === 0) {
+        setError('Please create a warehouse first before adding stock items')
+        setSubmitting(false)
+        return
+      }
+
       // Validate required fields
       if (!form.itemName.trim()) {
         setError('Item name is required')
@@ -223,7 +230,16 @@ const StockList = () => {
       setDialogOpen(false)
     } catch (error) {
       console.error('Error creating stock item:', error)
-      const errorMsg = error.response?.data?.message || 'Failed to create stock item'
+
+      // Extract specific validation error or use generic message
+      let errorMsg = 'Failed to create stock item'
+      if (error.response?.data?.errors && error.response.data.errors.length > 0) {
+        // Show the first validation error message
+        errorMsg = error.response.data.errors[0].msg
+      } else if (error.response?.data?.message) {
+        errorMsg = error.response.data.message
+      }
+
       setError(errorMsg)
       toast({
         title: 'Error',
