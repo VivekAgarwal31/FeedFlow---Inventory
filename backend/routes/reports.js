@@ -573,54 +573,126 @@ router.post('/clients/pdf', authenticate, requirePermission('canViewReports'), c
             return res.status(400).json({ message: 'No company associated with user' });
         }
 
-        const { startDate, endDate } = req.body;
-        const SalesOrder = (await import('../models/SalesOrder.js')).default;
+        const { startDate, endDate, clientId } = req.body;
 
-        // Build query for date filtering
-        const query = { companyId };
-        if (startDate || endDate) {
-            query.orderDate = {};
-            if (startDate) query.orderDate.$gte = new Date(startDate);
-            if (endDate) {
-                const end = new Date(endDate);
-                end.setHours(23, 59, 59, 999);
-                query.orderDate.$lte = end;
-            }
+        if (!clientId) {
+            return res.status(400).json({ message: 'Client ID is required for ledger report' });
         }
 
-        // Aggregate client financial data from sales orders
-        const clientData = await SalesOrder.aggregate([
-            { $match: query },
-            {
-                $group: {
-                    _id: '$clientId',
-                    clientName: { $first: '$clientName' },
-                    totalBills: { $sum: 1 },
-                    paidBills: {
-                        $sum: {
-                            $cond: [{ $eq: ['$paymentStatus', 'paid'] }, 1, 0]
-                        }
-                    },
-                    unpaidBills: {
-                        $sum: {
-                            $cond: [{ $ne: ['$paymentStatus', 'paid'] }, 1, 0]
-                        }
-                    },
-                    totalReceivable: { $sum: '$amountDue' },
-                    totalReceived: { $sum: '$amountPaid' }
-                }
-            },
-            { $sort: { totalReceivable: -1 } }
+        // Import Payment model
+        const Payment = (await import('../models/Payment.js')).default;
+        const Client = (await import('../models/Client.js')).default;
+
+        // Get client details
+        const client = await Client.findById(clientId).lean();
+        if (!client) {
+            return res.status(404).json({ message: 'Client not found' });
+        }
+
+        const start = startDate ? new Date(startDate) : new Date(0);
+        const end = endDate ? new Date(endDate) : new Date();
+        end.setHours(23, 59, 59, 999);
+
+        // Calculate opening balance (all unpaid transactions before start date)
+        const [openingSalesOrders, openingDirectSales] = await Promise.all([
+            SalesOrder.find({
+                companyId,
+                clientId,
+                orderDate: { $lt: start },
+                paymentStatus: { $in: ['pending', 'partial'] }
+            }).lean(),
+            DirectSale.find({
+                companyId,
+                clientId,
+                saleDate: { $lt: start },
+                paymentStatus: { $in: ['pending', 'partial'] }
+            }).lean()
         ]);
 
+        const openingBalance = [
+            ...openingSalesOrders.map(o => o.amountDue || (o.totalAmount - (o.amountPaid || 0))),
+            ...openingDirectSales.map(s => s.totalAmount - (s.amountPaid || 0))
+        ].reduce((sum, amt) => sum + amt, 0);
+
+        // Get all credit sales in date range
+        const [salesOrders, directSales] = await Promise.all([
+            SalesOrder.find({
+                companyId,
+                clientId,
+                orderDate: { $gte: start, $lte: end },
+                paymentType: 'credit'
+            }).sort({ orderDate: 1 }).lean(),
+            DirectSale.find({
+                companyId,
+                clientId,
+                saleDate: { $gte: start, $lte: end },
+                paymentType: 'credit'
+            }).sort({ saleDate: 1 }).lean()
+        ]);
+
+        // Get all payments in date range
+        const payments = await Payment.find({
+            companyId,
+            partyId: clientId,
+            partyType: 'client',
+            paymentDate: { $gte: start, $lte: end }
+        }).sort({ paymentDate: 1 }).lean();
+
+        // Combine all transactions and sort by date
+        const transactions = [
+            ...salesOrders.map(order => ({
+                date: order.orderDate,
+                type: 'sale',
+                description: `Sale Order #${order.orderNumber || order._id.toString().slice(-8).toUpperCase()}`,
+                debit: order.totalAmount,
+                credit: 0,
+                balance: 0
+            })),
+            ...directSales.map(sale => ({
+                date: sale.saleDate,
+                type: 'sale',
+                description: `Direct Sale #${sale.saleNumber || sale._id.toString().slice(-8).toUpperCase()}`,
+                debit: sale.totalAmount,
+                credit: 0,
+                balance: 0
+            })),
+            ...payments.map(payment => ({
+                date: payment.paymentDate,
+                type: 'payment',
+                description: `Payment - ${payment.paymentMethod} ${payment.referenceNumber ? '(Ref: ' + payment.referenceNumber + ')' : ''}`,
+                debit: 0,
+                credit: payment.amount,
+                balance: 0
+            }))
+        ].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        // Calculate running balance
+        let runningBalance = openingBalance;
+        transactions.forEach(txn => {
+            runningBalance += txn.debit - txn.credit;
+            txn.balance = runningBalance;
+        });
+
+        const closingBalance = runningBalance;
+
+        // Prepare ledger data
+        const ledgerData = {
+            clientName: client.name,
+            openingBalance,
+            transactions,
+            closingBalance,
+            totalDebits: transactions.reduce((sum, t) => sum + t.debit, 0),
+            totalCredits: transactions.reduce((sum, t) => sum + t.credit, 0)
+        };
+
         // Generate PDF
-        const pdfBuffer = await generateClientReportPDF(clientData, req.user.companyId, { startDate, endDate });
+        const pdfBuffer = await generateClientReportPDF(ledgerData, req.user.companyId, { startDate, endDate });
 
         // Generate filename
         const dateStr = startDate && endDate
             ? `${new Date(startDate).toISOString().split('T')[0]}_to_${new Date(endDate).toISOString().split('T')[0]}`
             : 'all_time';
-        const filename = `client_report_${dateStr}_${Date.now()}.pdf`;
+        const filename = `client_ledger_${client.name.replace(/\s+/g, '_')}_${dateStr}_${Date.now()}.pdf`;
 
         // Send PDF
         res.setHeader('Content-Type', 'application/pdf');
@@ -644,56 +716,63 @@ router.post('/clients/excel', authenticate, requirePermission('canViewReports'),
             return res.status(400).json({ message: 'No company associated with user' });
         }
 
-        const { startDate, endDate } = req.body;
-        const SalesOrder = (await import('../models/SalesOrder.js')).default;
+        const { startDate, endDate, clientId } = req.body;
 
-        // Build query for date filtering
-        const query = { companyId };
-        if (startDate || endDate) {
-            query.orderDate = {};
-            if (startDate) query.orderDate.$gte = new Date(startDate);
-            if (endDate) {
-                const end = new Date(endDate);
-                end.setHours(23, 59, 59, 999);
-                query.orderDate.$lte = end;
-            }
+        if (!clientId) {
+            return res.status(400).json({ message: 'Client ID is required for ledger report' });
         }
 
-        // Aggregate client financial data from sales orders
-        const clientData = await SalesOrder.aggregate([
-            { $match: query },
-            {
-                $group: {
-                    _id: '$clientId',
-                    clientName: { $first: '$clientName' },
-                    totalBills: { $sum: 1 },
-                    paidBills: {
-                        $sum: {
-                            $cond: [{ $eq: ['$paymentStatus', 'paid'] }, 1, 0]
-                        }
-                    },
-                    unpaidBills: {
-                        $sum: {
-                            $cond: [{ $ne: ['$paymentStatus', 'paid'] }, 1, 0]
-                        }
-                    },
-                    totalReceivable: { $sum: '$amountDue' },
-                    totalReceived: { $sum: '$amountPaid' }
-                }
-            },
-            { $sort: { totalReceivable: -1 } }
+        const Payment = (await import('../models/Payment.js')).default;
+        const Client = (await import('../models/Client.js')).default;
+
+        const client = await Client.findById(clientId).lean();
+        if (!client) {
+            return res.status(404).json({ message: 'Client not found' });
+        }
+
+        const start = startDate ? new Date(startDate) : new Date(0);
+        const end = endDate ? new Date(endDate) : new Date();
+        end.setHours(23, 59, 59, 999);
+
+        const [openingSalesOrders, openingDirectSales] = await Promise.all([
+            SalesOrder.find({ companyId, clientId, orderDate: { $lt: start }, paymentStatus: { $in: ['pending', 'partial'] } }).lean(),
+            DirectSale.find({ companyId, clientId, saleDate: { $lt: start }, paymentStatus: { $in: ['pending', 'partial'] } }).lean()
         ]);
 
-        // Generate Excel
-        const excelBuffer = await generateClientReportExcel(clientData, req.user.companyId, { startDate, endDate });
+        const openingBalance = [
+            ...openingSalesOrders.map(o => o.amountDue || (o.totalAmount - (o.amountPaid || 0))),
+            ...openingDirectSales.map(s => s.totalAmount - (s.amountPaid || 0))
+        ].reduce((sum, amt) => sum + amt, 0);
 
-        // Generate filename
-        const dateStr = startDate && endDate
-            ? `${new Date(startDate).toISOString().split('T')[0]}_to_${new Date(endDate).toISOString().split('T')[0]}`
-            : 'all_time';
-        const filename = `client_report_${dateStr}_${Date.now()}.xlsx`;
+        const [salesOrders, directSales] = await Promise.all([
+            SalesOrder.find({ companyId, clientId, orderDate: { $gte: start, $lte: end }, paymentType: 'credit' }).sort({ orderDate: 1 }).lean(),
+            DirectSale.find({ companyId, clientId, saleDate: { $gte: start, $lte: end }, paymentType: 'credit' }).sort({ saleDate: 1 }).lean()
+        ]);
 
-        // Send Excel
+        const payments = await Payment.find({ companyId, partyId: clientId, partyType: 'client', paymentDate: { $gte: start, $lte: end } }).sort({ paymentDate: 1 }).lean();
+
+        const transactions = [
+            ...salesOrders.map(order => ({ date: order.orderDate, type: 'sale', description: `Sale Order #${order.orderNumber || order._id.toString().slice(-8).toUpperCase()}`, debit: order.totalAmount, credit: 0, balance: 0 })),
+            ...directSales.map(sale => ({ date: sale.saleDate, type: 'sale', description: `Direct Sale #${sale.saleNumber || sale._id.toString().slice(-8).toUpperCase()}`, debit: sale.totalAmount, credit: 0, balance: 0 })),
+            ...payments.map(payment => ({ date: payment.paymentDate, type: 'payment', description: `Payment - ${payment.paymentMethod} ${payment.referenceNumber ? '(Ref: ' + payment.referenceNumber + ')' : ''}`, debit: 0, credit: payment.amount, balance: 0 }))
+        ].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        let runningBalance = openingBalance;
+        transactions.forEach(txn => { runningBalance += txn.debit - txn.credit; txn.balance = runningBalance; });
+
+        const ledgerData = {
+            clientName: client.name,
+            openingBalance,
+            transactions,
+            closingBalance: runningBalance,
+            totalDebits: transactions.reduce((sum, t) => sum + t.debit, 0),
+            totalCredits: transactions.reduce((sum, t) => sum + t.credit, 0)
+        };
+
+        const excelBuffer = await generateClientReportExcel(ledgerData, req.user.companyId, { startDate, endDate });
+        const dateStr = startDate && endDate ? `${new Date(startDate).toISOString().split('T')[0]}_to_${new Date(endDate).toISOString().split('T')[0]}` : 'all_time';
+        const filename = `client_ledger_${client.name.replace(/\s+/g, '_')}_${dateStr}_${Date.now()}.xlsx`;
+
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         res.send(excelBuffer);
@@ -715,56 +794,63 @@ router.post('/suppliers/pdf', authenticate, requirePermission('canViewReports'),
             return res.status(400).json({ message: 'No company associated with user' });
         }
 
-        const { startDate, endDate } = req.body;
-        const PurchaseOrder = (await import('../models/PurchaseOrder.js')).default;
+        const { startDate, endDate, supplierId } = req.body;
 
-        // Build query for date filtering
-        const query = { companyId };
-        if (startDate || endDate) {
-            query.orderDate = {};
-            if (startDate) query.orderDate.$gte = new Date(startDate);
-            if (endDate) {
-                const end = new Date(endDate);
-                end.setHours(23, 59, 59, 999);
-                query.orderDate.$lte = end;
-            }
+        if (!supplierId) {
+            return res.status(400).json({ message: 'Supplier ID is required for ledger report' });
         }
 
-        // Aggregate supplier financial data from purchase orders
-        const supplierData = await PurchaseOrder.aggregate([
-            { $match: query },
-            {
-                $group: {
-                    _id: '$supplierId',
-                    supplierName: { $first: '$supplierName' },
-                    totalBills: { $sum: 1 },
-                    paidBills: {
-                        $sum: {
-                            $cond: [{ $eq: ['$paymentStatus', 'paid'] }, 1, 0]
-                        }
-                    },
-                    unpaidBills: {
-                        $sum: {
-                            $cond: [{ $ne: ['$paymentStatus', 'paid'] }, 1, 0]
-                        }
-                    },
-                    totalPayable: { $sum: '$amountDue' },
-                    totalPaid: { $sum: '$amountPaid' }
-                }
-            },
-            { $sort: { totalPayable: -1 } }
+        const Payment = (await import('../models/Payment.js')).default;
+        const Supplier = (await import('../models/Supplier.js')).default;
+
+        const supplier = await Supplier.findById(supplierId).lean();
+        if (!supplier) {
+            return res.status(404).json({ message: 'Supplier not found' });
+        }
+
+        const start = startDate ? new Date(startDate) : new Date(0);
+        const end = endDate ? new Date(endDate) : new Date();
+        end.setHours(23, 59, 59, 999);
+
+        const [openingPurchaseOrders, openingDirectPurchases] = await Promise.all([
+            PurchaseOrder.find({ companyId, supplierId, orderDate: { $lt: start }, paymentStatus: { $in: ['pending', 'partial'] } }).lean(),
+            DirectPurchase.find({ companyId, supplierId, purchaseDate: { $lt: start }, paymentStatus: { $in: ['pending', 'partial'] } }).lean()
         ]);
 
-        // Generate PDF
-        const pdfBuffer = await generateSupplierReportPDF(supplierData, req.user.companyId, { startDate, endDate });
+        const openingBalance = [
+            ...openingPurchaseOrders.map(o => o.amountDue || (o.totalAmount - (o.amountPaid || 0))),
+            ...openingDirectPurchases.map(p => p.totalAmount - (p.amountPaid || 0))
+        ].reduce((sum, amt) => sum + amt, 0);
 
-        // Generate filename
-        const dateStr = startDate && endDate
-            ? `${new Date(startDate).toISOString().split('T')[0]}_to_${new Date(endDate).toISOString().split('T')[0]}`
-            : 'all_time';
-        const filename = `supplier_report_${dateStr}_${Date.now()}.pdf`;
+        const [purchaseOrders, directPurchases] = await Promise.all([
+            PurchaseOrder.find({ companyId, supplierId, orderDate: { $gte: start, $lte: end }, paymentType: 'credit' }).sort({ orderDate: 1 }).lean(),
+            DirectPurchase.find({ companyId, supplierId, purchaseDate: { $gte: start, $lte: end }, paymentType: 'credit' }).sort({ purchaseDate: 1 }).lean()
+        ]);
 
-        // Send PDF
+        const payments = await Payment.find({ companyId, partyId: supplierId, partyType: 'supplier', paymentDate: { $gte: start, $lte: end } }).sort({ paymentDate: 1 }).lean();
+
+        const transactions = [
+            ...purchaseOrders.map(order => ({ date: order.orderDate, type: 'purchase', description: `Purchase Order #${order.orderNumber || order._id.toString().slice(-8).toUpperCase()}`, debit: order.totalAmount, credit: 0, balance: 0 })),
+            ...directPurchases.map(purchase => ({ date: purchase.purchaseDate, type: 'purchase', description: `Direct Purchase #${purchase.purchaseNumber || purchase._id.toString().slice(-8).toUpperCase()}`, debit: purchase.totalAmount, credit: 0, balance: 0 })),
+            ...payments.map(payment => ({ date: payment.paymentDate, type: 'payment', description: `Payment - ${payment.paymentMethod} ${payment.referenceNumber ? '(Ref: ' + payment.referenceNumber + ')' : ''}`, debit: 0, credit: payment.amount, balance: 0 }))
+        ].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        let runningBalance = openingBalance;
+        transactions.forEach(txn => { runningBalance += txn.debit - txn.credit; txn.balance = runningBalance; });
+
+        const ledgerData = {
+            supplierName: supplier.name,
+            openingBalance,
+            transactions,
+            closingBalance: runningBalance,
+            totalDebits: transactions.reduce((sum, t) => sum + t.debit, 0),
+            totalCredits: transactions.reduce((sum, t) => sum + t.credit, 0)
+        };
+
+        const pdfBuffer = await generateSupplierReportPDF(ledgerData, req.user.companyId, { startDate, endDate });
+        const dateStr = startDate && endDate ? `${new Date(startDate).toISOString().split('T')[0]}_to_${new Date(endDate).toISOString().split('T')[0]}` : 'all_time';
+        const filename = `supplier_ledger_${supplier.name.replace(/\s+/g, '_')}_${dateStr}_${Date.now()}.pdf`;
+
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         res.send(pdfBuffer);
@@ -786,56 +872,63 @@ router.post('/suppliers/excel', authenticate, requirePermission('canViewReports'
             return res.status(400).json({ message: 'No company associated with user' });
         }
 
-        const { startDate, endDate } = req.body;
-        const PurchaseOrder = (await import('../models/PurchaseOrder.js')).default;
+        const { startDate, endDate, supplierId } = req.body;
 
-        // Build query for date filtering
-        const query = { companyId };
-        if (startDate || endDate) {
-            query.orderDate = {};
-            if (startDate) query.orderDate.$gte = new Date(startDate);
-            if (endDate) {
-                const end = new Date(endDate);
-                end.setHours(23, 59, 59, 999);
-                query.orderDate.$lte = end;
-            }
+        if (!supplierId) {
+            return res.status(400).json({ message: 'Supplier ID is required for ledger report' });
         }
 
-        // Aggregate supplier financial data from purchase orders
-        const supplierData = await PurchaseOrder.aggregate([
-            { $match: query },
-            {
-                $group: {
-                    _id: '$supplierId',
-                    supplierName: { $first: '$supplierName' },
-                    totalBills: { $sum: 1 },
-                    paidBills: {
-                        $sum: {
-                            $cond: [{ $eq: ['$paymentStatus', 'paid'] }, 1, 0]
-                        }
-                    },
-                    unpaidBills: {
-                        $sum: {
-                            $cond: [{ $ne: ['$paymentStatus', 'paid'] }, 1, 0]
-                        }
-                    },
-                    totalPayable: { $sum: '$amountDue' },
-                    totalPaid: { $sum: '$amountPaid' }
-                }
-            },
-            { $sort: { totalPayable: -1 } }
+        const Payment = (await import('../models/Payment.js')).default;
+        const Supplier = (await import('../models/Supplier.js')).default;
+
+        const supplier = await Supplier.findById(supplierId).lean();
+        if (!supplier) {
+            return res.status(404).json({ message: 'Supplier not found' });
+        }
+
+        const start = startDate ? new Date(startDate) : new Date(0);
+        const end = endDate ? new Date(endDate) : new Date();
+        end.setHours(23, 59, 59, 999);
+
+        const [openingPurchaseOrders, openingDirectPurchases] = await Promise.all([
+            PurchaseOrder.find({ companyId, supplierId, orderDate: { $lt: start }, paymentStatus: { $in: ['pending', 'partial'] } }).lean(),
+            DirectPurchase.find({ companyId, supplierId, purchaseDate: { $lt: start }, paymentStatus: { $in: ['pending', 'partial'] } }).lean()
         ]);
 
-        // Generate Excel
-        const excelBuffer = await generateSupplierReportExcel(supplierData, req.user.companyId, { startDate, endDate });
+        const openingBalance = [
+            ...openingPurchaseOrders.map(o => o.amountDue || (o.totalAmount - (o.amountPaid || 0))),
+            ...openingDirectPurchases.map(p => p.totalAmount - (p.amountPaid || 0))
+        ].reduce((sum, amt) => sum + amt, 0);
 
-        // Generate filename
-        const dateStr = startDate && endDate
-            ? `${new Date(startDate).toISOString().split('T')[0]}_to_${new Date(endDate).toISOString().split('T')[0]}`
-            : 'all_time';
-        const filename = `supplier_report_${dateStr}_${Date.now()}.xlsx`;
+        const [purchaseOrders, directPurchases] = await Promise.all([
+            PurchaseOrder.find({ companyId, supplierId, orderDate: { $gte: start, $lte: end }, paymentType: 'credit' }).sort({ orderDate: 1 }).lean(),
+            DirectPurchase.find({ companyId, supplierId, purchaseDate: { $gte: start, $lte: end }, paymentType: 'credit' }).sort({ purchaseDate: 1 }).lean()
+        ]);
 
-        // Send Excel
+        const payments = await Payment.find({ companyId, partyId: supplierId, partyType: 'supplier', paymentDate: { $gte: start, $lte: end } }).sort({ paymentDate: 1 }).lean();
+
+        const transactions = [
+            ...purchaseOrders.map(order => ({ date: order.orderDate, type: 'purchase', description: `Purchase Order #${order.orderNumber || order._id.toString().slice(-8).toUpperCase()}`, debit: order.totalAmount, credit: 0, balance: 0 })),
+            ...directPurchases.map(purchase => ({ date: purchase.purchaseDate, type: 'purchase', description: `Direct Purchase #${purchase.purchaseNumber || purchase._id.toString().slice(-8).toUpperCase()}`, debit: purchase.totalAmount, credit: 0, balance: 0 })),
+            ...payments.map(payment => ({ date: payment.paymentDate, type: 'payment', description: `Payment - ${payment.paymentMethod} ${payment.referenceNumber ? '(Ref: ' + payment.referenceNumber + ')' : ''}`, debit: 0, credit: payment.amount, balance: 0 }))
+        ].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        let runningBalance = openingBalance;
+        transactions.forEach(txn => { runningBalance += txn.debit - txn.credit; txn.balance = runningBalance; });
+
+        const ledgerData = {
+            supplierName: supplier.name,
+            openingBalance,
+            transactions,
+            closingBalance: runningBalance,
+            totalDebits: transactions.reduce((sum, t) => sum + t.debit, 0),
+            totalCredits: transactions.reduce((sum, t) => sum + t.credit, 0)
+        };
+
+        const excelBuffer = await generateSupplierReportExcel(ledgerData, req.user.companyId, { startDate, endDate });
+        const dateStr = startDate && endDate ? `${new Date(startDate).toISOString().split('T')[0]}_to_${new Date(endDate).toISOString().split('T')[0]}` : 'all_time';
+        const filename = `supplier_ledger_${supplier.name.replace(/\s+/g, '_')}_${dateStr}_${Date.now()}.xlsx`;
+
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         res.send(excelBuffer);

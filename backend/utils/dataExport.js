@@ -660,61 +660,48 @@ export const generateInventoryReportExcel = async (stockItems, company, filters 
 };
 
 /**
- * Generate Client Report in Excel format
- * @param {Array} clients - Client financial summary data
+ * Generate Client Ledger Report in Excel format
+ * @param {Object} ledgerData - Ledger data with opening balance, transactions, closing balance
  * @param {Object} company - Company information
  * @param {Object} filters - Report filters
  * @returns {Promise<Buffer>} Excel file buffer
  */
-export const generateClientReportExcel = async (clients, company, filters = {}) => {
+export const generateClientReportExcel = async (ledgerData, company, filters = {}) => {
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Client Report');
+    const worksheet = workbook.addWorksheet('Client Ledger');
 
     // Add company header
-    worksheet.mergeCells('A1:F1');
-    worksheet.getCell('A1').value = company.name || 'Company Name';
+    worksheet.mergeCells('A1:E1');
+    worksheet.getCell('A1').value = `${company.name || 'Company Name'} - Client Ledger`;
     worksheet.getCell('A1').font = { bold: true, size: 16 };
     worksheet.getCell('A1').alignment = { horizontal: 'center' };
+
+    // Add client name
+    worksheet.mergeCells('A2:E2');
+    worksheet.getCell('A2').value = `Client: ${ledgerData.clientName}`;
+    worksheet.getCell('A2').font = { bold: true, size: 12 };
+    worksheet.getCell('A2').alignment = { horizontal: 'center' };
 
     // Add date range
     if (filters.startDate || filters.endDate) {
         const startDate = filters.startDate ? new Date(filters.startDate).toLocaleDateString() : 'Beginning';
         const endDate = filters.endDate ? new Date(filters.endDate).toLocaleDateString() : 'Present';
-        worksheet.mergeCells('A2:F2');
-        worksheet.getCell('A2').value = `Period: ${startDate} to ${endDate}`;
-        worksheet.getCell('A2').alignment = { horizontal: 'center' };
+        worksheet.mergeCells('A3:E3');
+        worksheet.getCell('A3').value = `Period: ${startDate} to ${endDate}`;
+        worksheet.getCell('A3').alignment = { horizontal: 'center' };
     }
 
-    // Calculate summary
-    const totalClients = clients.length;
-    const totalBills = clients.reduce((sum, client) => sum + (client.totalBills || 0), 0);
-    const totalReceivable = clients.reduce((sum, client) => sum + (client.totalReceivable || 0), 0);
-    const totalReceived = clients.reduce((sum, client) => sum + (client.totalReceived || 0), 0);
+    let currentRow = 5;
 
-    // Add summary section
-    let currentRow = 4;
-    worksheet.getCell(`A${currentRow}`).value = 'Summary';
-    worksheet.getCell(`A${currentRow}`).font = { bold: true, size: 12 };
-    currentRow++;
-
-    const summaryData = [
-        ['Total Clients:', totalClients],
-        ['Total Bills:', totalBills],
-        ['Total Receivable:', `₹${totalReceivable.toFixed(2)}`],
-        ['Total Received:', `₹${totalReceived.toFixed(2)}`]
-    ];
-
-    summaryData.forEach(([label, value]) => {
-        worksheet.getCell(`A${currentRow}`).value = label;
-        worksheet.getCell(`B${currentRow}`).value = value;
-        worksheet.getCell(`A${currentRow}`).font = { bold: true };
-        currentRow++;
-    });
-
+    // Opening Balance
+    worksheet.getCell(`A${currentRow}`).value = 'Opening Balance:';
+    worksheet.getCell(`A${currentRow}`).font = { bold: true };
+    worksheet.getCell(`B${currentRow}`).value = `₹${ledgerData.openingBalance.toFixed(2)}`;
+    worksheet.getCell(`B${currentRow}`).font = { bold: true };
     currentRow += 2;
 
-    // Add data table
-    const headers = ['Client Name', 'Total Bills', 'Paid Bills', 'Unpaid Bills', 'Total Receivable', 'Total Received'];
+    // Transactions table
+    const headers = ['Date', 'Description', 'Debit (₹)', 'Credit (₹)', 'Balance (₹)'];
     const headerRow = worksheet.getRow(currentRow);
     headers.forEach((header, index) => {
         const cell = headerRow.getCell(index + 1);
@@ -730,95 +717,96 @@ export const generateClientReportExcel = async (clients, company, filters = {}) 
 
     currentRow++;
 
-    // Add client data
-    clients.forEach(client => {
-        const row = worksheet.getRow(currentRow);
-        row.getCell(1).value = client.clientName || 'N/A';
-        row.getCell(2).value = client.totalBills || 0;
-        row.getCell(3).value = client.paidBills || 0;
-        row.getCell(4).value = client.unpaidBills || 0;
-        row.getCell(5).value = client.totalReceivable || 0;
-        row.getCell(6).value = client.totalReceived || 0;
+    // Add transaction data
+    if (ledgerData.transactions && ledgerData.transactions.length > 0) {
+        ledgerData.transactions.forEach(txn => {
+            const row = worksheet.getRow(currentRow);
+            row.getCell(1).value = new Date(txn.date).toLocaleDateString();
+            row.getCell(2).value = txn.description || 'N/A';
+            row.getCell(3).value = txn.debit > 0 ? txn.debit : '-';
+            row.getCell(4).value = txn.credit > 0 ? txn.credit : '-';
+            row.getCell(5).value = txn.balance;
+            currentRow++;
+        });
+    }
 
+    currentRow += 2;
+
+    // Summary section
+    worksheet.getCell(`A${currentRow}`).value = 'Summary';
+    worksheet.getCell(`A${currentRow}`).font = { bold: true, size: 12 };
+    currentRow++;
+
+    const summaryData = [
+        ['Total Debits (Credit Sales):', `₹${ledgerData.totalDebits.toFixed(2)}`],
+        ['Total Credits (Payments):', `₹${ledgerData.totalCredits.toFixed(2)}`],
+        ['Closing Balance:', `₹${ledgerData.closingBalance.toFixed(2)}`]
+    ];
+
+    summaryData.forEach(([label, value]) => {
+        worksheet.getCell(`A${currentRow}`).value = label;
+        worksheet.getCell(`B${currentRow}`).value = value;
+        worksheet.getCell(`A${currentRow}`).font = { bold: true };
+        if (label.includes('Closing')) {
+            worksheet.getCell(`B${currentRow}`).font = { bold: true, size: 12 };
+        }
         currentRow++;
     });
 
     // Set column widths
-    worksheet.getColumn(1).width = 30;  // Client Name
-    worksheet.getColumn(2).width = 15;  // Total Bills
-    worksheet.getColumn(3).width = 15;  // Paid Bills
-    worksheet.getColumn(4).width = 15;  // Unpaid Bills
-    worksheet.getColumn(5).width = 18;  // Total Receivable
-    worksheet.getColumn(6).width = 18;  // Total Received
-
-    // Add auto-filter
-    if (clients.length > 0) {
-        worksheet.autoFilter = {
-            from: { row: currentRow - clients.length - 1, column: 1 },
-            to: { row: currentRow - 1, column: 6 }
-        };
-    }
+    worksheet.getColumn(1).width = 15;  // Date
+    worksheet.getColumn(2).width = 40;  // Description
+    worksheet.getColumn(3).width = 15;  // Debit
+    worksheet.getColumn(4).width = 15;  // Credit
+    worksheet.getColumn(5).width = 15;  // Balance
 
     const buffer = await workbook.xlsx.writeBuffer();
     return buffer;
 };
 
 /**
- * Generate Supplier Report in Excel format
- * @param {Array} suppliers - Supplier financial summary data
+ * Generate Supplier Ledger Report in Excel format
+ * @param {Object} ledgerData - Ledger data with opening balance, transactions, closing balance
  * @param {Object} company - Company information
  * @param {Object} filters - Report filters
  * @returns {Promise<Buffer>} Excel file buffer
  */
-export const generateSupplierReportExcel = async (suppliers, company, filters = {}) => {
+export const generateSupplierReportExcel = async (ledgerData, company, filters = {}) => {
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Supplier Report');
+    const worksheet = workbook.addWorksheet('Supplier Ledger');
 
     // Add company header
-    worksheet.mergeCells('A1:F1');
-    worksheet.getCell('A1').value = company.name || 'Company Name';
+    worksheet.mergeCells('A1:E1');
+    worksheet.getCell('A1').value = `${company.name || 'Company Name'} - Supplier Ledger`;
     worksheet.getCell('A1').font = { bold: true, size: 16 };
     worksheet.getCell('A1').alignment = { horizontal: 'center' };
+
+    // Add supplier name
+    worksheet.mergeCells('A2:E2');
+    worksheet.getCell('A2').value = `Supplier: ${ledgerData.supplierName}`;
+    worksheet.getCell('A2').font = { bold: true, size: 12 };
+    worksheet.getCell('A2').alignment = { horizontal: 'center' };
 
     // Add date range
     if (filters.startDate || filters.endDate) {
         const startDate = filters.startDate ? new Date(filters.startDate).toLocaleDateString() : 'Beginning';
         const endDate = filters.endDate ? new Date(filters.endDate).toLocaleDateString() : 'Present';
-        worksheet.mergeCells('A2:F2');
-        worksheet.getCell('A2').value = `Period: ${startDate} to ${endDate}`;
-        worksheet.getCell('A2').alignment = { horizontal: 'center' };
+        worksheet.mergeCells('A3:E3');
+        worksheet.getCell('A3').value = `Period: ${startDate} to ${endDate}`;
+        worksheet.getCell('A3').alignment = { horizontal: 'center' };
     }
 
-    // Calculate summary
-    const totalSuppliers = suppliers.length;
-    const totalBills = suppliers.reduce((sum, supplier) => sum + (supplier.totalBills || 0), 0);
-    const totalPayable = suppliers.reduce((sum, supplier) => sum + (supplier.totalPayable || 0), 0);
-    const totalPaid = suppliers.reduce((sum, supplier) => sum + (supplier.totalPaid || 0), 0);
+    let currentRow = 5;
 
-    // Add summary section
-    let currentRow = 4;
-    worksheet.getCell(`A${currentRow}`).value = 'Summary';
-    worksheet.getCell(`A${currentRow}`).font = { bold: true, size: 12 };
-    currentRow++;
-
-    const summaryData = [
-        ['Total Suppliers:', totalSuppliers],
-        ['Total Bills:', totalBills],
-        ['Total Payable:', `₹${totalPayable.toFixed(2)}`],
-        ['Total Paid:', `₹${totalPaid.toFixed(2)}`]
-    ];
-
-    summaryData.forEach(([label, value]) => {
-        worksheet.getCell(`A${currentRow}`).value = label;
-        worksheet.getCell(`B${currentRow}`).value = value;
-        worksheet.getCell(`A${currentRow}`).font = { bold: true };
-        currentRow++;
-    });
-
+    // Opening Balance
+    worksheet.getCell(`A${currentRow}`).value = 'Opening Balance:';
+    worksheet.getCell(`A${currentRow}`).font = { bold: true };
+    worksheet.getCell(`B${currentRow}`).value = `₹${ledgerData.openingBalance.toFixed(2)}`;
+    worksheet.getCell(`B${currentRow}`).font = { bold: true };
     currentRow += 2;
 
-    // Add data table
-    const headers = ['Supplier Name', 'Total Bills', 'Paid Bills', 'Unpaid Bills', 'Total Payable', 'Total Paid'];
+    // Transactions table
+    const headers = ['Date', 'Description', 'Debit (₹)', 'Credit (₹)', 'Balance (₹)'];
     const headerRow = worksheet.getRow(currentRow);
     headers.forEach((header, index) => {
         const cell = headerRow.getCell(index + 1);
@@ -834,34 +822,48 @@ export const generateSupplierReportExcel = async (suppliers, company, filters = 
 
     currentRow++;
 
-    // Add supplier data
-    suppliers.forEach(supplier => {
-        const row = worksheet.getRow(currentRow);
-        row.getCell(1).value = supplier.supplierName || 'N/A';
-        row.getCell(2).value = supplier.totalBills || 0;
-        row.getCell(3).value = supplier.paidBills || 0;
-        row.getCell(4).value = supplier.unpaidBills || 0;
-        row.getCell(5).value = supplier.totalPayable || 0;
-        row.getCell(6).value = supplier.totalPaid || 0;
+    // Add transaction data
+    if (ledgerData.transactions && ledgerData.transactions.length > 0) {
+        ledgerData.transactions.forEach(txn => {
+            const row = worksheet.getRow(currentRow);
+            row.getCell(1).value = new Date(txn.date).toLocaleDateString();
+            row.getCell(2).value = txn.description || 'N/A';
+            row.getCell(3).value = txn.debit > 0 ? txn.debit : '-';
+            row.getCell(4).value = txn.credit > 0 ? txn.credit : '-';
+            row.getCell(5).value = txn.balance;
+            currentRow++;
+        });
+    }
 
+    currentRow += 2;
+
+    // Summary section
+    worksheet.getCell(`A${currentRow}`).value = 'Summary';
+    worksheet.getCell(`A${currentRow}`).font = { bold: true, size: 12 };
+    currentRow++;
+
+    const summaryData = [
+        ['Total Debits (Credit Purchases):', `₹${ledgerData.totalDebits.toFixed(2)}`],
+        ['Total Credits (Payments):', `₹${ledgerData.totalCredits.toFixed(2)}`],
+        ['Closing Balance:', `₹${ledgerData.closingBalance.toFixed(2)}`]
+    ];
+
+    summaryData.forEach(([label, value]) => {
+        worksheet.getCell(`A${currentRow}`).value = label;
+        worksheet.getCell(`B${currentRow}`).value = value;
+        worksheet.getCell(`A${currentRow}`).font = { bold: true };
+        if (label.includes('Closing')) {
+            worksheet.getCell(`B${currentRow}`).font = { bold: true, size: 12 };
+        }
         currentRow++;
     });
 
     // Set column widths
-    worksheet.getColumn(1).width = 30;  // Supplier Name
-    worksheet.getColumn(2).width = 15;  // Total Bills
-    worksheet.getColumn(3).width = 15;  // Paid Bills
-    worksheet.getColumn(4).width = 15;  // Unpaid Bills
-    worksheet.getColumn(5).width = 18;  // Total Payable
-    worksheet.getColumn(6).width = 18;  // Total Paid
-
-    // Add auto-filter
-    if (suppliers.length > 0) {
-        worksheet.autoFilter = {
-            from: { row: currentRow - suppliers.length - 1, column: 1 },
-            to: { row: currentRow - 1, column: 6 }
-        };
-    }
+    worksheet.getColumn(1).width = 15;  // Date
+    worksheet.getColumn(2).width = 40;  // Description
+    worksheet.getColumn(3).width = 15;  // Debit
+    worksheet.getColumn(4).width = 15;  // Credit
+    worksheet.getColumn(5).width = 15;  // Balance
 
     const buffer = await workbook.xlsx.writeBuffer();
     return buffer;

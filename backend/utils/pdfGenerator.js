@@ -442,13 +442,13 @@ export const generateInventoryPDF = async (stockItems, company, filters = {}) =>
 };
 
 /**
- * Generate Client Report PDF
- * @param {Array} clients - Client financial summary data
+ * Generate Client Ledger Report PDF
+ * @param {Object} ledgerData - Ledger data with opening balance, transactions, closing balance
  * @param {Object} company - Company information
  * @param {Object} filters - Report filters
  * @returns {Promise<Buffer>} PDF buffer
  */
-export const generateClientReportPDF = async (clients, company, filters = {}) => {
+export const generateClientReportPDF = async (ledgerData, company, filters = {}) => {
     return new Promise((resolve, reject) => {
         try {
             const doc = new PDFDocument({ margin: 50, size: 'A4' });
@@ -459,55 +459,51 @@ export const generateClientReportPDF = async (clients, company, filters = {}) =>
             doc.on('error', reject);
 
             // Add header
-            let yPos = addReportHeader(doc, company, 'Client Financial Report', {
+            let yPos = addReportHeader(doc, company, `Client Ledger - ${ledgerData.clientName}`, {
                 startDate: filters.startDate,
                 endDate: filters.endDate
             });
 
-            // Calculate summary
-            const totalClients = clients.length;
-            const totalBills = clients.reduce((sum, client) => sum + (client.totalBills || 0), 0);
-            const totalReceivable = clients.reduce((sum, client) => sum + (client.totalReceivable || 0), 0);
-            const totalReceived = clients.reduce((sum, client) => sum + (client.totalReceived || 0), 0);
+            // Opening Balance
+            doc.fontSize(12).font('Helvetica-Bold').text('Opening Balance:', 50, yPos);
+            doc.fontSize(11).font('Helvetica').text(`₹${ledgerData.openingBalance.toFixed(2)}`, 200, yPos);
+            yPos += 30;
 
-            // Add summary
-            yPos = addSummary(doc, yPos, {
-                'Total Clients': totalClients,
-                'Total Bills': totalBills,
-                'Total Receivable': `₹${totalReceivable.toFixed(2)}`,
-                'Total Received': `₹${totalReceived.toFixed(2)}`
-            });
+            // Transactions table
+            if (ledgerData.transactions && ledgerData.transactions.length > 0) {
+                doc.fontSize(12).font('Helvetica-Bold').text('Transactions', 50, yPos);
+                yPos += 25;
+
+                const headers = ['Date', 'Description', 'Debit (₹)', 'Credit (₹)', 'Balance (₹)'];
+                const columnWidths = [70, 180, 70, 70, 90]; // Total: 480pt
+
+                const rows = ledgerData.transactions.map(txn => [
+                    new Date(txn.date).toLocaleDateString(),
+                    txn.description || 'N/A',
+                    txn.debit > 0 ? txn.debit.toFixed(2) : '-',
+                    txn.credit > 0 ? txn.credit.toFixed(2) : '-',
+                    txn.balance.toFixed(2)
+                ]);
+
+                yPos = addTable(doc, yPos, headers, rows, columnWidths);
+            } else {
+                doc.fontSize(10).font('Helvetica').text('No transactions found for the selected period.', 50, yPos);
+                yPos += 30;
+            }
 
             yPos += 20;
 
-            // Add client table
-            if (clients.length > 0) {
-                doc.fontSize(12)
-                    .font('Helvetica-Bold')
-                    .text('Client Details', 50, yPos);
+            // Summary section
+            doc.fontSize(12).font('Helvetica-Bold').text('Summary', 50, yPos);
+            yPos += 25;
 
-                yPos += 25;
-
-                const headers = ['Client', 'Bills', 'Paid', 'Unpaid', 'Receivable', 'Received'];
-                const columnWidths = [120, 50, 50, 50, 80, 80]; // Total: 430pt
-
-                const rows = clients.map(client => {
-                    return [
-                        client.clientName || 'N/A',
-                        (client.totalBills || 0).toString(),
-                        (client.paidBills || 0).toString(),
-                        (client.unpaidBills || 0).toString(),
-                        `₹${(client.totalReceivable || 0).toFixed(0)}`,
-                        `₹${(client.totalReceived || 0).toFixed(0)}`
-                    ];
-                });
-
-                addTable(doc, yPos, headers, rows, columnWidths);
-            } else {
-                doc.fontSize(10)
-                    .font('Helvetica')
-                    .text('No client data found for the selected period.', 50, yPos);
-            }
+            doc.fontSize(10).font('Helvetica');
+            doc.text(`Total Debits (Credit Sales): ₹${ledgerData.totalDebits.toFixed(2)}`, 50, yPos);
+            yPos += 20;
+            doc.text(`Total Credits (Payments): ₹${ledgerData.totalCredits.toFixed(2)}`, 50, yPos);
+            yPos += 20;
+            doc.fontSize(12).font('Helvetica-Bold');
+            doc.text(`Closing Balance: ₹${ledgerData.closingBalance.toFixed(2)}`, 50, yPos);
 
             doc.end();
         } catch (error) {
@@ -517,13 +513,13 @@ export const generateClientReportPDF = async (clients, company, filters = {}) =>
 };
 
 /**
- * Generate Supplier Report PDF
- * @param {Array} suppliers - Supplier financial summary data
+ * Generate Supplier Ledger Report PDF
+ * @param {Object} ledgerData - Ledger data with opening balance, transactions, closing balance
  * @param {Object} company - Company information
  * @param {Object} filters - Report filters
  * @returns {Promise<Buffer>} PDF buffer
  */
-export const generateSupplierReportPDF = async (suppliers, company, filters = {}) => {
+export const generateSupplierReportPDF = async (ledgerData, company, filters = {}) => {
     return new Promise((resolve, reject) => {
         try {
             const doc = new PDFDocument({ margin: 50, size: 'A4' });
@@ -534,55 +530,51 @@ export const generateSupplierReportPDF = async (suppliers, company, filters = {}
             doc.on('error', reject);
 
             // Add header
-            let yPos = addReportHeader(doc, company, 'Supplier Financial Report', {
+            let yPos = addReportHeader(doc, company, `Supplier Ledger - ${ledgerData.supplierName}`, {
                 startDate: filters.startDate,
                 endDate: filters.endDate
             });
 
-            // Calculate summary
-            const totalSuppliers = suppliers.length;
-            const totalBills = suppliers.reduce((sum, supplier) => sum + (supplier.totalBills || 0), 0);
-            const totalPayable = suppliers.reduce((sum, supplier) => sum + (supplier.totalPayable || 0), 0);
-            const totalPaid = suppliers.reduce((sum, supplier) => sum + (supplier.totalPaid || 0), 0);
+            // Opening Balance
+            doc.fontSize(12).font('Helvetica-Bold').text('Opening Balance:', 50, yPos);
+            doc.fontSize(11).font('Helvetica').text(`₹${ledgerData.openingBalance.toFixed(2)}`, 200, yPos);
+            yPos += 30;
 
-            // Add summary
-            yPos = addSummary(doc, yPos, {
-                'Total Suppliers': totalSuppliers,
-                'Total Bills': totalBills,
-                'Total Payable': `₹${totalPayable.toFixed(2)}`,
-                'Total Paid': `₹${totalPaid.toFixed(2)}`
-            });
+            // Transactions table
+            if (ledgerData.transactions && ledgerData.transactions.length > 0) {
+                doc.fontSize(12).font('Helvetica-Bold').text('Transactions', 50, yPos);
+                yPos += 25;
+
+                const headers = ['Date', 'Description', 'Debit (₹)', 'Credit (₹)', 'Balance (₹)'];
+                const columnWidths = [70, 180, 70, 70, 90]; // Total: 480pt
+
+                const rows = ledgerData.transactions.map(txn => [
+                    new Date(txn.date).toLocaleDateString(),
+                    txn.description || 'N/A',
+                    txn.debit > 0 ? txn.debit.toFixed(2) : '-',
+                    txn.credit > 0 ? txn.credit.toFixed(2) : '-',
+                    txn.balance.toFixed(2)
+                ]);
+
+                yPos = addTable(doc, yPos, headers, rows, columnWidths);
+            } else {
+                doc.fontSize(10).font('Helvetica').text('No transactions found for the selected period.', 50, yPos);
+                yPos += 30;
+            }
 
             yPos += 20;
 
-            // Add supplier table
-            if (suppliers.length > 0) {
-                doc.fontSize(12)
-                    .font('Helvetica-Bold')
-                    .text('Supplier Details', 50, yPos);
+            // Summary section
+            doc.fontSize(12).font('Helvetica-Bold').text('Summary', 50, yPos);
+            yPos += 25;
 
-                yPos += 25;
-
-                const headers = ['Supplier', 'Bills', 'Paid', 'Unpaid', 'Payable', 'Paid Amt'];
-                const columnWidths = [120, 50, 50, 50, 80, 80]; // Total: 430pt
-
-                const rows = suppliers.map(supplier => {
-                    return [
-                        supplier.supplierName || 'N/A',
-                        (supplier.totalBills || 0).toString(),
-                        (supplier.paidBills || 0).toString(),
-                        (supplier.unpaidBills || 0).toString(),
-                        `₹${(supplier.totalPayable || 0).toFixed(0)}`,
-                        `₹${(supplier.totalPaid || 0).toFixed(0)}`
-                    ];
-                });
-
-                addTable(doc, yPos, headers, rows, columnWidths);
-            } else {
-                doc.fontSize(10)
-                    .font('Helvetica')
-                    .text('No supplier data found for the selected period.', 50, yPos);
-            }
+            doc.fontSize(10).font('Helvetica');
+            doc.text(`Total Debits (Credit Purchases): ₹${ledgerData.totalDebits.toFixed(2)}`, 50, yPos);
+            yPos += 20;
+            doc.text(`Total Credits (Payments): ₹${ledgerData.totalCredits.toFixed(2)}`, 50, yPos);
+            yPos += 20;
+            doc.fontSize(12).font('Helvetica-Bold');
+            doc.text(`Closing Balance: ₹${ledgerData.closingBalance.toFixed(2)}`, 50, yPos);
 
             doc.end();
         } catch (error) {

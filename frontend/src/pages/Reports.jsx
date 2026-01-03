@@ -117,6 +117,26 @@ const Reports = () => {
                 }
             }
 
+            // Validate client selection for client ledger reports
+            if (reportType === 'clients' && !selectedClient) {
+                toast({
+                    title: 'Client Required',
+                    description: 'Please select a client for the ledger report.',
+                    variant: 'destructive'
+                });
+                return;
+            }
+
+            // Validate supplier selection for supplier ledger reports
+            if (reportType === 'suppliers' && !selectedSupplier) {
+                toast({
+                    title: 'Supplier Required',
+                    description: 'Please select a supplier for the ledger report.',
+                    variant: 'destructive'
+                });
+                return;
+            }
+
             setLoading(true);
 
             // Build request body based on report type
@@ -133,6 +153,10 @@ const Reports = () => {
                 if (paymentStatus && paymentStatus !== '') requestBody.paymentStatus = paymentStatus;
             } else if (reportType === 'inventory') {
                 if (selectedWarehouse && selectedWarehouse !== '') requestBody.warehouseId = selectedWarehouse;
+            } else if (reportType === 'clients') {
+                requestBody.clientId = selectedClient; // Required for ledger
+            } else if (reportType === 'suppliers') {
+                requestBody.supplierId = selectedSupplier; // Required for ledger
             } else if (reportType === 'deliveries-out') {
                 if (selectedClient && selectedClient !== '') requestBody.clientId = selectedClient;
             } else if (reportType === 'deliveries-in') {
@@ -245,8 +269,8 @@ const Reports = () => {
                             <FileText className="h-6 w-6 text-primary" />
                         </div>
                         <div>
-                            <h3 className="font-semibold">Client Report</h3>
-                            <p className="text-sm text-muted-foreground">Financial summary per client</p>
+                            <h3 className="font-semibold">Client Ledger</h3>
+                            <p className="text-sm text-muted-foreground">Transaction ledger for a specific client</p>
                         </div>
                     </div>
                 </Card>
@@ -261,8 +285,8 @@ const Reports = () => {
                             <FileText className="h-6 w-6 text-primary" />
                         </div>
                         <div>
-                            <h3 className="font-semibold">Supplier Report</h3>
-                            <p className="text-sm text-muted-foreground">Financial summary per supplier</p>
+                            <h3 className="font-semibold">Supplier Ledger</h3>
+                            <p className="text-sm text-muted-foreground">Transaction ledger for a specific supplier</p>
                         </div>
                     </div>
                 </Card>
@@ -526,6 +550,64 @@ const Reports = () => {
                                             variant="outline"
                                             size="sm"
                                             onClick={() => setSelectedWarehouse('')}
+                                        >
+                                            Clear
+                                        </Button>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {reportType === 'clients' && (
+                            <div>
+                                <Label htmlFor="client">Client (Required) *</Label>
+                                <div className="flex gap-2 mt-1">
+                                    <Select value={selectedClient} onValueChange={setSelectedClient}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select a client" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {clients.map((client) => (
+                                                <SelectItem key={client._id} value={client._id}>
+                                                    {client.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    {selectedClient && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setSelectedClient('')}
+                                        >
+                                            Clear
+                                        </Button>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {reportType === 'suppliers' && (
+                            <div>
+                                <Label htmlFor="supplier">Supplier (Required) *</Label>
+                                <div className="flex gap-2 mt-1">
+                                    <Select value={selectedSupplier} onValueChange={setSelectedSupplier}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select a supplier" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {suppliers.map((supplier) => (
+                                                <SelectItem key={supplier._id} value={supplier._id}>
+                                                    {supplier.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    {selectedSupplier && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setSelectedSupplier('')}
                                         >
                                             Clear
                                         </Button>
