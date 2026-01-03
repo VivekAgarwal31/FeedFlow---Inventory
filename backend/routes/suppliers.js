@@ -158,7 +158,7 @@ router.post('/', authenticate, requirePermission('canManageSuppliers'), [
             return res.status(400).json({ message: 'No company associated with user' });
         }
 
-        const { name, contactPerson, phone, email, address, gstNumber, panNumber, paymentTerms, notes } = req.body;
+        const { name, contactPerson, phone, email, address, gstNumber, panNumber, paymentTerms, notes, openingBalance } = req.body;
 
         const supplier = new Supplier({
             companyId,
@@ -170,7 +170,8 @@ router.post('/', authenticate, requirePermission('canManageSuppliers'), [
             gstNumber,
             panNumber,
             paymentTerms,
-            notes
+            notes,
+            currentPayable: openingBalance && !isNaN(parseFloat(openingBalance)) ? parseFloat(openingBalance) : 0
         });
 
         await supplier.save();
@@ -287,6 +288,119 @@ router.post('/recalculate-payables', authenticate, requirePermission('canManageS
     } catch (error) {
         console.error('Recalculate payables error:', error);
         res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// Bulk import suppliers from Excel
+import multer from 'multer';
+import ExcelJS from 'exceljs';
+
+const upload = multer({ storage: multer.memoryStorage() });
+
+router.post('/bulk-import', authenticate, requirePermission('canManageSuppliers'), upload.single('file'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ message: 'No file uploaded' });
+        }
+
+        const companyId = req.user.companyId?._id || req.user.companyId;
+        if (!companyId) {
+            return res.status(400).json({ message: 'No company associated with user' });
+        }
+
+        // Parse Excel file
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.load(req.file.buffer);
+        const worksheet = workbook.worksheets[0];
+
+        if (!worksheet) {
+            return res.status(400).json({ message: 'Excel file is empty' });
+        }
+
+        const suppliers = [];
+        const errors = [];
+        const existingNames = new Set();
+
+        // Get existing supplier names for duplicate check
+        const existingSuppliers = await Supplier.find({ companyId }).select('name').lean();
+        existingSuppliers.forEach(s => existingNames.add(s.name.toLowerCase()));
+
+        // Skip header row, start from row 2
+        worksheet.eachRow((row, rowNumber) => {
+            if (rowNumber === 1) return; // Skip header
+
+            const name = row.getCell(1).value?.toString().trim();
+            const contactPerson = row.getCell(2).value?.toString().trim() || '';
+            const email = row.getCell(3).value?.toString().trim() || '';
+            const phone = row.getCell(4).value?.toString().trim() || '';
+            const address = row.getCell(5).value?.toString().trim() || '';
+            const gstNumber = row.getCell(6).value?.toString().trim() || '';
+            const panNumber = row.getCell(7).value?.toString().trim() || '';
+            const paymentTerms = row.getCell(8).value?.toString().trim() || '';
+            const notes = row.getCell(9).value?.toString().trim() || '';
+            const openingBalance = parseFloat(row.getCell(10).value) || 0;
+
+            // Validation
+            if (!name || name.length < 2) {
+                errors.push({ row: rowNumber, error: 'Name is required and must be at least 2 characters' });
+                return;
+            }
+
+            // Check for duplicate
+            const nameLower = name.toLowerCase();
+            if (existingNames.has(nameLower)) {
+                errors.push({ row: rowNumber, error: `Supplier "${name}" already exists` });
+                return;
+            }
+
+            // Email validation
+            if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                errors.push({ row: rowNumber, error: 'Invalid email format' });
+                return;
+            }
+
+            existingNames.add(nameLower);
+            suppliers.push({
+                companyId,
+                name,
+                contactPerson,
+                email,
+                phone,
+                address,
+                gstNumber,
+                panNumber,
+                paymentTerms,
+                notes,
+                currentPayable: openingBalance
+            });
+        });
+
+        // If there are validation errors, return them
+        if (errors.length > 0) {
+            return res.status(400).json({
+                message: 'Validation errors found',
+                errors,
+                successCount: 0,
+                failedCount: errors.length
+            });
+        }
+
+        // Bulk insert suppliers
+        let successCount = 0;
+        if (suppliers.length > 0) {
+            const result = await Supplier.insertMany(suppliers, { ordered: false });
+            successCount = result.length;
+        }
+
+        res.json({
+            message: `Successfully imported ${successCount} supplier(s)`,
+            successCount,
+            failedCount: errors.length,
+            errors
+        });
+    } catch (error) {
+        console.error('Bulk import error:', error);
+        res.status(500).json({ message: 'Server error during import', error: error.message });
     }
 });
 

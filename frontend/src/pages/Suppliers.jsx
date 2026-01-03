@@ -60,6 +60,12 @@ const Suppliers = () => {
     notes: ''
   })
 
+  // Bulk import state
+  const [importDialogOpen, setImportDialogOpen] = useState(false)
+  const [importFile, setImportFile] = useState(null)
+  const [importing, setImporting] = useState(false)
+  const [importResults, setImportResults] = useState(null)
+
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 12
@@ -70,7 +76,8 @@ const Suppliers = () => {
     phone: '',
     address: '',
     gstNumber: '',
-    paymentTerms: ''
+    paymentTerms: '',
+    openingBalance: ''
   })
 
   useEffect(() => {
@@ -438,6 +445,107 @@ const Suppliers = () => {
       setError(error.response?.data?.message || 'Failed to export data')
     } finally {
       setExporting(false)
+    }
+  }
+
+  // Bulk import functions
+  const handleDownloadTemplate = () => {
+    const ExcelJS = require('exceljs')
+    const workbook = new ExcelJS.Workbook()
+    const worksheet = workbook.addWorksheet('Suppliers Template')
+
+    worksheet.columns = [
+      { header: 'Name*', key: 'name', width: 25 },
+      { header: 'Contact Person', key: 'contactPerson', width: 20 },
+      { header: 'Email', key: 'email', width: 25 },
+      { header: 'Phone', key: 'phone', width: 15 },
+      { header: 'Address', key: 'address', width: 30 },
+      { header: 'GST Number', key: 'gstNumber', width: 20 },
+      { header: 'PAN Number', key: 'panNumber', width: 15 },
+      { header: 'Payment Terms', key: 'paymentTerms', width: 15 },
+      { header: 'Notes', key: 'notes', width: 30 },
+      { header: 'Opening Balance', key: 'openingBalance', width: 18 }
+    ]
+
+    worksheet.getRow(1).font = { bold: true }
+    worksheet.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE0E0E0' }
+    }
+
+    worksheet.addRow({
+      name: 'ABC Feed Suppliers',
+      contactPerson: 'John Doe',
+      email: 'contact@abcfeed.com',
+      phone: '+91 9876543210',
+      address: '456 Industrial Area, City, State',
+      gstNumber: '22AAAAA0000A1Z5',
+      panNumber: 'AAAAA0000A',
+      paymentTerms: '30',
+      notes: 'Regular supplier',
+      openingBalance: 10000
+    })
+
+    workbook.xlsx.writeBuffer().then(buffer => {
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = 'suppliers_import_template.xlsx'
+      link.click()
+      window.URL.revokeObjectURL(url)
+    })
+  }
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0]
+    if (file) {
+      setImportFile(file)
+      setImportResults(null)
+    }
+  }
+
+  const handleBulkImport = async () => {
+    if (!importFile) {
+      toast({
+        title: 'No file selected',
+        description: 'Please select an Excel file to import',
+        variant: 'destructive'
+      })
+      return
+    }
+
+    setImporting(true)
+    setImportResults(null)
+
+    try {
+      const formData = new FormData()
+      formData.append('file', importFile)
+
+      const response = await supplierAPI.bulkImport(formData)
+
+      setImportResults(response.data)
+      toast({
+        title: 'Import Complete',
+        description: response.data.message
+      })
+
+      await fetchSuppliers()
+
+      if (response.data.successCount > 0) {
+        setImportFile(null)
+      }
+    } catch (error) {
+      const errorData = error.response?.data
+      setImportResults(errorData || { successCount: 0, failedCount: 1, errors: [{ row: 0, error: 'Failed to import' }] })
+      toast({
+        title: 'Import Failed',
+        description: errorData?.message || 'Failed to import suppliers',
+        variant: 'destructive'
+      })
+    } finally {
+      setImporting(false)
     }
   }
 
@@ -883,6 +991,92 @@ const Suppliers = () => {
             </DialogTrigger>
           </Dialog>
 
+          <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Download className="mr-2 h-4 w-4" />
+                Import Suppliers
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Import Suppliers from Excel</DialogTitle>
+                <DialogDescription>
+                  Upload an Excel file to import multiple suppliers at once
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-4">
+                <div className="flex gap-2">
+                  <Button onClick={handleDownloadTemplate} variant="outline" className="flex-1">
+                    <Download className="mr-2 h-4 w-4" />
+                    Download Template
+                  </Button>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="import-file">Select Excel File</Label>
+                  <Input
+                    id="import-file"
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={handleFileSelect}
+                  />
+                  {importFile && (
+                    <p className="text-sm text-muted-foreground">
+                      Selected: {importFile.name}
+                    </p>
+                  )}
+                </div>
+
+                {importResults && (
+                  <div className="space-y-2">
+                    <div className="p-4 bg-muted rounded-lg">
+                      <h4 className="font-semibold mb-2">Import Results</h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-sm text-muted-foreground">Successful</p>
+                          <p className="text-2xl font-bold text-green-600">{importResults.successCount}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">Failed</p>
+                          <p className="text-2xl font-bold text-red-600">{importResults.failedCount}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {importResults.errors && importResults.errors.length > 0 && (
+                      <div className="max-h-40 overflow-y-auto">
+                        <h5 className="font-semibold text-sm mb-2">Errors:</h5>
+                        {importResults.errors.map((err, idx) => (
+                          <div key={idx} className="text-sm text-red-600 mb-1">
+                            Row {err.row}: {err.error}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex gap-3 pt-4">
+                  <Button onClick={handleBulkImport} disabled={!importFile || importing} className="flex-1">
+                    {importing ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Importing...
+                      </>
+                    ) : (
+                      'Import Suppliers'
+                    )}
+                  </Button>
+                  <Button variant="outline" onClick={() => { setImportDialogOpen(false); setImportFile(null); setImportResults(null); }}>
+                    Close
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
               <Button>
@@ -974,6 +1168,20 @@ const Suppliers = () => {
                       onChange={(e) => setForm({ ...form, creditTerms: e.target.value })}
                     />
                   </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="opening-balance">Opening Balance (₹)</Label>
+                  <Input
+                    id="opening-balance"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0.00"
+                    value={form.openingBalance}
+                    onChange={(e) => setForm({ ...form, openingBalance: e.target.value })}
+                  />
+                  <p className="text-xs text-muted-foreground">Enter existing payables (if any)</p>
                 </div>
 
                 <div className="flex gap-3 pt-4">

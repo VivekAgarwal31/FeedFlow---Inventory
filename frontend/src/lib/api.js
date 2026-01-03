@@ -93,7 +93,10 @@ export const supplierAPI = {
   create: (data) => api.post('/suppliers', data),
   update: (id, data) => api.put(`/suppliers/${id}`, data),
   delete: (id) => api.delete(`/suppliers/${id}`),
-  recalculatePayables: () => api.post('/suppliers/recalculate-payables')
+  recalculatePayables: () => api.post('/suppliers/recalculate-payables'),
+  bulkImport: (formData) => api.post('/suppliers/bulk-import', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
 }
 
 // Purchase API
@@ -145,7 +148,10 @@ export const clientAPI = {
   getById: (id) => api.get(`/clients/${id}`),
   create: (data) => api.post('/clients', data),
   update: (id, data) => api.put(`/clients/${id}`, data),
-  delete: (id) => api.delete(`/clients/${id}`)
+  delete: (id) => api.delete(`/clients/${id}`),
+  bulkImport: (formData) => api.post('/clients/bulk-import', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
 }
 
 // Stock Operations API

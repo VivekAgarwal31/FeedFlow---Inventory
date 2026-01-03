@@ -130,7 +130,7 @@ router.post('/', authenticate, requirePermission('canManageClients'), [
             return res.status(400).json({ message: 'No company associated with user' });
         }
 
-        const { name, phone, email, address, gstNumber, notes } = req.body;
+        const { name, phone, email, address, gstNumber, notes, openingBalance } = req.body;
 
         // Create client
         const client = new Client({
@@ -140,7 +140,8 @@ router.post('/', authenticate, requirePermission('canManageClients'), [
             email,
             address,
             gstNumber,
-            notes
+            notes,
+            currentCredit: openingBalance && !isNaN(parseFloat(openingBalance)) ? parseFloat(openingBalance) : 0
         });
 
         await client.save();
@@ -318,6 +319,113 @@ router.get('/:id/payment-history', authenticate, async (req, res) => {
     } catch (error) {
         console.error('Get payment history error:', error);
         res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// Bulk import clients from Excel
+import multer from 'multer';
+import ExcelJS from 'exceljs';
+
+const upload = multer({ storage: multer.memoryStorage() });
+
+router.post('/bulk-import', authenticate, requirePermission('canManageClients'), upload.single('file'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ message: 'No file uploaded' });
+        }
+
+        const companyId = req.user.companyId?._id || req.user.companyId;
+        if (!companyId) {
+            return res.status(400).json({ message: 'No company associated with user' });
+        }
+
+        // Parse Excel file
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.load(req.file.buffer);
+        const worksheet = workbook.worksheets[0];
+
+        if (!worksheet) {
+            return res.status(400).json({ message: 'Excel file is empty' });
+        }
+
+        const clients = [];
+        const errors = [];
+        const existingNames = new Set();
+
+        // Get existing client names for duplicate check
+        const existingClients = await Client.find({ companyId }).select('name').lean();
+        existingClients.forEach(c => existingNames.add(c.name.toLowerCase()));
+
+        // Skip header row, start from row 2
+        worksheet.eachRow((row, rowNumber) => {
+            if (rowNumber === 1) return; // Skip header
+
+            const name = row.getCell(1).value?.toString().trim();
+            const email = row.getCell(2).value?.toString().trim() || '';
+            const phone = row.getCell(3).value?.toString().trim() || '';
+            const address = row.getCell(4).value?.toString().trim() || '';
+            const gstNumber = row.getCell(5).value?.toString().trim() || '';
+            const notes = row.getCell(6).value?.toString().trim() || '';
+            const openingBalance = parseFloat(row.getCell(7).value) || 0;
+
+            // Validation
+            if (!name || name.length < 2) {
+                errors.push({ row: rowNumber, error: 'Name is required and must be at least 2 characters' });
+                return;
+            }
+
+            // Check for duplicate within file
+            const nameLower = name.toLowerCase();
+            if (existingNames.has(nameLower)) {
+                errors.push({ row: rowNumber, error: `Client "${name}" already exists` });
+                return;
+            }
+
+            // Email validation
+            if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                errors.push({ row: rowNumber, error: 'Invalid email format' });
+                return;
+            }
+
+            existingNames.add(nameLower);
+            clients.push({
+                companyId,
+                name,
+                email,
+                phone,
+                address,
+                gstNumber,
+                notes,
+                currentCredit: openingBalance
+            });
+        });
+
+        // If there are validation errors, return them
+        if (errors.length > 0) {
+            return res.status(400).json({
+                message: 'Validation errors found',
+                errors,
+                successCount: 0,
+                failedCount: errors.length
+            });
+        }
+
+        // Bulk insert clients
+        let successCount = 0;
+        if (clients.length > 0) {
+            const result = await Client.insertMany(clients, { ordered: false });
+            successCount = result.length;
+        }
+
+        res.json({
+            message: `Successfully imported ${successCount} client(s)`,
+            successCount,
+            failedCount: errors.length,
+            errors
+        });
+    } catch (error) {
+        console.error('Bulk import error:', error);
+        res.status(500).json({ message: 'Server error during import', error: error.message });
     }
 });
 
