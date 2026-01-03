@@ -724,9 +724,18 @@ const Suppliers = () => {
                     <p className="font-medium">{selectedPurchase.supplierName}</p>
                   </div>
                   <div>
-                    <Label className="text-muted-foreground">Status</Label>
-                    <Badge variant={getStatusBadgeVariant(selectedPurchase.orderStatus)}>
-                      {selectedPurchase.orderStatus?.replace('_', ' ').toUpperCase() || 'PENDING'}
+                    <Label className="text-muted-foreground">Staff</Label>
+                    <p className="font-medium">{selectedPurchase.staffName || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <Label className="text-muted-foreground">Payment Status</Label>
+                    <Badge variant={
+                      selectedPurchase.paymentStatus === 'paid' ? 'default' :
+                        selectedPurchase.paymentStatus === 'partial' ? 'secondary' :
+                          selectedPurchase.paymentStatus === 'pending' ? 'destructive' :
+                            'outline'
+                    }>
+                      {selectedPurchase.paymentStatus?.toUpperCase() || 'PENDING'}
                     </Badge>
                   </div>
                 </div>

@@ -779,9 +779,18 @@ const Clients = () => {
                     <p className="font-medium">{selectedSale.clientName}</p>
                   </div>
                   <div>
-                    <Label className="text-muted-foreground">Status</Label>
-                    <Badge variant={getStatusBadgeVariant(selectedSale.orderStatus)}>
-                      {selectedSale.orderStatus?.replace('_', ' ').toUpperCase() || 'PENDING'}
+                    <Label className="text-muted-foreground">Staff</Label>
+                    <p className="font-medium">{selectedSale.staffName || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <Label className="text-muted-foreground">Payment Status</Label>
+                    <Badge variant={
+                      selectedSale.paymentStatus === 'paid' ? 'default' :
+                        selectedSale.paymentStatus === 'partial' ? 'secondary' :
+                          selectedSale.paymentStatus === 'pending' ? 'destructive' :
+                            'outline'
+                    }>
+                      {selectedSale.paymentStatus?.toUpperCase() || 'PENDING'}
                     </Badge>
                   </div>
                 </div>
