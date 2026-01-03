@@ -1,6 +1,10 @@
 import express from 'express';
 import DeliveryOut from '../models/DeliveryOut.js';
 import DeliveryIn from '../models/DeliveryIn.js';
+import SalesOrder from '../models/SalesOrder.js';
+import PurchaseOrder from '../models/PurchaseOrder.js';
+import DirectSale from '../models/DirectSale.js';
+import DirectPurchase from '../models/DirectPurchase.js';
 import StockItem from '../models/StockItem.js';
 import { authenticate } from '../middleware/auth.js';
 import { checkReportsAccess } from '../middleware/subscriptionMiddleware.js';
@@ -23,38 +27,54 @@ router.post('/sales/pdf', authenticate, requirePermission('canViewReports'), che
 
         const { startDate, endDate, clientId, clientName, paymentStatus } = req.body;
 
-        // Build query for SalesOrder (not DeliveryOut)
-        const query = { companyId };
-
+        // Build query for SalesOrder
+        const orderQuery = { companyId };
         if (startDate || endDate) {
-            query.orderDate = {}; // Use orderDate for SalesOrder
-            if (startDate) query.orderDate.$gte = new Date(startDate);
+            orderQuery.orderDate = {};
+            if (startDate) orderQuery.orderDate.$gte = new Date(startDate);
             if (endDate) {
                 const end = new Date(endDate);
                 end.setHours(23, 59, 59, 999);
-                query.orderDate.$lte = end;
+                orderQuery.orderDate.$lte = end;
             }
         }
-
-        // Filter by client - prefer ID over name for data integrity
         if (clientId) {
-            query.clientId = clientId;
+            orderQuery.clientId = clientId;
         } else if (clientName) {
-            query.clientName = clientName;
+            orderQuery.clientName = clientName;
         }
-
         if (paymentStatus) {
-            query.paymentStatus = paymentStatus;
+            orderQuery.paymentStatus = paymentStatus;
         }
 
-        // Fetch SalesOrder data (not DeliveryOut)
-        const salesOrders = await SalesOrder.find(query)
-            .sort({ orderDate: -1 })
-            .lean();
+        // Build query for DirectSale
+        const directQuery = { companyId };
+        if (startDate || endDate) {
+            directQuery.saleDate = {};
+            if (startDate) directQuery.saleDate.$gte = new Date(startDate);
+            if (endDate) {
+                const end = new Date(endDate);
+                end.setHours(23, 59, 59, 999);
+                directQuery.saleDate.$lte = end;
+            }
+        }
+        if (clientId) {
+            directQuery.clientId = clientId;
+        } else if (clientName) {
+            directQuery.clientName = clientName;
+        }
+        if (paymentStatus) {
+            directQuery.paymentStatus = paymentStatus;
+        }
 
-        // Transform data to match sales export format
-        const sales = salesOrders.map(order => {
-            // Format items as "ItemName (Warehouse - Quantity bags)"
+        // Fetch both SalesOrder and DirectSale data
+        const [salesOrders, directSales] = await Promise.all([
+            SalesOrder.find(orderQuery).sort({ orderDate: -1 }).lean(),
+            DirectSale.find(directQuery).sort({ saleDate: -1 }).lean()
+        ]);
+
+        // Transform SalesOrder data
+        const orderSales = salesOrders.map(order => {
             const itemsText = order.items && order.items.length > 0
                 ? order.items.map(item =>
                     `${item.itemName || 'Unknown'} (${item.warehouseName || 'Unknown'} - ${item.quantity || 0} bags)`
@@ -72,6 +92,31 @@ router.post('/sales/pdf', authenticate, requirePermission('canViewReports'), che
                 pendingAmount: order.amountDue || 0
             };
         });
+
+        // Transform DirectSale data
+        const directSalesData = directSales.map(sale => {
+            const itemsText = sale.items && sale.items.length > 0
+                ? sale.items.map(item =>
+                    `${item.itemName || 'Unknown'} (${item.warehouseName || 'Unknown'} - ${item.quantity || 0} bags)`
+                ).join(', ')
+                : 'N/A';
+
+            return {
+                saleDate: sale.saleDate,
+                clientName: sale.clientName || 'N/A',
+                staffName: sale.staffName || 'N/A',
+                items: itemsText,
+                totalAmount: sale.totalAmount || 0,
+                paymentStatus: sale.paymentStatus || 'pending',
+                paidAmount: sale.amountPaid || 0,
+                pendingAmount: (sale.totalAmount - (sale.amountPaid || 0)) || 0
+            };
+        });
+
+        // Combine and sort by date
+        const sales = [...orderSales, ...directSalesData].sort((a, b) =>
+            new Date(b.saleDate) - new Date(a.saleDate)
+        );
 
         // Generate PDF
         const pdfBuffer = await generateSalesPDF(sales, req.user.companyId, { startDate, endDate });
@@ -106,38 +151,54 @@ router.post('/sales/excel', authenticate, requirePermission('canViewReports'), c
 
         const { startDate, endDate, clientId, clientName, paymentStatus } = req.body;
 
-        // Build query for SalesOrder (not DeliveryOut)
-        const query = { companyId };
-
+        // Build query for SalesOrder
+        const orderQuery = { companyId };
         if (startDate || endDate) {
-            query.orderDate = {}; // Use orderDate for SalesOrder
-            if (startDate) query.orderDate.$gte = new Date(startDate);
+            orderQuery.orderDate = {};
+            if (startDate) orderQuery.orderDate.$gte = new Date(startDate);
             if (endDate) {
                 const end = new Date(endDate);
                 end.setHours(23, 59, 59, 999);
-                query.orderDate.$lte = end;
+                orderQuery.orderDate.$lte = end;
             }
         }
-
-        // Filter by client - prefer ID over name for data integrity
         if (clientId) {
-            query.clientId = clientId;
+            orderQuery.clientId = clientId;
         } else if (clientName) {
-            query.clientName = clientName;
+            orderQuery.clientName = clientName;
         }
-
         if (paymentStatus) {
-            query.paymentStatus = paymentStatus;
+            orderQuery.paymentStatus = paymentStatus;
         }
 
-        // Fetch SalesOrder data (not DeliveryOut)
-        const salesOrders = await SalesOrder.find(query)
-            .sort({ orderDate: -1 })
-            .lean();
+        // Build query for DirectSale
+        const directQuery = { companyId };
+        if (startDate || endDate) {
+            directQuery.saleDate = {};
+            if (startDate) directQuery.saleDate.$gte = new Date(startDate);
+            if (endDate) {
+                const end = new Date(endDate);
+                end.setHours(23, 59, 59, 999);
+                directQuery.saleDate.$lte = end;
+            }
+        }
+        if (clientId) {
+            directQuery.clientId = clientId;
+        } else if (clientName) {
+            directQuery.clientName = clientName;
+        }
+        if (paymentStatus) {
+            directQuery.paymentStatus = paymentStatus;
+        }
 
-        // Transform data to match sales export format
-        const sales = salesOrders.map(order => {
-            // Format items as "ItemName (Warehouse - Quantity bags)"
+        // Fetch both SalesOrder and DirectSale data
+        const [salesOrders, directSales] = await Promise.all([
+            SalesOrder.find(orderQuery).sort({ orderDate: -1 }).lean(),
+            DirectSale.find(directQuery).sort({ saleDate: -1 }).lean()
+        ]);
+
+        // Transform SalesOrder data
+        const orderSales = salesOrders.map(order => {
             const itemsText = order.items && order.items.length > 0
                 ? order.items.map(item =>
                     `${item.itemName || 'Unknown'} (${item.warehouseName || 'Unknown'} - ${item.quantity || 0} bags)`
@@ -155,6 +216,31 @@ router.post('/sales/excel', authenticate, requirePermission('canViewReports'), c
                 pendingAmount: order.amountDue || 0
             };
         });
+
+        // Transform DirectSale data
+        const directSalesData = directSales.map(sale => {
+            const itemsText = sale.items && sale.items.length > 0
+                ? sale.items.map(item =>
+                    `${item.itemName || 'Unknown'} (${item.warehouseName || 'Unknown'} - ${item.quantity || 0} bags)`
+                ).join(', ')
+                : 'N/A';
+
+            return {
+                saleDate: sale.saleDate,
+                clientName: sale.clientName || 'N/A',
+                staffName: sale.staffName || 'N/A',
+                items: itemsText,
+                totalAmount: sale.totalAmount || 0,
+                paymentStatus: sale.paymentStatus || 'pending',
+                paidAmount: sale.amountPaid || 0,
+                pendingAmount: (sale.totalAmount - (sale.amountPaid || 0)) || 0
+            };
+        });
+
+        // Combine and sort by date
+        const sales = [...orderSales, ...directSalesData].sort((a, b) =>
+            new Date(b.saleDate) - new Date(a.saleDate)
+        );
 
         // Generate Excel
         const excelBuffer = await generateSalesReportExcel(sales, req.user.companyId, { startDate, endDate });
@@ -189,38 +275,54 @@ router.post('/purchases/pdf', authenticate, requirePermission('canViewReports'),
 
         const { startDate, endDate, supplierId, supplierName, paymentStatus } = req.body;
 
-        // Build query for PurchaseOrder (not DeliveryIn)
-        const query = { companyId };
-
+        // Build query for PurchaseOrder
+        const orderQuery = { companyId };
         if (startDate || endDate) {
-            query.orderDate = {}; // Use orderDate for PurchaseOrder
-            if (startDate) query.orderDate.$gte = new Date(startDate);
+            orderQuery.orderDate = {};
+            if (startDate) orderQuery.orderDate.$gte = new Date(startDate);
             if (endDate) {
                 const end = new Date(endDate);
                 end.setHours(23, 59, 59, 999);
-                query.orderDate.$lte = end;
+                orderQuery.orderDate.$lte = end;
             }
         }
-
-        // Filter by supplier - prefer ID over name for data integrity
         if (supplierId) {
-            query.supplierId = supplierId;
+            orderQuery.supplierId = supplierId;
         } else if (supplierName) {
-            query.supplierName = supplierName;
+            orderQuery.supplierName = supplierName;
         }
-
         if (paymentStatus) {
-            query.paymentStatus = paymentStatus;
+            orderQuery.paymentStatus = paymentStatus;
         }
 
-        // Fetch PurchaseOrder data (not DeliveryIn)
-        const purchaseOrders = await PurchaseOrder.find(query)
-            .sort({ orderDate: -1 })
-            .lean();
+        // Build query for DirectPurchase
+        const directQuery = { companyId };
+        if (startDate || endDate) {
+            directQuery.purchaseDate = {};
+            if (startDate) directQuery.purchaseDate.$gte = new Date(startDate);
+            if (endDate) {
+                const end = new Date(endDate);
+                end.setHours(23, 59, 59, 999);
+                directQuery.purchaseDate.$lte = end;
+            }
+        }
+        if (supplierId) {
+            directQuery.supplierId = supplierId;
+        } else if (supplierName) {
+            directQuery.supplierName = supplierName;
+        }
+        if (paymentStatus) {
+            directQuery.paymentStatus = paymentStatus;
+        }
 
-        // Transform data to match purchase export format
-        const purchases = purchaseOrders.map(order => {
-            // Format items as "ItemName (Warehouse - Quantity bags)"
+        // Fetch both PurchaseOrder and DirectPurchase data
+        const [purchaseOrders, directPurchases] = await Promise.all([
+            PurchaseOrder.find(orderQuery).sort({ orderDate: -1 }).lean(),
+            DirectPurchase.find(directQuery).sort({ purchaseDate: -1 }).lean()
+        ]);
+
+        // Transform PurchaseOrder data
+        const orderPurchases = purchaseOrders.map(order => {
             const itemsText = order.items && order.items.length > 0
                 ? order.items.map(item =>
                     `${item.itemName || 'Unknown'} (${item.warehouseName || 'Unknown'} - ${item.quantity || 0} bags)`
@@ -238,6 +340,31 @@ router.post('/purchases/pdf', authenticate, requirePermission('canViewReports'),
                 pendingAmount: order.amountDue || 0
             };
         });
+
+        // Transform DirectPurchase data
+        const directPurchasesData = directPurchases.map(purchase => {
+            const itemsText = purchase.items && purchase.items.length > 0
+                ? purchase.items.map(item =>
+                    `${item.itemName || 'Unknown'} (${item.warehouseName || 'Unknown'} - ${item.quantity || 0} bags)`
+                ).join(', ')
+                : 'N/A';
+
+            return {
+                purchaseDate: purchase.purchaseDate,
+                supplierName: purchase.supplierName || 'N/A',
+                staffName: purchase.staffName || 'N/A',
+                items: itemsText,
+                totalAmount: purchase.totalAmount || 0,
+                paymentStatus: purchase.paymentStatus || 'pending',
+                paidAmount: purchase.amountPaid || 0,
+                pendingAmount: (purchase.totalAmount - (purchase.amountPaid || 0)) || 0
+            };
+        });
+
+        // Combine and sort by date
+        const purchases = [...orderPurchases, ...directPurchasesData].sort((a, b) =>
+            new Date(b.purchaseDate) - new Date(a.purchaseDate)
+        );
 
         // Generate PDF
         const pdfBuffer = await generatePurchasePDF(purchases, req.user.companyId, { startDate, endDate });

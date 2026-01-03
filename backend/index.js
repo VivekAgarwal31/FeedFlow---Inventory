@@ -27,6 +27,8 @@ import subscriptionRoutes from './routes/subscription.js';
 import adminSubscriptionRoutes from './routes/adminSubscription.js';
 import subscriptionPaymentRoutes from './routes/subscriptionPayments.js';
 import adminCouponRoutes from './routes/admin/coupons.js';
+import directSalesRoutes from './routes/directSales.js';
+import directPurchasesRoutes from './routes/directPurchases.js';
 import { startHttpPing } from './utils/keepAlive.js';
 import { startDbPing } from './utils/dbPing.js';
 import { startTrialExpiryJob } from './jobs/trialExpiryJob.js';
@@ -60,6 +62,8 @@ import './models/UserSubscription.js';
 import './models/SubscriptionPayment.js';
 import './models/Coupon.js';
 import './models/CouponUsage.js';
+import './models/DirectSale.js';
+import './models/DirectPurchase.js';
 
 // Load environment variables (works both locally and on Render)
 dotenv.config();
@@ -159,6 +163,8 @@ app.use('/api/subscription', subscriptionRoutes);
 app.use('/api/admin/subscription', adminSubscriptionRoutes);
 app.use('/api/admin/coupons', adminCouponRoutes);
 app.use('/api/subscription-payments', subscriptionPaymentRoutes);
+app.use('/api/direct-sales', directSalesRoutes);
+app.use('/api/direct-purchases', directPurchasesRoutes);
 
 app.listen(PORT, async () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);

@@ -9,7 +9,7 @@ const stockTransactionSchema = new mongoose.Schema({
     },
     type: {
         type: String,
-        enum: ['delivery_in', 'delivery_out', 'stock_move', 'stock_adjust'],
+        enum: ['delivery_in', 'delivery_out', 'stock_move', 'stock_adjust', 'direct_sale', 'direct_purchase'],
         required: true,
         index: true
     },
@@ -72,7 +72,7 @@ const stockTransactionSchema = new mongoose.Schema({
     },
     referenceModel: {
         type: String,
-        enum: ['DeliveryOut', 'DeliveryIn', 'Sale', 'Purchase']
+        enum: ['DeliveryOut', 'DeliveryIn', 'Sale', 'Purchase', 'DirectSale', 'DirectPurchase']
     },
     reason: {
         type: String,

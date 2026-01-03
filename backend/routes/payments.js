@@ -2,6 +2,8 @@ import express from 'express';
 import Payment from '../models/Payment.js';
 import SalesOrder from '../models/SalesOrder.js';
 import PurchaseOrder from '../models/PurchaseOrder.js';
+import DirectSale from '../models/DirectSale.js';
+import DirectPurchase from '../models/DirectPurchase.js';
 import Client from '../models/Client.js';
 import Supplier from '../models/Supplier.js';
 import LedgerAccount from '../models/LedgerAccount.js';
@@ -270,59 +272,87 @@ router.post('/record-client-payment', async (req, res) => {
             return res.status(403).json({ message: 'Not authorized' });
         }
 
-        // Get all unpaid/partial sales orders for this client (oldest first)
-        const unpaidSalesOrders = await SalesOrder.find({
-            companyId: userCompanyId,
-            clientId: clientId,
-            paymentStatus: { $in: ['pending', 'partial'] }
-        }).sort({ orderDate: 1 }); // Oldest first
+        // Get all unpaid/partial sales orders AND direct sales for this client (oldest first)
+        const [unpaidSalesOrders, unpaidDirectSales] = await Promise.all([
+            SalesOrder.find({
+                companyId: userCompanyId,
+                clientId: clientId,
+                paymentStatus: { $in: ['pending', 'partial'] }
+            }).sort({ orderDate: 1 }),
+            DirectSale.find({
+                companyId: userCompanyId,
+                clientId: clientId,
+                paymentStatus: { $in: ['pending', 'partial'] }
+            }).sort({ saleDate: 1 })
+        ]);
+
+        // Combine and sort by date (oldest first)
+        const allUnpaidTransactions = [
+            ...unpaidSalesOrders.map(order => ({ ...order.toObject(), type: 'order', date: order.orderDate })),
+            ...unpaidDirectSales.map(sale => ({ ...sale.toObject(), type: 'direct', date: sale.saleDate }))
+        ].sort((a, b) => new Date(a.date) - new Date(b.date));
 
         let remainingAmount = parseFloat(amount);
         const allocations = [];
         const salesUpdated = [];
 
         // Build allocations array
-        for (const order of unpaidSalesOrders) {
+        for (const transaction of allUnpaidTransactions) {
             if (remainingAmount <= 0.01) break; // Account for floating point precision
 
             // Round to 2 decimal places to avoid floating point issues
-            const amountDue = Math.round((order.amountDue || (order.totalAmount - (order.amountPaid || 0))) * 100) / 100;
+            const amountDue = Math.round((transaction.amountDue || (transaction.totalAmount - (transaction.amountPaid || 0))) * 100) / 100;
 
             if (amountDue <= 0.01) continue; // Skip if already paid
 
-            // Calculate payment for this order and round to 2 decimals
-            const paymentForThisOrder = Math.round(Math.min(remainingAmount, amountDue) * 100) / 100;
-            const willBeCleared = (order.amountPaid + paymentForThisOrder) >= order.totalAmount;
+            // Calculate payment for this transaction and round to 2 decimals
+            const paymentForThis = Math.round(Math.min(remainingAmount, amountDue) * 100) / 100;
+            const willBeCleared = (transaction.amountPaid + paymentForThis) >= transaction.totalAmount;
 
             // Add to allocations array
             allocations.push({
-                saleId: order._id,
-                invoiceNumber: order.orderNumber || `ORD-${order._id.toString().slice(-8).toUpperCase()}`,
-                amountAllocated: paymentForThisOrder,
-                status: willBeCleared ? 'cleared' : 'partial'
+                saleId: transaction._id,
+                invoiceNumber: transaction.orderNumber || transaction.saleNumber || `${transaction.type === 'order' ? 'ORD' : 'DS'}-${transaction._id.toString().slice(-8).toUpperCase()}`,
+                amountAllocated: paymentForThis,
+                status: willBeCleared ? 'cleared' : 'partial',
+                type: transaction.type
             });
 
-            // Update order with rounded values
-            order.amountPaid = Math.round(((order.amountPaid || 0) + paymentForThisOrder) * 100) / 100;
-            order.amountDue = Math.round((order.totalAmount - order.amountPaid) * 100) / 100;
+            // Update transaction with rounded values
+            transaction.amountPaid = Math.round(((transaction.amountPaid || 0) + paymentForThis) * 100) / 100;
+            transaction.amountDue = Math.round((transaction.totalAmount - transaction.amountPaid) * 100) / 100;
 
             // Update payment status
-            if (order.amountPaid >= order.totalAmount - 0.01) { // Account for rounding
-                order.paymentStatus = 'paid';
-                order.amountDue = 0; // Ensure it's exactly 0
-            } else if (order.amountPaid > 0) {
-                order.paymentStatus = 'partial';
+            if (transaction.amountPaid >= transaction.totalAmount - 0.01) { // Account for rounding
+                transaction.paymentStatus = 'paid';
+                transaction.amountDue = 0; // Ensure it's exactly 0
+            } else if (transaction.amountPaid > 0) {
+                transaction.paymentStatus = 'partial';
             }
 
-            await order.save();
+            // Save based on type
+            if (transaction.type === 'order') {
+                const order = await SalesOrder.findById(transaction._id);
+                order.amountPaid = transaction.amountPaid;
+                order.amountDue = transaction.amountDue;
+                order.paymentStatus = transaction.paymentStatus;
+                await order.save();
+            } else {
+                const sale = await DirectSale.findById(transaction._id);
+                sale.amountPaid = transaction.amountPaid;
+                sale.paymentStatus = transaction.paymentStatus;
+                await sale.save();
+            }
+
             salesUpdated.push({
-                saleId: order._id,
-                invoiceNumber: order.orderNumber,
-                amountPaid: paymentForThisOrder,
-                newStatus: order.paymentStatus
+                saleId: transaction._id,
+                invoiceNumber: transaction.orderNumber || transaction.saleNumber,
+                amountPaid: paymentForThis,
+                newStatus: transaction.paymentStatus,
+                type: transaction.type
             });
 
-            remainingAmount = Math.round((remainingAmount - paymentForThisOrder) * 100) / 100;
+            remainingAmount = Math.round((remainingAmount - paymentForThis) * 100) / 100;
         }
 
         // Create ONE payment record with all allocations
@@ -383,17 +413,31 @@ router.post('/record-client-payment', async (req, res) => {
         }
 
 
-        // Recalculate client's credit from ALL unpaid/partial sales orders (including updated ones)
-        const allUnpaidSalesOrders = await SalesOrder.find({
-            companyId: userCompanyId,
-            clientId: clientId,
-            paymentStatus: { $in: ['pending', 'partial'] }
-        });
+        // Recalculate client's credit from ALL unpaid/partial transactions (including updated ones)
+        const [allUnpaidOrders, allUnpaidDirectSales] = await Promise.all([
+            SalesOrder.find({
+                companyId: userCompanyId,
+                clientId: clientId,
+                paymentStatus: { $in: ['pending', 'partial'] }
+            }),
+            DirectSale.find({
+                companyId: userCompanyId,
+                clientId: clientId,
+                paymentStatus: { $in: ['pending', 'partial'] }
+            })
+        ]);
 
-        const totalReceivable = allUnpaidSalesOrders.reduce((sum, order) => {
+        const orderReceivable = allUnpaidOrders.reduce((sum, order) => {
             const due = order.amountDue || (order.totalAmount - (order.amountPaid || 0));
             return sum + due;
         }, 0);
+
+        const directReceivable = allUnpaidDirectSales.reduce((sum, sale) => {
+            const due = sale.totalAmount - (sale.amountPaid || 0);
+            return sum + due;
+        }, 0);
+
+        const totalReceivable = orderReceivable + directReceivable;
 
         client.currentCredit = Math.round(Math.max(0, totalReceivable) * 100) / 100;
 
@@ -442,54 +486,82 @@ router.post('/record-supplier-payment', async (req, res) => {
             return res.status(403).json({ message: 'Not authorized' });
         }
 
-        // Get all unpaid/partial purchase orders for this supplier (oldest first)
-        const unpaidPurchaseOrders = await PurchaseOrder.find({
-            companyId: userCompanyId,
-            supplierId: supplierId,
-            paymentStatus: { $in: ['pending', 'partial'] }
-        }).sort({ orderDate: 1 }); // Oldest first
+        // Get all unpaid/partial purchase orders AND direct purchases for this supplier (oldest first)
+        const [unpaidPurchaseOrders, unpaidDirectPurchases] = await Promise.all([
+            PurchaseOrder.find({
+                companyId: userCompanyId,
+                supplierId: supplierId,
+                paymentStatus: { $in: ['pending', 'partial'] }
+            }).sort({ orderDate: 1 }),
+            DirectPurchase.find({
+                companyId: userCompanyId,
+                supplierId: supplierId,
+                paymentStatus: { $in: ['pending', 'partial'] }
+            }).sort({ purchaseDate: 1 })
+        ]);
+
+        // Combine and sort by date (oldest first)
+        const allUnpaidTransactions = [
+            ...unpaidPurchaseOrders.map(order => ({ ...order.toObject(), type: 'order', date: order.orderDate })),
+            ...unpaidDirectPurchases.map(purchase => ({ ...purchase.toObject(), type: 'direct', date: purchase.purchaseDate }))
+        ].sort((a, b) => new Date(a.date) - new Date(b.date));
 
         let remainingAmount = parseFloat(amount);
         const allocations = [];
         const purchasesUpdated = [];
 
         // Build allocations array
-        for (const order of unpaidPurchaseOrders) {
+        for (const transaction of allUnpaidTransactions) {
             if (remainingAmount <= 0.01) break;
 
-            const amountDue = Math.round((order.amountDue || (order.totalAmount - (order.amountPaid || 0))) * 100) / 100;
+            const amountDue = Math.round((transaction.amountDue || (transaction.totalAmount - (transaction.amountPaid || 0))) * 100) / 100;
 
             if (amountDue <= 0.01) continue;
 
-            const paymentForThisOrder = Math.round(Math.min(remainingAmount, amountDue) * 100) / 100;
-            const willBeCleared = (order.amountPaid + paymentForThisOrder) >= order.totalAmount;
+            const paymentForThis = Math.round(Math.min(remainingAmount, amountDue) * 100) / 100;
+            const willBeCleared = (transaction.amountPaid + paymentForThis) >= transaction.totalAmount;
 
             allocations.push({
-                saleId: order._id,
-                invoiceNumber: order.orderNumber || `ORD-${order._id.toString().slice(-8).toUpperCase()}`,
-                amountAllocated: paymentForThisOrder,
-                status: willBeCleared ? 'cleared' : 'partial'
+                saleId: transaction._id,
+                invoiceNumber: transaction.orderNumber || transaction.purchaseNumber || `${transaction.type === 'order' ? 'ORD' : 'DP'}-${transaction._id.toString().slice(-8).toUpperCase()}`,
+                amountAllocated: paymentForThis,
+                status: willBeCleared ? 'cleared' : 'partial',
+                type: transaction.type
             });
 
-            order.amountPaid = Math.round(((order.amountPaid || 0) + paymentForThisOrder) * 100) / 100;
-            order.amountDue = Math.round((order.totalAmount - order.amountPaid) * 100) / 100;
+            transaction.amountPaid = Math.round(((transaction.amountPaid || 0) + paymentForThis) * 100) / 100;
+            transaction.amountDue = Math.round((transaction.totalAmount - transaction.amountPaid) * 100) / 100;
 
-            if (order.amountPaid >= order.totalAmount - 0.01) {
-                order.paymentStatus = 'paid';
-                order.amountDue = 0;
-            } else if (order.amountPaid > 0) {
-                order.paymentStatus = 'partial';
+            if (transaction.amountPaid >= transaction.totalAmount - 0.01) {
+                transaction.paymentStatus = 'paid';
+                transaction.amountDue = 0;
+            } else if (transaction.amountPaid > 0) {
+                transaction.paymentStatus = 'partial';
             }
 
-            await order.save();
+            // Save based on type
+            if (transaction.type === 'order') {
+                const order = await PurchaseOrder.findById(transaction._id);
+                order.amountPaid = transaction.amountPaid;
+                order.amountDue = transaction.amountDue;
+                order.paymentStatus = transaction.paymentStatus;
+                await order.save();
+            } else {
+                const purchase = await DirectPurchase.findById(transaction._id);
+                purchase.amountPaid = transaction.amountPaid;
+                purchase.paymentStatus = transaction.paymentStatus;
+                await purchase.save();
+            }
+
             purchasesUpdated.push({
-                purchaseId: order._id,
-                billNumber: order.orderNumber,
-                amountPaid: paymentForThisOrder,
-                newStatus: order.paymentStatus
+                purchaseId: transaction._id,
+                billNumber: transaction.orderNumber || transaction.purchaseNumber,
+                amountPaid: paymentForThis,
+                newStatus: transaction.paymentStatus,
+                type: transaction.type
             });
 
-            remainingAmount = Math.round((remainingAmount - paymentForThisOrder) * 100) / 100;
+            remainingAmount = Math.round((remainingAmount - paymentForThis) * 100) / 100;
         }
 
         // Create ONE payment record with all allocations
@@ -549,17 +621,31 @@ router.post('/record-supplier-payment', async (req, res) => {
             // Don't fail the payment if journal entry fails
         }
 
-        // Recalculate supplier's payable from ALL unpaid/partial purchase orders (including updated ones)
-        const allUnpaidPurchaseOrders = await PurchaseOrder.find({
-            companyId: userCompanyId,
-            supplierId: supplierId,
-            paymentStatus: { $in: ['pending', 'partial'] }
-        });
+        // Recalculate supplier's payable from ALL unpaid/partial transactions (including updated ones)
+        const [allUnpaidOrders, allUnpaidDirectPurchases] = await Promise.all([
+            PurchaseOrder.find({
+                companyId: userCompanyId,
+                supplierId: supplierId,
+                paymentStatus: { $in: ['pending', 'partial'] }
+            }),
+            DirectPurchase.find({
+                companyId: userCompanyId,
+                supplierId: supplierId,
+                paymentStatus: { $in: ['pending', 'partial'] }
+            })
+        ]);
 
-        const totalPayable = allUnpaidPurchaseOrders.reduce((sum, order) => {
+        const orderPayable = allUnpaidOrders.reduce((sum, order) => {
             const due = order.amountDue || (order.totalAmount - (order.amountPaid || 0));
             return sum + due;
         }, 0);
+
+        const directPayable = allUnpaidDirectPurchases.reduce((sum, purchase) => {
+            const due = purchase.totalAmount - (purchase.amountPaid || 0);
+            return sum + due;
+        }, 0);
+
+        const totalPayable = orderPayable + directPayable;
 
         supplier.currentPayable = Math.round(Math.max(0, totalPayable) * 100) / 100;
 

@@ -32,7 +32,7 @@ const journalEntrySchema = new mongoose.Schema({
     },
     referenceType: {
         type: String,
-        enum: ['SalesOrder', 'PurchaseOrder', 'Payment', 'Manual', null],
+        enum: ['SalesOrder', 'PurchaseOrder', 'Payment', 'Manual', 'DirectSale', 'DirectPurchase', null],
         default: null
     },
     referenceId: {

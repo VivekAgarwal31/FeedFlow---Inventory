@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, Package, AlertCircle, Loader2, Search, Filter, Trash2, MoreHorizontal, Eye, Warehouse } from 'lucide-react'
+import { Plus, Package, AlertCircle, Loader2, Search, Filter, Trash2, MoreHorizontal, Eye, Warehouse, FileUp } from 'lucide-react'
 import { formatCurrency } from '../lib/utils'
 import { stockAPI, warehouseAPI } from '../lib/api'
 import { useToast } from '../hooks/use-toast'
@@ -14,6 +14,7 @@ import { Badge } from '../components/ui/badge'
 import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../components/ui/dropdown-menu'
 import { Pagination } from '../components/ui/Pagination'
+import BulkStockUpload from '../components/BulkStockUpload'
 
 const StockList = () => {
   const [stockItems, setStockItems] = useState([])
@@ -32,6 +33,7 @@ const StockList = () => {
   const [deleting, setDeleting] = useState(false)
   const [itemDetailDialogOpen, setItemDetailDialogOpen] = useState(false)
   const [selectedItemForDetail, setSelectedItemForDetail] = useState(null)
+  const [bulkUploadMode, setBulkUploadMode] = useState(false)
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
@@ -378,7 +380,12 @@ const StockList = () => {
           </p>
         </div>
 
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog open={dialogOpen} onOpenChange={(open) => {
+          setDialogOpen(open)
+          if (!open) {
+            setBulkUploadMode(false)
+          }
+        }}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
@@ -393,140 +400,176 @@ const StockList = () => {
               </DialogDescription>
             </DialogHeader>
 
-            {error && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="item-name">Item Name *</Label>
-                  <Input
-                    id="item-name"
-                    type="text"
-                    placeholder="Premium Product"
-                    value={form.itemName}
-                    onChange={(e) => setForm({ ...form, itemName: e.target.value })}
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="category">Category</Label>
-                  <Select value={form.category} onValueChange={(value) => setForm({ ...form, category: value })}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="raw_material">Raw Material</SelectItem>
-                      <SelectItem value="finished_product">Finished Product</SelectItem>
-                      <SelectItem value="packaging">Packaging</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="item-category">Item Category (Optional)</Label>
-                  <Input
-                    id="item-category"
-                    type="text"
-                    placeholder="e.g., Premium Brand, Economy, Organic"
-                    value={form.itemCategory}
-                    onChange={(e) => setForm({ ...form, itemCategory: e.target.value })}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Use this to group similar items by brand, quality, or type
-                  </p>
-                </div>
-
-
-                <div className="space-y-2">
-                  <Label htmlFor="bag-size">Bag Size (kg) *</Label>
-                  <Input
-                    id="bag-size"
-                    type="number"
-                    step="0.01"
-                    placeholder="25"
-                    value={form.bagSize}
-                    onChange={(e) => setForm({ ...form, bagSize: e.target.value })}
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="quantity">Initial Quantity (bags)</Label>
-                  <Input
-                    id="quantity"
-                    type="number"
-                    placeholder="0 (can be added later via Stock In)"
-                    value={form.quantity}
-                    onChange={(e) => setForm({ ...form, quantity: e.target.value })}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Leave as 0 to add stock later using Stock In
-                  </p>
-                </div>
-
-                {/* Show warehouse selection only if quantity > 0 */}
-                {parseInt(form.quantity) > 0 && (
-                  <div className="space-y-2">
-                    <Label htmlFor="initial-warehouse">Assign Initial Quantity To *</Label>
-                    <Select value={form.initialWarehouseId} onValueChange={(value) => setForm({ ...form, initialWarehouseId: value })}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select warehouse for initial stock" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {warehouses.map((warehouse) => (
-                          <SelectItem key={warehouse._id} value={warehouse._id}>
-                            {warehouse.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      Choose which warehouse will receive the initial quantity
-                    </p>
-                  </div>
-                )}
-
-
-                <div className="space-y-2">
-                  <Label htmlFor="low-stock">Low Stock Alert</Label>
-                  <Input
-                    id="low-stock"
-                    type="number"
-                    placeholder="10"
-                    value={form.lowStockAlert}
-                    onChange={(e) => setForm({ ...form, lowStockAlert: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <Button type="submit" disabled={submitting} className="flex-1">
-                  {submitting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Adding...
-                    </>
-                  ) : (
-                    'Add Stock Item'
-                  )}
-                </Button>
+            {/* Mode Toggle */}
+            {!bulkUploadMode && (
+              <div className="flex gap-2 pb-4 border-b">
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setDialogOpen(false)}
-                  disabled={submitting}
+                  size="sm"
+                  onClick={() => setBulkUploadMode(true)}
+                  className="flex-1"
                 >
-                  Cancel
+                  <FileUp className="mr-2 h-4 w-4" />
+                  Add via File
                 </Button>
               </div>
-            </form>
+            )}
+
+            {/* Bulk Upload Mode */}
+            {bulkUploadMode ? (
+              <BulkStockUpload
+                warehouses={warehouses}
+                onSuccess={() => {
+                  fetchData()
+                  setBulkUploadMode(false)
+                  setDialogOpen(false)
+                }}
+                onCancel={() => {
+                  setBulkUploadMode(false)
+                  setDialogOpen(false)
+                }}
+              />
+            ) : (
+              <>
+                {/* Manual Entry Mode */}
+                {error && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
+                )}
+
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="item-name">Item Name *</Label>
+                      <Input
+                        id="item-name"
+                        type="text"
+                        placeholder="Premium Product"
+                        value={form.itemName}
+                        onChange={(e) => setForm({ ...form, itemName: e.target.value })}
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="category">Category</Label>
+                      <Select value={form.category} onValueChange={(value) => setForm({ ...form, category: value })}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="raw_material">Raw Material</SelectItem>
+                          <SelectItem value="finished_product">Finished Product</SelectItem>
+                          <SelectItem value="packaging">Packaging</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="item-category">Item Category (Optional)</Label>
+                      <Input
+                        id="item-category"
+                        type="text"
+                        placeholder="e.g., Premium Brand, Economy, Organic"
+                        value={form.itemCategory}
+                        onChange={(e) => setForm({ ...form, itemCategory: e.target.value })}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Use this to group similar items by brand, quality, or type
+                      </p>
+                    </div>
+
+
+                    <div className="space-y-2">
+                      <Label htmlFor="bag-size">Bag Size (kg) *</Label>
+                      <Input
+                        id="bag-size"
+                        type="number"
+                        step="0.01"
+                        placeholder="25"
+                        value={form.bagSize}
+                        onChange={(e) => setForm({ ...form, bagSize: e.target.value })}
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="quantity">Initial Quantity (bags)</Label>
+                      <Input
+                        id="quantity"
+                        type="number"
+                        placeholder="0 (can be added later via Stock In)"
+                        value={form.quantity}
+                        onChange={(e) => setForm({ ...form, quantity: e.target.value })}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Leave as 0 to add stock later using Stock In
+                      </p>
+                    </div>
+
+                    {/* Show warehouse selection only if quantity > 0 */}
+                    {parseInt(form.quantity) > 0 && (
+                      <div className="space-y-2">
+                        <Label htmlFor="initial-warehouse">Assign Initial Quantity To *</Label>
+                        <Select value={form.initialWarehouseId} onValueChange={(value) => setForm({ ...form, initialWarehouseId: value })}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select warehouse for initial stock" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {warehouses.map((warehouse) => (
+                              <SelectItem key={warehouse._id} value={warehouse._id}>
+                                {warehouse.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          Choose which warehouse will receive the initial quantity
+                        </p>
+                      </div>
+                    )}
+
+
+                    <div className="space-y-2">
+                      <Label htmlFor="low-stock">Low Stock Alert</Label>
+                      <Input
+                        id="low-stock"
+                        type="number"
+                        placeholder="10"
+                        value={form.lowStockAlert}
+                        onChange={(e) => setForm({ ...form, lowStockAlert: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 pt-4">
+                    <Button type="submit" disabled={submitting} className="flex-1">
+                      {submitting ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Adding...
+                        </>
+                      ) : (
+                        'Add Stock Item'
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setDialogOpen(false)}
+                      disabled={submitting}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              </>
+            )}
           </DialogContent>
+
         </Dialog>
       </div>
 
@@ -672,7 +715,10 @@ const StockList = () => {
                     )}
                   </TableCell>
                   <TableCell>
-                    <span className="font-mono">{item.totalQuantity} bags</span>
+                    <span className={`font-mono font-semibold ${item.totalQuantity < 0 ? 'text-red-600' : 'text-foreground'
+                      }`}>
+                      {item.totalQuantity} bags
+                    </span>
                   </TableCell>
                   <TableCell>
                     <span className="font-mono">{item.bagSize} kg</span>
@@ -848,17 +894,25 @@ const StockList = () => {
                           <TableCell className="font-medium">{dist.warehouse.name}</TableCell>
                           <TableCell>{dist.warehouse.location || 'No location'}</TableCell>
                           <TableCell>
-                            <span className={`font-mono ${dist.quantity === 0 ? 'text-red-500 font-bold' : ''}`}>
+                            <span className={`font-mono font-semibold ${dist.quantity < 0 ? 'text-red-600' :
+                              dist.quantity === 0 ? 'text-muted-foreground' :
+                                'text-foreground'
+                              }`}>
                               {dist.quantity} bags
                             </span>
                           </TableCell>
                           <TableCell>
-                            {dist.quantity === 0 ? (
+                            {dist.quantity < 0 ? (
+                              <Badge variant="destructive" className="gap-1">
+                                <AlertCircle className="h-3 w-3" />
+                                Negative Stock
+                              </Badge>
+                            ) : dist.quantity === 0 ? (
                               <Badge variant="destructive">Out of Stock</Badge>
-                            ) : dist.quantity <= selectedItemForDetail.lowStockAlert ? (
+                            ) : dist.quantity <= (selectedItemForDetail.lowStockAlert || 10) ? (
                               <Badge variant="outline" className="text-orange-600 border-orange-600">Low Stock</Badge>
                             ) : (
-                              <Badge variant="outline" className="text-green-600 border-green-600">In Stock</Badge>
+                              <Badge variant="outline" className="bg-success/10 text-success border-success/20">In Stock</Badge>
                             )}
                           </TableCell>
                         </TableRow>

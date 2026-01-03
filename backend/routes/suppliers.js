@@ -3,6 +3,7 @@ import { body, validationResult } from 'express-validator';
 import Supplier from '../models/Supplier.js';
 import PurchaseOrder from '../models/PurchaseOrder.js';
 import DeliveryIn from '../models/DeliveryIn.js';
+import DirectPurchase from '../models/DirectPurchase.js';
 import { authenticate } from '../middleware/auth.js';
 import { requirePermission } from '../middleware/rbac.js';
 
@@ -44,29 +45,52 @@ router.get('/', authenticate, async (req, res) => {
 
         // Calculate purchase statistics for each supplier
         const suppliersWithStats = await Promise.all(suppliers.map(async (supplier) => {
-            const purchaseOrders = await PurchaseOrder.find({
-                companyId,
-                supplierName: supplier.name
-            }).lean();
+            const [purchaseOrders, directPurchases] = await Promise.all([
+                PurchaseOrder.find({
+                    companyId,
+                    supplierName: supplier.name
+                }).lean(),
+                DirectPurchase.find({
+                    companyId,
+                    supplierId: supplier._id
+                }).lean()
+            ]);
 
-            const totalPurchases = purchaseOrders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
-            const purchaseCount = purchaseOrders.length;
+            // Calculate totals from both sources
+            const orderTotal = purchaseOrders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
+            const directTotal = directPurchases.reduce((sum, purchase) => sum + (purchase.totalAmount || 0), 0);
+            const totalPurchases = orderTotal + directTotal;
+            const purchaseCount = purchaseOrders.length + directPurchases.length;
 
-            const lastPurchaseDate = purchaseOrders.length > 0
-                ? purchaseOrders.reduce((latest, order) => {
-                    const orderDate = new Date(order.orderDate || order.createdAt);
-                    return orderDate > latest ? orderDate : latest;
-                }, new Date(0))
+            // Get most recent purchase date from both sources
+            const orderDates = purchaseOrders.map(o => new Date(o.orderDate || o.createdAt)).filter(d => !isNaN(d));
+            const directDates = directPurchases.map(p => new Date(p.purchaseDate || p.createdAt)).filter(d => !isNaN(d));
+            const allDates = [...orderDates, ...directDates];
+
+            const lastPurchaseDate = allDates.length > 0
+                ? new Date(Math.max(...allDates))
                 : null;
 
-            // Calculate current payable from unpaid/partial orders
+            // Calculate current payable from unpaid/partial orders AND direct purchases
             const unpaidOrders = purchaseOrders.filter(order =>
                 order.paymentStatus === 'pending' || order.paymentStatus === 'partial'
             );
-            const currentPayable = unpaidOrders.reduce((sum, order) => {
+            const orderPayable = unpaidOrders.reduce((sum, order) => {
                 const amountDue = order.amountDue || (order.totalAmount - (order.amountPaid || 0));
                 return sum + amountDue;
             }, 0);
+
+            // Get unpaid direct purchases
+            const unpaidDirectPurchases = directPurchases.filter(purchase =>
+                purchase.paymentStatus === 'pending' || purchase.paymentStatus === 'partial'
+            );
+
+            const directPurchasePayable = unpaidDirectPurchases.reduce((sum, purchase) => {
+                const amountDue = purchase.totalAmount - (purchase.amountPaid || 0);
+                return sum + amountDue;
+            }, 0);
+
+            const currentPayable = orderPayable + directPurchasePayable;
 
             return {
                 ...supplier,
@@ -96,17 +120,20 @@ router.get('/:id', authenticate, async (req, res) => {
             return res.status(404).json({ message: 'Supplier not found' });
         }
 
-        // Get both purchase orders and deliveries
-        const [purchaseOrders, deliveries] = await Promise.all([
+        // Get purchase orders, deliveries, and direct purchases
+        const [purchaseOrders, deliveries, directPurchases] = await Promise.all([
             PurchaseOrder.find({ companyId, supplierName: supplier.name })
                 .sort({ orderDate: -1, createdAt: -1 })
                 .limit(50),
             DeliveryIn.find({ companyId, supplierName: supplier.name })
                 .sort({ receiptDate: -1, createdAt: -1 })
+                .limit(50),
+            DirectPurchase.find({ companyId, supplierId: supplier._id })
+                .sort({ purchaseDate: -1, createdAt: -1 })
                 .limit(50)
         ]);
 
-        res.json({ supplier, purchaseOrders, deliveries });
+        res.json({ supplier, purchaseOrders, deliveries, directPurchases });
     } catch (error) {
         console.error('Get supplier error:', error);
         res.status(500).json({ message: 'Server error' });

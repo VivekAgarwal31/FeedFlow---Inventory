@@ -28,6 +28,8 @@ import {
   Search
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
+import { clientAPI, supplierAPI, stockAPI, warehouseAPI } from '../../lib/api'
+import OnboardingModal from '../OnboardingModal'
 import { Button } from '../ui/button'
 import { Card } from '../ui/card'
 import {
@@ -53,6 +55,14 @@ const DashboardLayout = ({ children }) => {
     data: false,
     settings: false
   })
+  const [showOnboarding, setShowOnboarding] = useState(false)
+
+  // Check if user needs onboarding
+  React.useEffect(() => {
+    if (user?.companyId && user.companyId.onboardingCompleted === false) {
+      setShowOnboarding(true)
+    }
+  }, [user])
 
   const toggleGroup = (group) => {
     setExpandedGroups(prev => ({
@@ -62,6 +72,9 @@ const DashboardLayout = ({ children }) => {
   }
 
   const isActive = (path) => location.pathname === path
+
+  // Get delivery mode from user's company
+  const deliveryMode = user?.companyId?.deliveryMode || 'order_based'
 
   const menuItems = [
     {
@@ -89,9 +102,13 @@ const DashboardLayout = ({ children }) => {
       title: 'Sales',
       icon: TrendingUp,
       group: 'sales',
-      items: [
+      items: deliveryMode === 'direct' ? [
+        { title: 'Stock Out', icon: FileBarChart, path: '/direct-sales' },
+        { title: 'Clients', icon: Users, path: '/clients' },
+        { title: 'Receivables', icon: DollarSign, path: '/accounts-receivable' }
+      ] : [
         { title: 'Sales Orders', icon: FileBarChart, path: '/sales-orders' },
-        { title: 'Stock Out', icon: ArrowUpFromLine, path: '/delivery-out' }, // UI label only, route unchanged
+        { title: 'Delivery Out', icon: ArrowUpFromLine, path: '/delivery-out' },
         { title: 'Clients', icon: Users, path: '/clients' },
         { title: 'Receivables', icon: DollarSign, path: '/accounts-receivable' }
       ]
@@ -100,9 +117,13 @@ const DashboardLayout = ({ children }) => {
       title: 'Purchases',
       icon: ShoppingCart,
       group: 'purchases',
-      items: [
+      items: deliveryMode === 'direct' ? [
+        { title: 'Stock In', icon: FileBarChart, path: '/direct-purchases' },
+        { title: 'Suppliers', icon: Truck, path: '/suppliers' },
+        { title: 'Payables', icon: DollarSign, path: '/accounts-payable' }
+      ] : [
         { title: 'Purchase Orders', icon: FileBarChart, path: '/purchase-orders' },
-        { title: 'Stock In (GRN)', icon: ArrowDownToLine, path: '/delivery-in' }, // UI label only, route unchanged
+        { title: 'Delivery In', icon: ArrowDownToLine, path: '/delivery-in' },
         { title: 'Suppliers', icon: Truck, path: '/suppliers' },
         { title: 'Payables', icon: DollarSign, path: '/accounts-payable' }
       ]
@@ -403,6 +424,12 @@ const DashboardLayout = ({ children }) => {
           </div>
         </footer>
       </div>
+
+      {/* Onboarding Modal */}
+      <OnboardingModal
+        open={showOnboarding}
+        onComplete={() => setShowOnboarding(false)}
+      />
     </div>
   )
 }

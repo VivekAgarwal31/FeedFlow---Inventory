@@ -4,6 +4,9 @@ import JournalEntry from '../models/JournalEntry.js';
 import JournalLine from '../models/JournalLine.js';
 import CashbookBalance from '../models/CashbookBalance.js';
 import SalesOrder from '../models/SalesOrder.js';
+import PurchaseOrder from '../models/PurchaseOrder.js';
+import DirectSale from '../models/DirectSale.js';
+import DirectPurchase from '../models/DirectPurchase.js';
 import Payment from '../models/Payment.js';
 import DeliveryIn from '../models/DeliveryIn.js';
 import DeliveryOut from '../models/DeliveryOut.js';
@@ -95,12 +98,33 @@ router.get('/entries-register', authenticate, checkAccountingAccess, async (req,
         const endOfDay = new Date(date);
         endOfDay.setHours(23, 59, 59, 999);
 
-        // Get credit sales (created on this date, not fully paid)
-        const creditSales = await SalesOrder.find({
-            companyId,
-            orderDate: { $gte: startOfDay, $lte: endOfDay },
-            paymentStatus: { $in: ['pending', 'partial'] }
-        }).select('orderNumber clientName orderDate totalAmount amountPaid amountDue paymentStatus').lean();
+        // Get credit sales from both SalesOrder and DirectSale (created on this date, not fully paid)
+        const [salesOrderCredits, directSaleCredits] = await Promise.all([
+            SalesOrder.find({
+                companyId,
+                orderDate: { $gte: startOfDay, $lte: endOfDay },
+                paymentStatus: { $in: ['pending', 'partial'] }
+            }).select('orderNumber clientName orderDate totalAmount amountPaid amountDue paymentStatus').lean(),
+            DirectSale.find({
+                companyId,
+                saleDate: { $gte: startOfDay, $lte: endOfDay },
+                paymentStatus: { $in: ['pending', 'partial'] }
+            }).select('saleNumber clientName saleDate totalAmount amountPaid paymentStatus').lean()
+        ]);
+
+        // Combine and format credit sales
+        const creditSales = [
+            ...salesOrderCredits,
+            ...directSaleCredits.map(ds => ({
+                orderNumber: `DS-${ds.saleNumber}`,
+                clientName: ds.clientName,
+                orderDate: ds.saleDate,
+                totalAmount: ds.totalAmount,
+                amountPaid: ds.amountPaid || 0,
+                amountDue: ds.totalAmount - (ds.amountPaid || 0),
+                paymentStatus: ds.paymentStatus
+            }))
+        ];
 
         // Get payments received on this date
         const paymentsReceived = await Payment.find({
@@ -329,23 +353,68 @@ router.get('/wages/calculate', authenticate, async (req, res) => {
         const endOfDay = new Date(date);
         endOfDay.setHours(23, 59, 59, 999);
 
-        // Get company wages per bag
+        // Get company wages per bag and delivery mode
         const company = await Company.findById(companyId);
         const wagesPerBag = company?.wagesPerBag || 0;
+        const deliveryMode = company?.deliveryMode || 'order_based';
 
-        // Get deliveries in (purchase orders)
-        const deliveriesIn = await DeliveryIn.find({
-            companyId,
-            receiptDate: { $gte: startOfDay, $lte: endOfDay }
-        }).lean();
+        let bagsReceived = 0;
+        let bagsDelivered = 0;
 
-        const bagsReceived = deliveriesIn.reduce((sum, delivery) => {
-            return sum + delivery.items.reduce((itemSum, item) => {
-                return itemSum + (item.quantity || 0);
+        if (deliveryMode === 'direct') {
+            // Direct Mode: Use DirectPurchase and DirectSale
+            const DirectPurchase = (await import('../models/DirectPurchase.js')).default;
+            const DirectSale = (await import('../models/DirectSale.js')).default;
+
+            const directPurchases = await DirectPurchase.find({
+                companyId,
+                purchaseDate: { $gte: startOfDay, $lte: endOfDay },
+                purchaseStatus: 'completed'
+            }).lean();
+
+            bagsReceived = directPurchases.reduce((sum, purchase) => {
+                return sum + purchase.items.reduce((itemSum, item) => {
+                    return itemSum + (item.quantity || 0);
+                }, 0);
             }, 0);
-        }, 0);
 
-        // Get stock moves
+            const directSales = await DirectSale.find({
+                companyId,
+                saleDate: { $gte: startOfDay, $lte: endOfDay },
+                saleStatus: 'completed'
+            }).lean();
+
+            bagsDelivered = directSales.reduce((sum, sale) => {
+                return sum + sale.items.reduce((itemSum, item) => {
+                    return itemSum + (item.quantity || 0);
+                }, 0);
+            }, 0);
+        } else {
+            // Order-Based Mode: Use existing DeliveryIn and DeliveryOut
+            const deliveriesIn = await DeliveryIn.find({
+                companyId,
+                receiptDate: { $gte: startOfDay, $lte: endOfDay }
+            }).lean();
+
+            bagsReceived = deliveriesIn.reduce((sum, delivery) => {
+                return sum + delivery.items.reduce((itemSum, item) => {
+                    return itemSum + (item.quantity || 0);
+                }, 0);
+            }, 0);
+
+            const deliveriesOut = await DeliveryOut.find({
+                companyId,
+                deliveryDate: { $gte: startOfDay, $lte: endOfDay }
+            }).lean();
+
+            bagsDelivered = deliveriesOut.reduce((sum, delivery) => {
+                return sum + delivery.items.reduce((itemSum, item) => {
+                    return itemSum + (item.quantity || 0);
+                }, 0);
+            }, 0);
+        }
+
+        // Get stock moves (common to both modes)
         const stockMoves = await StockTransaction.find({
             companyId,
             type: 'stock_move',
@@ -356,23 +425,12 @@ router.get('/wages/calculate', authenticate, async (req, res) => {
             return sum + (move.quantity || 0);
         }, 0);
 
-        // Get deliveries out (sales orders)
-        const deliveriesOut = await DeliveryOut.find({
-            companyId,
-            deliveryDate: { $gte: startOfDay, $lte: endOfDay }
-        }).lean();
-
-        const bagsDelivered = deliveriesOut.reduce((sum, delivery) => {
-            return sum + delivery.items.reduce((itemSum, item) => {
-                return itemSum + (item.quantity || 0);
-            }, 0);
-        }, 0);
-
         const totalBags = bagsReceived + bagsMoved + bagsDelivered;
         const totalWages = totalBags * wagesPerBag;
 
         res.json({
             date,
+            deliveryMode,
             bagsReceived,
             bagsMoved,
             bagsDelivered,
@@ -385,6 +443,7 @@ router.get('/wages/calculate', authenticate, async (req, res) => {
         res.status(500).json({ message: 'Server error' });
     }
 });
+
 
 // Record wages journal entry
 router.post('/wages/record', authenticate, async (req, res) => {

@@ -3,6 +3,7 @@ import { body, validationResult } from 'express-validator';
 import Client from '../models/Client.js';
 import SalesOrder from '../models/SalesOrder.js';
 import DeliveryOut from '../models/DeliveryOut.js';
+import DirectSale from '../models/DirectSale.js';
 import { authenticate } from '../middleware/auth.js';
 import { requirePermission } from '../middleware/rbac.js';
 
@@ -42,7 +43,7 @@ router.get('/', authenticate, async (req, res) => {
             .sort({ name: 1 })
             .lean();
 
-        // Calculate currentCredit for each client from unpaid sales orders
+        // Calculate currentCredit for each client from unpaid sales orders AND direct sales
         for (const client of clients) {
             // Get unpaid sales orders
             const unpaidOrders = await SalesOrder.find({
@@ -51,29 +52,53 @@ router.get('/', authenticate, async (req, res) => {
                 paymentStatus: { $in: ['pending', 'partial'] }
             });
 
-            // Calculate total credit
-            client.currentCredit = unpaidOrders.reduce((sum, order) => {
+            // Get unpaid direct sales
+            const unpaidDirectSales = await DirectSale.find({
+                companyId,
+                clientId: client._id,
+                paymentStatus: { $in: ['pending', 'partial'] }
+            });
+
+            // Calculate total credit from both sources
+            const orderCredit = unpaidOrders.reduce((sum, order) => {
                 const amountDue = order.amountDue || (order.totalAmount - (order.amountPaid || 0));
                 return sum + amountDue;
             }, 0);
 
-            // Get all sales orders for total purchases
-            const allOrders = await SalesOrder.find({
-                companyId,
-                clientName: client.name
-            }).select('totalAmount');
+            const directSaleCredit = unpaidDirectSales.reduce((sum, sale) => {
+                const amountDue = sale.totalAmount - (sale.amountPaid || 0);
+                return sum + amountDue;
+            }, 0);
 
-            // Calculate total purchases from all orders
-            client.totalPurchases = allOrders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
+            client.currentCredit = orderCredit + directSaleCredit;
 
-            // Get most recent order for lastPurchaseDate
-            const mostRecentOrder = await SalesOrder.findOne({
-                companyId,
-                clientName: client.name
-            }).sort({ orderDate: -1 }).select('orderDate');
+            // Get all sales orders AND direct sales for total purchases
+            const [allOrders, allDirectSales] = await Promise.all([
+                SalesOrder.find({
+                    companyId,
+                    clientName: client.name
+                }).select('totalAmount orderDate'),
+                DirectSale.find({
+                    companyId,
+                    clientId: client._id
+                }).select('totalAmount saleDate')
+            ]);
 
-            if (mostRecentOrder) {
-                client.lastPurchaseDate = mostRecentOrder.orderDate;
+            // Calculate total purchases from both sources
+            const orderTotal = allOrders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
+            const directTotal = allDirectSales.reduce((sum, sale) => sum + (sale.totalAmount || 0), 0);
+            client.totalPurchases = orderTotal + directTotal;
+
+            // Calculate sales count from both sources
+            client.salesCount = allOrders.length + allDirectSales.length;
+
+            // Get most recent transaction date from both sources
+            const orderDates = allOrders.map(o => new Date(o.orderDate || o.createdAt)).filter(d => !isNaN(d));
+            const directDates = allDirectSales.map(s => new Date(s.saleDate || s.createdAt)).filter(d => !isNaN(d));
+            const allDates = [...orderDates, ...directDates];
+
+            if (allDates.length > 0) {
+                client.lastPurchaseDate = new Date(Math.max(...allDates));
             }
         }
 
@@ -144,8 +169,8 @@ router.get('/:id', authenticate, async (req, res) => {
             return res.status(404).json({ message: 'Client not found' });
         }
 
-        // Get both sales orders and deliveries
-        const [salesOrders, deliveries] = await Promise.all([
+        // Get sales orders, deliveries, and direct sales
+        const [salesOrders, deliveries, directSales] = await Promise.all([
             SalesOrder.find({ companyId, clientName: client.name })
                 .sort({ orderDate: -1, createdAt: -1 })
                 .limit(50)
@@ -153,10 +178,14 @@ router.get('/:id', authenticate, async (req, res) => {
             DeliveryOut.find({ companyId, clientName: client.name })
                 .sort({ deliveryDate: -1, createdAt: -1 })
                 .limit(50)
+                .lean(),
+            DirectSale.find({ companyId, clientId: client._id })
+                .sort({ saleDate: -1, createdAt: -1 })
+                .limit(50)
                 .lean()
         ]);
 
-        res.json({ client, salesOrders, deliveries });
+        res.json({ client, salesOrders, deliveries, directSales });
     } catch (error) {
         console.error('Get client error:', error);
         res.status(500).json({ message: 'Server error' });

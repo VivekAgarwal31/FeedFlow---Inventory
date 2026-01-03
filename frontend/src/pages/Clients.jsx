@@ -25,6 +25,7 @@ const Clients = () => {
   const [selectedClient, setSelectedClient] = useState(null)
   const [clientTransactions, setClientTransactions] = useState([])
   const [clientDeliveries, setClientDeliveries] = useState([])
+  const [clientDirectSales, setClientDirectSales] = useState([])
   const [filteredTransactions, setFilteredTransactions] = useState([])
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedSale, setSelectedSale] = useState(null)
@@ -104,8 +105,25 @@ const Clients = () => {
   const fetchClientTransactions = async (clientId) => {
     try {
       const response = await clientAPI.getById(clientId)
-      setClientTransactions(response.data.salesOrders || [])
+      const salesOrders = response.data.salesOrders || []
+      const directSales = response.data.directSales || []
+
+      // Combine salesOrders and directSales for display
+      const allTransactions = [
+        ...salesOrders,
+        ...directSales.map(ds => ({
+          ...ds,
+          _id: ds._id,
+          orderNumber: `DS-${ds.saleNumber}`,
+          orderDate: ds.saleDate,
+          orderStatus: ds.saleStatus,
+          isDirect: true
+        }))
+      ].sort((a, b) => new Date(b.orderDate || b.createdAt) - new Date(a.orderDate || a.createdAt))
+
+      setClientTransactions(allTransactions)
       setClientDeliveries(response.data.deliveries || [])
+      setClientDirectSales(directSales)
     } catch (error) {
       console.error('Failed to fetch client transactions:', error)
     }
@@ -165,6 +183,7 @@ const Clients = () => {
   const handleBackToClients = () => {
     setSelectedClient(null)
     setClientTransactions([])
+    setClientDirectSales([])
     setFilteredTransactions([])
     setDateFilter('all')
     setSearchTerm('')
@@ -295,8 +314,25 @@ const Clients = () => {
 
         // Refresh client transactions
         const clientResponse = await clientAPI.getById(selectedClient._id)
-        setClientTransactions(clientResponse.data.salesOrders || [])
+        const salesOrders = clientResponse.data.salesOrders || []
+        const directSales = clientResponse.data.directSales || []
+
+        // Combine salesOrders and directSales for display
+        const allTransactions = [
+          ...salesOrders,
+          ...directSales.map(ds => ({
+            ...ds,
+            _id: ds._id,
+            orderNumber: `DS-${ds.saleNumber}`,
+            orderDate: ds.saleDate,
+            orderStatus: ds.saleStatus,
+            isDirect: true
+          }))
+        ].sort((a, b) => new Date(b.orderDate || b.createdAt) - new Date(a.orderDate || a.createdAt))
+
+        setClientTransactions(allTransactions)
         setClientDeliveries(clientResponse.data.deliveries || [])
+        setClientDirectSales(directSales)
 
         // Update selected client with new data
         const updatedClientsResponse = await clientAPI.getClients()
@@ -632,6 +668,7 @@ const Clients = () => {
                     <TableHead>Date</TableHead>
                     <TableHead>Items</TableHead>
                     <TableHead>Delivery Status</TableHead>
+                    <TableHead>Payment Status</TableHead>
                     <TableHead>Quantity</TableHead>
                     <TableHead>Total Amount</TableHead>
                     <TableHead>Actions</TableHead>
@@ -656,12 +693,28 @@ const Clients = () => {
                         </div>
                       </TableCell>
                       <TableCell>
+                        {/* Delivery Status - Only for order-based transactions */}
+                        {!transaction.isDirect ? (
+                          <Badge variant={
+                            transaction.orderStatus === 'completed' ? 'default' :
+                              transaction.orderStatus === 'partially_delivered' ? 'secondary' :
+                                'outline'
+                          }>
+                            {transaction.orderStatus?.replace('_', ' ').toUpperCase() || 'PENDING'}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">N/A</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {/* Payment Status - For all transactions */}
                         <Badge variant={
-                          transaction.orderStatus === 'completed' ? 'default' :
-                            transaction.orderStatus === 'partially_delivered' ? 'secondary' :
-                              'outline'
+                          transaction.paymentStatus === 'paid' ? 'default' :
+                            transaction.paymentStatus === 'partial' ? 'secondary' :
+                              transaction.paymentStatus === 'pending' ? 'destructive' :
+                                'outline'
                         }>
-                          {transaction.orderStatus?.replace('_', ' ').toUpperCase() || 'PENDING'}
+                          {transaction.paymentStatus?.toUpperCase() || (transaction.isDirect ? 'CASH' : 'PENDING')}
                         </Badge>
                       </TableCell>
                       <TableCell className="font-mono">
@@ -680,15 +733,14 @@ const Clients = () => {
                           >
                             <Download className="h-4 w-4" />
                           </Button>
-                          {transaction.items && transaction.items.length > 1 && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => viewSaleDetails(transaction)}
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => viewSaleDetails(transaction)}
+                            title="View Details"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -741,9 +793,15 @@ const Clients = () => {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Item Name</TableHead>
-                        <TableHead>Ordered Qty</TableHead>
-                        <TableHead>Delivered Qty</TableHead>
-                        <TableHead>Remaining</TableHead>
+                        {!selectedSale.isDirect ? (
+                          <>
+                            <TableHead>Ordered Qty</TableHead>
+                            <TableHead>Delivered Qty</TableHead>
+                            <TableHead>Remaining</TableHead>
+                          </>
+                        ) : (
+                          <TableHead>Quantity</TableHead>
+                        )}
                         <TableHead>Price</TableHead>
                         <TableHead>Total</TableHead>
                       </TableRow>
@@ -752,11 +810,17 @@ const Clients = () => {
                       {selectedSale.items?.map((item, index) => (
                         <TableRow key={index}>
                           <TableCell className="font-medium">{item.itemName}</TableCell>
-                          <TableCell className="font-mono">{item.quantity}</TableCell>
-                          <TableCell className="font-mono">{item.deliveredQuantity || 0}</TableCell>
-                          <TableCell className="font-mono font-bold">
-                            {item.quantity - (item.deliveredQuantity || 0)}
-                          </TableCell>
+                          {!selectedSale.isDirect ? (
+                            <>
+                              <TableCell className="font-mono">{item.quantity}</TableCell>
+                              <TableCell className="font-mono">{item.deliveredQuantity || 0}</TableCell>
+                              <TableCell className="font-mono font-bold">
+                                {item.quantity - (item.deliveredQuantity || 0)}
+                              </TableCell>
+                            </>
+                          ) : (
+                            <TableCell className="font-mono">{item.quantity}</TableCell>
+                          )}
                           <TableCell className="font-mono">{formatCurrency(item.sellingPrice)}</TableCell>
                           <TableCell className="font-mono font-medium">{formatCurrency(item.total)}</TableCell>
                         </TableRow>

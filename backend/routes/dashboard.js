@@ -2,6 +2,8 @@ import express from 'express';
 import StockItem from '../models/StockItem.js';
 import SalesOrder from '../models/SalesOrder.js';
 import PurchaseOrder from '../models/PurchaseOrder.js';
+import DirectSale from '../models/DirectSale.js';
+import DirectPurchase from '../models/DirectPurchase.js';
 import DeliveryOut from '../models/DeliveryOut.js';
 import Warehouse from '../models/Warehouse.js';
 import Client from '../models/Client.js';
@@ -24,10 +26,13 @@ router.get('/stats', authenticate, async (req, res) => {
       totalItems,
       totalStockValue,
       warehouseCount,
-      revenueData,
+      salesOrderRevenue,
+      directSaleRevenue,
       lowStockCount,
-      totalReceivables,
-      totalPayables
+      salesOrderReceivables,
+      directSaleReceivables,
+      purchaseOrderPayables,
+      directPurchasePayables
     ] = await Promise.all([
       // Total stock items count
       StockItem.countDocuments({ companyId }),
@@ -49,8 +54,20 @@ router.get('/stats', authenticate, async (req, res) => {
       // Warehouse count
       Warehouse.countDocuments({ companyId }),
 
-      // Revenue statistics from sales orders
+      // Revenue from sales orders
       SalesOrder.aggregate([
+        { $match: { companyId } },
+        {
+          $group: {
+            _id: null,
+            totalRevenue: { $sum: '$totalAmount' },
+            totalSales: { $sum: 1 }
+          }
+        }
+      ]),
+
+      // Revenue from direct sales
+      DirectSale.aggregate([
         { $match: { companyId } },
         {
           $group: {
@@ -73,7 +90,7 @@ router.get('/stats', authenticate, async (req, res) => {
         { $count: 'lowStockCount' }
       ]),
 
-      // Total receivables - sum of amountDue from unpaid/partial sales orders
+      // Receivables from sales orders
       SalesOrder.aggregate([
         {
           $match: {
@@ -89,7 +106,28 @@ router.get('/stats', authenticate, async (req, res) => {
         }
       ]),
 
-      // Total payables - sum of amountDue from unpaid/partial purchase orders
+      // Receivables from direct sales
+      DirectSale.aggregate([
+        {
+          $match: {
+            companyId,
+            paymentStatus: { $in: ['pending', 'partial'] }
+          }
+        },
+        {
+          $addFields: {
+            amountDue: { $subtract: ['$totalAmount', { $ifNull: ['$amountPaid', 0] }] }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalReceivables: { $sum: '$amountDue' }
+          }
+        }
+      ]),
+
+      // Payables from purchase orders
       PurchaseOrder.aggregate([
         {
           $match: {
@@ -103,20 +141,56 @@ router.get('/stats', authenticate, async (req, res) => {
             totalPayables: { $sum: '$amountDue' }
           }
         }
+      ]),
+
+      // Payables from direct purchases
+      DirectPurchase.aggregate([
+        {
+          $match: {
+            companyId,
+            paymentStatus: { $in: ['pending', 'partial'] }
+          }
+        },
+        {
+          $addFields: {
+            amountDue: { $subtract: ['$totalAmount', { $ifNull: ['$amountPaid', 0] }] }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalPayables: { $sum: '$amountDue' }
+          }
+        }
       ])
     ]);
 
     const stockValue = totalStockValue[0] || { totalValue: 0, totalQuantity: 0 };
-    const revenue = revenueData[0] || { totalRevenue: 0, totalSales: 0 };
+    const orderRevenue = salesOrderRevenue[0] || { totalRevenue: 0, totalSales: 0 };
+    const directRevenue = directSaleRevenue[0] || { totalRevenue: 0, totalSales: 0 };
     const lowStock = lowStockCount[0]?.lowStockCount || 0;
 
-    // Better fallback for receivables and payables
-    const receivables = (totalReceivables && totalReceivables[0])
-      ? (totalReceivables[0].totalReceivables || 0)
+    // Combine revenue from both sources
+    const totalRevenue = orderRevenue.totalRevenue + directRevenue.totalRevenue;
+    const totalSales = orderRevenue.totalSales + directRevenue.totalSales;
+
+    // Combine receivables from both sources
+    const orderReceivables = (salesOrderReceivables && salesOrderReceivables[0])
+      ? (salesOrderReceivables[0].totalReceivables || 0)
       : 0;
-    const payables = (totalPayables && totalPayables[0])
-      ? (totalPayables[0].totalPayables || 0)
+    const directReceivables = (directSaleReceivables && directSaleReceivables[0])
+      ? (directSaleReceivables[0].totalReceivables || 0)
       : 0;
+    const totalReceivables = orderReceivables + directReceivables;
+
+    // Combine payables from both sources
+    const orderPayables = (purchaseOrderPayables && purchaseOrderPayables[0])
+      ? (purchaseOrderPayables[0].totalPayables || 0)
+      : 0;
+    const directPayables = (directPurchasePayables && directPurchasePayables[0])
+      ? (directPurchasePayables[0].totalPayables || 0)
+      : 0;
+    const totalPayables = orderPayables + directPayables;
 
     res.json({
       stats: {
@@ -124,11 +198,11 @@ router.get('/stats', authenticate, async (req, res) => {
         totalStockValue: stockValue.totalValue,
         totalQuantity: stockValue.totalQuantity,
         warehouseCount,
-        totalRevenue: revenue.totalRevenue,
-        totalSales: revenue.totalSales,
+        totalRevenue,
+        totalSales,
         lowStockCount: lowStock,
-        totalReceivables: receivables,
-        totalPayables: payables
+        totalReceivables,
+        totalPayables
       }
     });
   } catch (error) {

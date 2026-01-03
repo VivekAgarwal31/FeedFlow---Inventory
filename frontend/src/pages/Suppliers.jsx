@@ -26,6 +26,7 @@ const Suppliers = () => {
   const [selectedSupplier, setSelectedSupplier] = useState(null)
   const [supplierTransactions, setSupplierTransactions] = useState([])
   const [supplierDeliveries, setSupplierDeliveries] = useState([])
+  const [supplierDirectPurchases, setSupplierDirectPurchases] = useState([])
   const [filteredTransactions, setFilteredTransactions] = useState([])
   const [dateFilter, setDateFilter] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
@@ -113,8 +114,25 @@ const Suppliers = () => {
   const fetchSupplierTransactions = async (supplierId) => {
     try {
       const response = await supplierAPI.getById(supplierId)
-      setSupplierTransactions(response.data.purchaseOrders || [])
+      const purchaseOrders = response.data.purchaseOrders || []
+      const directPurchases = response.data.directPurchases || []
+
+      // Combine purchaseOrders and directPurchases for display
+      const allTransactions = [
+        ...purchaseOrders,
+        ...directPurchases.map(dp => ({
+          ...dp,
+          _id: dp._id,
+          orderNumber: `DP-${dp.purchaseNumber}`,
+          orderDate: dp.purchaseDate,
+          orderStatus: dp.purchaseStatus,
+          isDirect: true
+        }))
+      ].sort((a, b) => new Date(b.orderDate || b.createdAt) - new Date(a.orderDate || a.createdAt))
+
+      setSupplierTransactions(allTransactions)
       setSupplierDeliveries(response.data.deliveries || [])
+      setSupplierDirectPurchases(directPurchases)
     } catch (error) {
       console.error('Failed to fetch supplier transactions:', error)
     }
@@ -189,6 +207,7 @@ const Suppliers = () => {
   const handleBackToSuppliers = () => {
     setSelectedSupplier(null)
     setSupplierTransactions([])
+    setSupplierDirectPurchases([])
     setFilteredTransactions([])
     setDateFilter('all')
     setSearchTerm('')
@@ -605,6 +624,7 @@ const Suppliers = () => {
                     <TableHead>Date</TableHead>
                     <TableHead>Items</TableHead>
                     <TableHead>Receipt Status</TableHead>
+                    <TableHead>Payment Status</TableHead>
                     <TableHead>Quantity</TableHead>
                     <TableHead>Total Amount</TableHead>
                     <TableHead>Actions</TableHead>
@@ -629,12 +649,28 @@ const Suppliers = () => {
                         </div>
                       </TableCell>
                       <TableCell>
+                        {/* Receipt Status - Only for order-based transactions */}
+                        {!transaction.isDirect ? (
+                          <Badge variant={
+                            transaction.orderStatus === 'completed' ? 'default' :
+                              transaction.orderStatus === 'partially_received' ? 'secondary' :
+                                'outline'
+                          }>
+                            {transaction.orderStatus?.replace('_', ' ').toUpperCase() || 'PENDING'}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">N/A</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {/* Payment Status - For all transactions */}
                         <Badge variant={
-                          transaction.orderStatus === 'completed' ? 'default' :
-                            transaction.orderStatus === 'partially_received' ? 'secondary' :
-                              'outline'
+                          transaction.paymentStatus === 'paid' ? 'default' :
+                            transaction.paymentStatus === 'partial' ? 'secondary' :
+                              transaction.paymentStatus === 'pending' ? 'destructive' :
+                                'outline'
                         }>
-                          {transaction.orderStatus?.replace('_', ' ').toUpperCase() || 'PENDING'}
+                          {transaction.paymentStatus?.toUpperCase() || (transaction.isDirect ? 'CASH' : 'PENDING')}
                         </Badge>
                       </TableCell>
                       <TableCell className="font-mono">
@@ -702,9 +738,15 @@ const Suppliers = () => {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Item Name</TableHead>
-                        <TableHead>Ordered Qty</TableHead>
-                        <TableHead>Received Qty</TableHead>
-                        <TableHead>Remaining</TableHead>
+                        {!selectedPurchase.isDirect ? (
+                          <>
+                            <TableHead>Ordered Qty</TableHead>
+                            <TableHead>Received Qty</TableHead>
+                            <TableHead>Remaining</TableHead>
+                          </>
+                        ) : (
+                          <TableHead>Quantity</TableHead>
+                        )}
                         <TableHead>Cost Price</TableHead>
                         <TableHead>Total</TableHead>
                       </TableRow>
@@ -713,11 +755,17 @@ const Suppliers = () => {
                       {selectedPurchase.items?.map((item, index) => (
                         <TableRow key={index}>
                           <TableCell className="font-medium">{item.itemName}</TableCell>
-                          <TableCell className="font-mono">{item.quantity}</TableCell>
-                          <TableCell className="font-mono">{item.receivedQuantity || 0}</TableCell>
-                          <TableCell className="font-mono font-bold">
-                            {item.quantity - (item.receivedQuantity || 0)}
-                          </TableCell>
+                          {!selectedPurchase.isDirect ? (
+                            <>
+                              <TableCell className="font-mono">{item.quantity}</TableCell>
+                              <TableCell className="font-mono">{item.receivedQuantity || 0}</TableCell>
+                              <TableCell className="font-mono font-bold">
+                                {item.quantity - (item.receivedQuantity || 0)}
+                              </TableCell>
+                            </>
+                          ) : (
+                            <TableCell className="font-mono">{item.quantity}</TableCell>
+                          )}
                           <TableCell className="font-mono">{formatCurrency(item.costPrice)}</TableCell>
                           <TableCell className="font-mono font-medium">{formatCurrency(item.total)}</TableCell>
                         </TableRow>

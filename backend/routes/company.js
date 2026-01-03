@@ -220,7 +220,8 @@ router.get('/', authenticate, async (req, res) => {
         type: company.type,
         address: company.address,
         contactNumber: company.contactNumber,
-        gstNumber: company.gstNumber
+        gstNumber: company.gstNumber,
+        deliveryMode: company.deliveryMode || 'order_based'
       }
     });
   } catch (error) {
@@ -243,7 +244,8 @@ router.put('/', authenticate, requirePermission('canManageSettings'), [
     }
     return true;
   }),
-  body('wagesPerBag').optional().isNumeric().withMessage('Wages per bag must be a number')
+  body('wagesPerBag').optional().isNumeric().withMessage('Wages per bag must be a number'),
+  body('deliveryMode').optional().isIn(['order_based', 'direct']).withMessage('Invalid delivery mode')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -263,7 +265,7 @@ router.put('/', authenticate, requirePermission('canManageSettings'), [
       return res.status(403).json({ message: 'Insufficient permissions to update company' });
     }
 
-    const { name, address, phone, email, wagesPerBag } = req.body;
+    const { name, address, phone, email, wagesPerBag, deliveryMode, onboardingCompleted } = req.body;
     const updateData = {};
 
     if (name) updateData.name = name;
@@ -271,6 +273,8 @@ router.put('/', authenticate, requirePermission('canManageSettings'), [
     if (phone) updateData.contactNumber = phone;
     if (email) updateData.email = email;
     if (wagesPerBag !== undefined) updateData.wagesPerBag = wagesPerBag;
+    if (deliveryMode) updateData.deliveryMode = deliveryMode;
+    if (onboardingCompleted !== undefined) updateData.onboardingCompleted = onboardingCompleted;
 
     const company = await Company.findByIdAndUpdate(
       req.user.companyId._id,
@@ -289,7 +293,10 @@ router.put('/', authenticate, requirePermission('canManageSettings'), [
         contactNumber: company.contactNumber,
         gstNumber: company.gstNumber,
         email: company.email,
-        wagesPerBag: company.wagesPerBag
+        wagesPerBag: company.wagesPerBag,
+        deliveryMode: company.deliveryMode,
+        onboardingCompleted: company.onboardingCompleted,
+        subscriptionTier: company.subscriptionTier
       }
     });
   } catch (error) {

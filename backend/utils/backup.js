@@ -45,6 +45,8 @@ export const createBackup = async (companyId, companyName) => {
             { collection: 'purchaseorders', model: 'PurchaseOrder' },
             { collection: 'deliveryins', model: 'DeliveryIn' },
             { collection: 'deliveryouts', model: 'DeliveryOut' },
+            { collection: 'directsales', model: 'DirectSale' },
+            { collection: 'directpurchases', model: 'DirectPurchase' },
             { collection: 'payments', model: 'Payment' },
             { collection: 'stocktransactions', model: 'StockTransaction' }
         ];
@@ -101,6 +103,8 @@ export const createBackup = async (companyId, companyName) => {
                 'purchaseorders',
                 'deliveryins',
                 'deliveryouts',
+                'directsales',
+                'directpurchases',
                 'payments',
                 'stocktransactions'
             ],
@@ -216,6 +220,8 @@ export const restoreBackup = async (companyId, backupFilePath) => {
                 { collection: 'purchaseorders', model: 'PurchaseOrder' },
                 { collection: 'deliveryins', model: 'DeliveryIn' },
                 { collection: 'deliveryouts', model: 'DeliveryOut' },
+                { collection: 'directsales', model: 'DirectSale' },
+                { collection: 'directpurchases', model: 'DirectPurchase' },
                 { collection: 'payments', model: 'Payment' },
                 { collection: 'stocktransactions', model: 'StockTransaction' },
                 // Backward compatibility for old backups
@@ -411,6 +417,8 @@ export const importCompanyFromZip = async (zipFilePath, importingUserId) => {
                 { collection: 'purchaseorders', model: 'PurchaseOrder', refs: ['supplierId'] },
                 { collection: 'deliveryins', model: 'DeliveryIn', refs: ['supplierId', 'purchaseOrderId'] },
                 { collection: 'deliveryouts', model: 'DeliveryOut', refs: ['clientId', 'salesOrderId'] },
+                { collection: 'directsales', model: 'DirectSale', refs: ['clientId'] },
+                { collection: 'directpurchases', model: 'DirectPurchase', refs: ['supplierId'] },
                 { collection: 'payments', model: 'Payment', refs: ['partyId', 'transactionId'] },
                 { collection: 'stocktransactions', model: 'StockTransaction', refs: ['warehouseId', 'itemId'] }
             ];

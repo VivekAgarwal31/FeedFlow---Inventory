@@ -3,6 +3,10 @@ import StockTransaction from '../models/StockTransaction.js';
 import StockItem from '../models/StockItem.js';
 import Sale from '../models/Sale.js';
 import Purchase from '../models/Purchase.js';
+import DirectSale from '../models/DirectSale.js';
+import DirectPurchase from '../models/DirectPurchase.js';
+import JournalEntry from '../models/JournalEntry.js';
+import JournalLine from '../models/JournalLine.js';
 import Client from '../models/Client.js';
 import Supplier from '../models/Supplier.js';
 import { authenticate } from '../middleware/auth.js';
@@ -165,6 +169,104 @@ router.delete('/:id', authenticate, requirePermission('canManageInventory'), asy
 
                     // Delete the purchase
                     await Purchase.findByIdAndDelete(purchase._id);
+                }
+            } else if (transaction.referenceModel === 'DirectSale') {
+                // Delete the direct sale and clean up all associated records
+                const directSale = await DirectSale.findById(transaction.referenceId);
+                if (directSale) {
+                    // Update client receivables
+                    if (directSale.clientId && directSale.paymentType === 'credit') {
+                        const client = await Client.findById(directSale.clientId);
+                        if (client) {
+                            const amountDue = directSale.totalAmount - (directSale.amountPaid || 0);
+                            client.currentCredit = Math.max(0, client.currentCredit - amountDue);
+                            client.totalReceivable = Math.max(0, client.totalReceivable - amountDue);
+                            await client.save();
+                        }
+                    }
+
+                    // Delete associated journal entries
+                    const journalEntries = await JournalEntry.find({
+                        referenceType: 'DirectSale',
+                        referenceId: directSale._id
+                    });
+                    for (const entry of journalEntries) {
+                        await JournalLine.deleteMany({ journalEntryId: entry._id });
+                        await JournalEntry.findByIdAndDelete(entry._id);
+                    }
+
+                    // Restore stock quantities for all items
+                    for (const item of directSale.items) {
+                        const stockItem = await StockItem.findOne({
+                            companyId,
+                            warehouseId: item.warehouseId,
+                            itemName: item.itemName,
+                            bagSize: item.bagSize,
+                            category: item.category
+                        });
+                        if (stockItem) {
+                            stockItem.quantity += item.quantity;
+                            await stockItem.save();
+                        }
+                    }
+
+                    // Delete all associated stock transactions
+                    await StockTransaction.deleteMany({
+                        referenceId: directSale._id,
+                        referenceModel: 'DirectSale'
+                    });
+
+                    // Delete the direct sale
+                    await DirectSale.findByIdAndDelete(directSale._id);
+                }
+            } else if (transaction.referenceModel === 'DirectPurchase') {
+                // Delete the direct purchase and clean up all associated records
+                const directPurchase = await DirectPurchase.findById(transaction.referenceId);
+                if (directPurchase) {
+                    // Update supplier payables
+                    if (directPurchase.supplierId && directPurchase.paymentType === 'credit') {
+                        const supplier = await Supplier.findById(directPurchase.supplierId);
+                        if (supplier) {
+                            const amountDue = directPurchase.totalAmount - (directPurchase.amountPaid || 0);
+                            supplier.currentPayable = Math.max(0, supplier.currentPayable - amountDue);
+                            supplier.totalPayable = Math.max(0, supplier.totalPayable - amountDue);
+                            await supplier.save();
+                        }
+                    }
+
+                    // Delete associated journal entries
+                    const journalEntries = await JournalEntry.find({
+                        referenceType: 'DirectPurchase',
+                        referenceId: directPurchase._id
+                    });
+                    for (const entry of journalEntries) {
+                        await JournalLine.deleteMany({ journalEntryId: entry._id });
+                        await JournalEntry.findByIdAndDelete(entry._id);
+                    }
+
+                    // Restore stock quantities for all items (remove them since they were added)
+                    for (const item of directPurchase.items) {
+                        const stockItem = await StockItem.findOne({
+                            companyId,
+                            warehouseId: item.warehouseId,
+                            itemName: item.itemName,
+                            bagSize: item.bagSize,
+                            category: item.category
+                        });
+                        if (stockItem) {
+                            stockItem.quantity = Math.max(0, stockItem.quantity - item.quantity);
+                            await stockItem.save();
+                        }
+                    }
+
+                    // Delete all associated stock transactions
+                    await StockTransaction.deleteMany({
+                        referenceId: directPurchase._id,
+                        referenceModel: 'DirectPurchase'
+                    });
+
+                    // Delete the direct purchase
+                    await DirectPurchase.findByIdAndDelete(directPurchase._id);
                 }
             }
 

@@ -99,7 +99,7 @@ router.get('/pending/:supplierId', authenticate, async (req, res) => {
 
 // Create purchase order
 router.post('/', authenticate, requirePermission('canManagePurchases'), [
-    body('supplierId').notEmpty().withMessage('Supplier is required'),
+    body('supplierName').trim().isLength({ min: 2 }).withMessage('Supplier name is required'),
     body('items').isArray({ min: 1 }).withMessage('At least one item is required'),
     body('totalAmount').isNumeric().withMessage('Total amount must be a number')
 ], async (req, res) => {
@@ -122,12 +122,6 @@ router.post('/', authenticate, requirePermission('canManagePurchases'), [
             notes
         } = req.body;
 
-        // Validate supplier exists
-        const supplier = await Supplier.findOne({ _id: supplierId, companyId });
-        if (!supplier) {
-            return res.status(404).json({ message: 'Supplier not found' });
-        }
-
         // Validate items exist
         for (const item of items) {
             const stockItem = await StockItem.findOne({
@@ -138,6 +132,20 @@ router.post('/', authenticate, requirePermission('canManagePurchases'), [
             if (!stockItem) {
                 return res.status(404).json({ message: `Item ${item.itemName} not found` });
             }
+        }
+
+        // Get or create supplier
+        let supplier;
+        if (supplierId) {
+            supplier = await Supplier.findOne({ _id: supplierId, companyId });
+        }
+
+        if (!supplier && supplierName) {
+            supplier = new Supplier({
+                companyId,
+                name: supplierName
+            });
+            await supplier.save();
         }
 
         // Generate unique order number
@@ -156,8 +164,8 @@ router.post('/', authenticate, requirePermission('canManagePurchases'), [
                 purchaseOrder = new PurchaseOrder({
                     companyId,
                     orderNumber: nextOrderNumber,
-                    supplierId,
-                    supplierName: supplierName || supplier.name,
+                    supplierId: supplier?._id,
+                    supplierName,
                     items: items.map(item => ({
                         itemId: item.itemId,
                         itemName: item.itemName,
@@ -194,10 +202,12 @@ router.post('/', authenticate, requirePermission('canManagePurchases'), [
         }
 
         // Update supplier statistics
-        supplier.purchaseCount = (supplier.purchaseCount || 0) + 1;
-        supplier.totalPurchases = (supplier.totalPurchases || 0) + totalAmount;
-        supplier.lastPurchaseDate = purchaseOrder.orderDate || new Date();
-        await supplier.save();
+        if (supplier) {
+            supplier.purchaseCount = (supplier.purchaseCount || 0) + 1;
+            supplier.totalPurchases = (supplier.totalPurchases || 0) + totalAmount;
+            supplier.lastPurchaseDate = purchaseOrder.orderDate || new Date();
+            await supplier.save();
+        }
 
         res.status(201).json({
             message: 'Purchase order created successfully',

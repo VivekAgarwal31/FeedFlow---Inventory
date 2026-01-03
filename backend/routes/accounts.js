@@ -1,6 +1,8 @@
 import express from 'express';
 import SalesOrder from '../models/SalesOrder.js';
 import PurchaseOrder from '../models/PurchaseOrder.js';
+import DirectSale from '../models/DirectSale.js';
+import DirectPurchase from '../models/DirectPurchase.js';
 import Client from '../models/Client.js';
 import Supplier from '../models/Supplier.js';
 import Invoice from '../models/Invoice.js';
@@ -16,11 +18,17 @@ router.get('/receivable', async (req, res) => {
     try {
         const userCompanyId = req.user.companyId?._id || req.user.companyId;
 
-        // Get all unpaid and partial sales orders
-        const salesOrders = await SalesOrder.find({
-            companyId: userCompanyId,
-            paymentStatus: { $in: ['pending', 'partial'] }
-        });
+        // Get all unpaid and partial sales orders AND direct sales
+        const [salesOrders, directSales] = await Promise.all([
+            SalesOrder.find({
+                companyId: userCompanyId,
+                paymentStatus: { $in: ['pending', 'partial'] }
+            }),
+            DirectSale.find({
+                companyId: userCompanyId,
+                paymentStatus: { $in: ['pending', 'partial'] }
+            })
+        ]);
 
         let totalOutstanding = 0;
         let overdueAmount = 0;
@@ -34,6 +42,7 @@ router.get('/receivable', async (req, res) => {
             days90Plus: 0    // 90+ days
         };
 
+        // Process sales orders
         salesOrders.forEach(order => {
             totalOutstanding += order.amountDue;
 
@@ -56,29 +65,90 @@ router.get('/receivable', async (req, res) => {
             }
         });
 
-        // Get client-wise breakdown
-        const clientBreakdown = await SalesOrder.aggregate([
-            {
-                $match: {
-                    companyId: userCompanyId,
-                    paymentStatus: { $in: ['pending', 'partial'] }
-                }
-            },
-            {
-                $group: {
-                    _id: '$clientId',
-                    clientName: { $first: '$clientName' },
-                    totalDue: { $sum: '$amountDue' },
-                    salesCount: { $sum: 1 }
-                }
-            },
-            {
-                $sort: { totalDue: -1 }
-            },
-            {
-                $limit: 10
+        // Process direct sales
+        directSales.forEach(sale => {
+            const amountDue = sale.totalAmount - (sale.amountPaid || 0);
+            totalOutstanding += amountDue;
+
+            // Direct sales don't have isOverdue, calculate based on date
+            const saleDate = new Date(sale.saleDate);
+            const daysOld = Math.floor((today - saleDate) / (1000 * 60 * 60 * 24));
+
+            if (daysOld > 30) {
+                overdueAmount += amountDue;
             }
+
+            // Calculate aging
+            if (daysOld <= 30) {
+                aging.current += amountDue;
+            } else if (daysOld <= 60) {
+                aging.days31_60 += amountDue;
+            } else if (daysOld <= 90) {
+                aging.days61_90 += amountDue;
+            } else {
+                aging.days90Plus += amountDue;
+            }
+        });
+
+        // Get client-wise breakdown from both sources
+        const [orderBreakdown, directBreakdown] = await Promise.all([
+            SalesOrder.aggregate([
+                {
+                    $match: {
+                        companyId: userCompanyId,
+                        paymentStatus: { $in: ['pending', 'partial'] }
+                    }
+                },
+                {
+                    $group: {
+                        _id: '$clientId',
+                        clientName: { $first: '$clientName' },
+                        totalDue: { $sum: '$amountDue' },
+                        salesCount: { $sum: 1 }
+                    }
+                }
+            ]),
+            DirectSale.aggregate([
+                {
+                    $match: {
+                        companyId: userCompanyId,
+                        paymentStatus: { $in: ['pending', 'partial'] }
+                    }
+                },
+                {
+                    $addFields: {
+                        amountDue: { $subtract: ['$totalAmount', { $ifNull: ['$amountPaid', 0] }] }
+                    }
+                },
+                {
+                    $group: {
+                        _id: '$clientId',
+                        clientName: { $first: '$clientName' },
+                        totalDue: { $sum: '$amountDue' },
+                        salesCount: { $sum: 1 }
+                    }
+                }
+            ])
         ]);
+
+        // Combine and aggregate by client
+        const clientMap = new Map();
+        [...orderBreakdown, ...directBreakdown].forEach(item => {
+            const key = item._id?.toString();
+            if (!key) return;
+
+            if (clientMap.has(key)) {
+                const existing = clientMap.get(key);
+                existing.totalDue += item.totalDue;
+                existing.salesCount += item.salesCount;
+            } else {
+                clientMap.set(key, { ...item });
+            }
+        });
+
+        const clientBreakdown = Array.from(clientMap.values())
+            .sort((a, b) => b.totalDue - a.totalDue)
+            .slice(0, 10);
 
         res.json({
             totalOutstanding,
@@ -86,7 +156,7 @@ router.get('/receivable', async (req, res) => {
             currentAmount: totalOutstanding - overdueAmount,
             aging,
             topClients: clientBreakdown,
-            salesCount: salesOrders.length
+            salesCount: salesOrders.length + directSales.length
         });
     } catch (error) {
         console.error('Error fetching accounts receivable:', error);
@@ -167,15 +237,38 @@ router.get('/receivable/invoices', async (req, res) => {
 
         const skip = (page - 1) * limit;
 
-        const salesOrders = await SalesOrder.find(query)
-            .sort({ orderDate: -1 })
-            .skip(skip)
-            .limit(parseInt(limit));
+        // Get both sales orders and direct sales
+        const [salesOrders, directSales] = await Promise.all([
+            SalesOrder.find(query)
+                .sort({ orderDate: -1 })
+                .skip(skip)
+                .limit(parseInt(limit)),
+            DirectSale.find(query)
+                .sort({ saleDate: -1 })
+                .skip(skip)
+                .limit(parseInt(limit))
+        ]);
 
-        const total = await SalesOrder.countDocuments(query);
+        // Combine and sort by date
+        const allInvoices = [
+            ...salesOrders,
+            ...directSales.map(ds => ({
+                ...ds.toObject(),
+                orderDate: ds.saleDate,
+                isDirect: true
+            }))
+        ].sort((a, b) => new Date(b.orderDate || b.saleDate) - new Date(a.orderDate || a.saleDate))
+            .slice(0, parseInt(limit));
+
+        const [orderTotal, directTotal] = await Promise.all([
+            SalesOrder.countDocuments(query),
+            DirectSale.countDocuments(query)
+        ]);
+
+        const total = orderTotal + directTotal;
 
         res.json({
-            invoices: salesOrders,
+            invoices: allInvoices,
             pagination: {
                 page: parseInt(page),
                 limit: parseInt(limit),
@@ -194,11 +287,17 @@ router.get('/payable', async (req, res) => {
     try {
         const userCompanyId = req.user.companyId?._id || req.user.companyId;
 
-        // Get all unpaid and partial purchase orders
-        const purchaseOrders = await PurchaseOrder.find({
-            companyId: userCompanyId,
-            paymentStatus: { $in: ['pending', 'partial'] }
-        });
+        // Get all unpaid and partial purchase orders AND direct purchases
+        const [purchaseOrders, directPurchases] = await Promise.all([
+            PurchaseOrder.find({
+                companyId: userCompanyId,
+                paymentStatus: { $in: ['pending', 'partial'] }
+            }),
+            DirectPurchase.find({
+                companyId: userCompanyId,
+                paymentStatus: { $in: ['pending', 'partial'] }
+            })
+        ]);
 
         let totalPayable = 0;
         let overdueAmount = 0;
@@ -212,6 +311,7 @@ router.get('/payable', async (req, res) => {
             days90Plus: 0
         };
 
+        // Process purchase orders
         purchaseOrders.forEach(order => {
             totalPayable += order.amountDue;
 
@@ -234,29 +334,90 @@ router.get('/payable', async (req, res) => {
             }
         });
 
-        // Get supplier-wise breakdown
-        const supplierBreakdown = await PurchaseOrder.aggregate([
-            {
-                $match: {
-                    companyId: userCompanyId,
-                    paymentStatus: { $in: ['pending', 'partial'] }
-                }
-            },
-            {
-                $group: {
-                    _id: '$supplierId',
-                    supplierName: { $first: '$supplierName' },
-                    totalDue: { $sum: '$amountDue' },
-                    purchasesCount: { $sum: 1 }
-                }
-            },
-            {
-                $sort: { totalDue: -1 }
-            },
-            {
-                $limit: 10
+        // Process direct purchases
+        directPurchases.forEach(purchase => {
+            const amountDue = purchase.totalAmount - (purchase.amountPaid || 0);
+            totalPayable += amountDue;
+
+            // Direct purchases don't have isOverdue, calculate based on date
+            const purchaseDate = new Date(purchase.purchaseDate);
+            const daysOld = Math.floor((today - purchaseDate) / (1000 * 60 * 60 * 24));
+
+            if (daysOld > 30) {
+                overdueAmount += amountDue;
             }
+
+            // Calculate aging
+            if (daysOld <= 30) {
+                aging.current += amountDue;
+            } else if (daysOld <= 60) {
+                aging.days31_60 += amountDue;
+            } else if (daysOld <= 90) {
+                aging.days61_90 += amountDue;
+            } else {
+                aging.days90Plus += amountDue;
+            }
+        });
+
+        // Get supplier-wise breakdown from both sources
+        const [orderBreakdown, directBreakdown] = await Promise.all([
+            PurchaseOrder.aggregate([
+                {
+                    $match: {
+                        companyId: userCompanyId,
+                        paymentStatus: { $in: ['pending', 'partial'] }
+                    }
+                },
+                {
+                    $group: {
+                        _id: '$supplierId',
+                        supplierName: { $first: '$supplierName' },
+                        totalDue: { $sum: '$amountDue' },
+                        purchasesCount: { $sum: 1 }
+                    }
+                }
+            ]),
+            DirectPurchase.aggregate([
+                {
+                    $match: {
+                        companyId: userCompanyId,
+                        paymentStatus: { $in: ['pending', 'partial'] }
+                    }
+                },
+                {
+                    $addFields: {
+                        amountDue: { $subtract: ['$totalAmount', { $ifNull: ['$amountPaid', 0] }] }
+                    }
+                },
+                {
+                    $group: {
+                        _id: '$supplierId',
+                        supplierName: { $first: '$supplierName' },
+                        totalDue: { $sum: '$amountDue' },
+                        purchasesCount: { $sum: 1 }
+                    }
+                }
+            ])
         ]);
+
+        // Combine and aggregate by supplier
+        const supplierMap = new Map();
+        [...orderBreakdown, ...directBreakdown].forEach(item => {
+            const key = item._id?.toString();
+            if (!key) return;
+
+            if (supplierMap.has(key)) {
+                const existing = supplierMap.get(key);
+                existing.totalDue += item.totalDue;
+                existing.purchasesCount += item.purchasesCount;
+            } else {
+                supplierMap.set(key, { ...item });
+            }
+        });
+
+        const supplierBreakdown = Array.from(supplierMap.values())
+            .sort((a, b) => b.totalDue - a.totalDue)
+            .slice(0, 10);
 
         res.json({
             totalPayable,
@@ -264,7 +425,7 @@ router.get('/payable', async (req, res) => {
             currentAmount: totalPayable - overdueAmount,
             aging,
             topSuppliers: supplierBreakdown,
-            purchasesCount: purchaseOrders.length
+            purchasesCount: purchaseOrders.length + directPurchases.length
         });
     } catch (error) {
         console.error('Error fetching accounts payable:', error);
@@ -345,15 +506,38 @@ router.get('/payable/bills', async (req, res) => {
 
         const skip = (page - 1) * limit;
 
-        const purchaseOrders = await PurchaseOrder.find(query)
-            .sort({ orderDate: -1 })
-            .skip(skip)
-            .limit(parseInt(limit));
+        // Get both purchase orders and direct purchases
+        const [purchaseOrders, directPurchases] = await Promise.all([
+            PurchaseOrder.find(query)
+                .sort({ orderDate: -1 })
+                .skip(skip)
+                .limit(parseInt(limit)),
+            DirectPurchase.find(query)
+                .sort({ purchaseDate: -1 })
+                .skip(skip)
+                .limit(parseInt(limit))
+        ]);
 
-        const total = await PurchaseOrder.countDocuments(query);
+        // Combine and sort by date
+        const allBills = [
+            ...purchaseOrders,
+            ...directPurchases.map(dp => ({
+                ...dp.toObject(),
+                orderDate: dp.purchaseDate,
+                isDirect: true
+            }))
+        ].sort((a, b) => new Date(b.orderDate || b.purchaseDate) - new Date(a.orderDate || a.purchaseDate))
+            .slice(0, parseInt(limit));
+
+        const [orderTotal, directTotal] = await Promise.all([
+            PurchaseOrder.countDocuments(query),
+            DirectPurchase.countDocuments(query)
+        ]);
+
+        const total = orderTotal + directTotal;
 
         res.json({
-            bills: purchaseOrders,
+            bills: allBills,
             pagination: {
                 page: parseInt(page),
                 limit: parseInt(limit),

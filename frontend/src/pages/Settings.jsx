@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Alert, AlertDescription } from '../components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Separator } from '../components/ui/separator'
+import { Switch } from '../components/ui/switch'
 import DataManagementTab from '../components/DataManagementTab'
 
 const Settings = () => {
@@ -37,7 +38,8 @@ const Settings = () => {
     address: '',
     phone: '',
     email: '',
-    wagesPerBag: 0
+    wagesPerBag: 0,
+    deliveryMode: 'order_based'
   })
 
   useEffect(() => {
@@ -56,7 +58,8 @@ const Settings = () => {
           address: user.companyId.address || '',
           phone: user.companyId.contactNumber || '',
           email: user.companyId.email || '',
-          wagesPerBag: user.companyId.wagesPerBag || 0
+          wagesPerBag: user.companyId.wagesPerBag || 0,
+          deliveryMode: user.companyId.deliveryMode || 'order_based'
         })
       }
     }
@@ -130,7 +133,8 @@ const Settings = () => {
         address: companyForm.address,
         phone: companyForm.phone,
         email: companyForm.email,
-        wagesPerBag: parseFloat(companyForm.wagesPerBag) || 0
+        wagesPerBag: parseFloat(companyForm.wagesPerBag) || 0,
+        deliveryMode: companyForm.deliveryMode
       }
 
       await companyAPI.update(updateData)
@@ -144,7 +148,8 @@ const Settings = () => {
           address: companyForm.address,
           contactNumber: companyForm.phone,
           email: companyForm.email,
-          wagesPerBag: parseFloat(companyForm.wagesPerBag) || 0
+          wagesPerBag: parseFloat(companyForm.wagesPerBag) || 0,
+          deliveryMode: companyForm.deliveryMode
         }
       }
       localStorage.setItem('user', JSON.stringify(updatedUser))
@@ -434,6 +439,29 @@ const Settings = () => {
                     />
                     <p className="text-xs text-muted-foreground">
                       Amount paid to workers per bag handled (deliveries, moves, etc.)
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="deliveryMode">Delivery Mode</Label>
+                        <p className="text-sm text-muted-foreground">
+                          {companyForm.deliveryMode === 'direct' ? 'Direct Delivery' : 'Order-Based Delivery'}
+                        </p>
+                      </div>
+                      <Switch
+                        id="deliveryMode"
+                        checked={companyForm.deliveryMode === 'direct'}
+                        onCheckedChange={(checked) => {
+                          setCompanyForm({ ...companyForm, deliveryMode: checked ? 'direct' : 'order_based' })
+                          clearMessages()
+                        }}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      <strong>Order-Based:</strong> Sales Orders → Delivery Out | Purchase Orders → Delivery In<br />
+                      <strong>Direct:</strong> Direct Sales & Direct Purchases (no orders required)
                     </p>
                   </div>
 

@@ -192,16 +192,11 @@ const PurchaseOrders = () => {
 
             const totalAmount = calculateOrderTotal()
 
-            // Find supplier by name
+            // Find supplier by name (optional - allows creating new suppliers)
             const supplier = suppliers.find(s => s.name === form.supplierName)
-            if (!supplier) {
-                setError('Please select a valid supplier from the list')
-                setSubmitting(false)
-                return
-            }
 
             const orderData = {
-                supplierId: supplier._id,
+                supplierId: supplier?._id || undefined,
                 supplierName: form.supplierName,
                 items: form.items,
                 totalAmount,

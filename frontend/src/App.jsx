@@ -37,6 +37,8 @@ const SalesOrders = lazy(() => import('./pages/SalesOrders'))
 const PurchaseOrders = lazy(() => import('./pages/PurchaseOrders'))
 const DeliveryOut = lazy(() => import('./pages/DeliveryOut'))
 const DeliveryIn = lazy(() => import('./pages/DeliveryIn'))
+const DirectSale = lazy(() => import('./pages/DirectSale'))
+const DirectPurchase = lazy(() => import('./pages/DirectPurchase'))
 const Clients = lazy(() => import('./pages/Clients'))
 const Suppliers = lazy(() => import('./pages/Suppliers'))
 const Staff = lazy(() => import('./pages/Staff'))
@@ -145,6 +147,8 @@ function App() {
           <Route path="/purchase-orders" element={<PurchaseOrders />} />
           <Route path="/delivery-out" element={<DeliveryOut />} />
           <Route path="/delivery-in" element={<DeliveryIn />} />
+          <Route path="/direct-sales" element={<DirectSale />} />
+          <Route path="/direct-purchases" element={<DirectPurchase />} />
           <Route path="/clients" element={<Clients />} />
           <Route path="/suppliers" element={<Suppliers />} />
           <Route path="/staff" element={<Staff />} />

@@ -65,6 +65,11 @@ const clientSchema = new mongoose.Schema({
         default: 0,
         min: 0
     },
+    totalReceivable: {
+        type: Number,
+        default: 0,
+        min: 0
+    },
     paymentTerms: {
         type: String,
         trim: true,

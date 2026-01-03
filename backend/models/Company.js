@@ -57,6 +57,16 @@ const companySchema = new mongoose.Schema({
     default: 0,
     min: 0
   },
+  deliveryMode: {
+    type: String,
+    enum: ['order_based', 'direct'],
+    default: 'order_based',
+    required: true
+  },
+  onboardingCompleted: {
+    type: Boolean,
+    default: false
+  },
   metadata: {
     userCount: { type: Number, default: 0 },
     dataVolume: { type: Number, default: 0 },
