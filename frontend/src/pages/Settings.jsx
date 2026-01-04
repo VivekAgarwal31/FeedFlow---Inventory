@@ -42,6 +42,9 @@ const Settings = () => {
     deliveryMode: 'order_based'
   })
 
+  // Track original delivery mode to detect changes
+  const [originalDeliveryMode, setOriginalDeliveryMode] = useState('order_based')
+
   useEffect(() => {
     if (user) {
       setProfileForm({
@@ -53,14 +56,16 @@ const Settings = () => {
       })
 
       if (user.companyId) {
+        const currentDeliveryMode = user.companyId.deliveryMode || 'order_based'
         setCompanyForm({
           name: user.companyId.name || '',
           address: user.companyId.address || '',
           phone: user.companyId.contactNumber || '',
           email: user.companyId.email || '',
           wagesPerBag: user.companyId.wagesPerBag || 0,
-          deliveryMode: user.companyId.deliveryMode || 'order_based'
+          deliveryMode: currentDeliveryMode
         })
+        setOriginalDeliveryMode(currentDeliveryMode)
       }
     }
   }, [user])
@@ -155,6 +160,13 @@ const Settings = () => {
       localStorage.setItem('user', JSON.stringify(updatedUser))
 
       setSuccess('Company information updated successfully')
+
+      // Check if delivery mode changed - if so, reload page to update sidebar
+      if (companyForm.deliveryMode !== originalDeliveryMode) {
+        setTimeout(() => {
+          window.location.reload()
+        }, 1000) // Give user time to see success message
+      }
     } catch (error) {
       setError(error.response?.data?.message || 'Failed to update company information')
     } finally {
