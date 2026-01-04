@@ -32,7 +32,9 @@ router.get('/stats', authenticate, async (req, res) => {
       salesOrderReceivables,
       directSaleReceivables,
       purchaseOrderPayables,
-      directPurchasePayables
+      directPurchasePayables,
+      clients, // Added for client opening balances
+      suppliers // Added for supplier opening balances
     ] = await Promise.all([
       // Total stock items count
       StockItem.countDocuments({ companyId }),
@@ -106,11 +108,12 @@ router.get('/stats', authenticate, async (req, res) => {
         }
       ]),
 
-      // Receivables from direct sales
+      // Receivables from direct sales (only credit transactions)
       DirectSale.aggregate([
         {
           $match: {
             companyId,
+            paymentType: 'credit', // Only include credit transactions
             paymentStatus: { $in: ['pending', 'partial'] }
           }
         },
@@ -143,11 +146,12 @@ router.get('/stats', authenticate, async (req, res) => {
         }
       ]),
 
-      // Payables from direct purchases
+      // Payables from direct purchases (only credit transactions)
       DirectPurchase.aggregate([
         {
           $match: {
             companyId,
+            paymentType: 'credit', // Only include credit transactions
             paymentStatus: { $in: ['pending', 'partial'] }
           }
         },
@@ -162,7 +166,13 @@ router.get('/stats', authenticate, async (req, res) => {
             totalPayables: { $sum: '$amountDue' }
           }
         }
-      ])
+      ]),
+
+      // Get all clients for opening balance
+      Client.find({ companyId }).select('openingBalance').lean(),
+
+      // Get all suppliers for opening balance
+      Supplier.find({ companyId }).select('openingBalance').lean()
     ]);
 
     const stockValue = totalStockValue[0] || { totalValue: 0, totalQuantity: 0 };
@@ -181,7 +191,7 @@ router.get('/stats', authenticate, async (req, res) => {
     const directReceivables = (directSaleReceivables && directSaleReceivables[0])
       ? (directSaleReceivables[0].totalReceivables || 0)
       : 0;
-    const totalReceivables = orderReceivables + directReceivables;
+    let totalReceivables = orderReceivables + directReceivables;
 
     // Combine payables from both sources
     const orderPayables = (purchaseOrderPayables && purchaseOrderPayables[0])
@@ -190,7 +200,14 @@ router.get('/stats', authenticate, async (req, res) => {
     const directPayables = (directPurchasePayables && directPurchasePayables[0])
       ? (directPurchasePayables[0].totalPayables || 0)
       : 0;
-    const totalPayables = orderPayables + directPayables;
+    let totalPayables = orderPayables + directPayables;
+
+    // Add opening balances to totals
+    const clientOpeningBalance = clients.reduce((sum, client) => sum + (client.openingBalance || 0), 0);
+    const supplierOpeningBalance = suppliers.reduce((sum, supplier) => sum + (supplier.openingBalance || 0), 0);
+
+    totalReceivables += clientOpeningBalance;
+    totalPayables += supplierOpeningBalance;
 
     res.json({
       stats: {

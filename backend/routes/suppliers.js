@@ -80,9 +80,10 @@ router.get('/', authenticate, async (req, res) => {
                 return sum + amountDue;
             }, 0);
 
-            // Get unpaid direct purchases
+            // Get unpaid direct purchases (only credit transactions, not cash)
             const unpaidDirectPurchases = directPurchases.filter(purchase =>
-                purchase.paymentStatus === 'pending' || purchase.paymentStatus === 'partial'
+                purchase.paymentType === 'credit' && // Only include credit transactions
+                (purchase.paymentStatus === 'pending' || purchase.paymentStatus === 'partial')
             );
 
             const directPurchasePayable = unpaidDirectPurchases.reduce((sum, purchase) => {
@@ -90,7 +91,10 @@ router.get('/', authenticate, async (req, res) => {
                 return sum + amountDue;
             }, 0);
 
-            const currentPayable = orderPayable + directPurchasePayable;
+            // Total payable = opening balance + unpaid transactions
+            const openingBalance = supplier.openingBalance || 0;
+            const currentPayable = openingBalance + orderPayable + directPurchasePayable;
+            supplier.currentPayable = currentPayable;
 
             return {
                 ...supplier,
@@ -98,7 +102,7 @@ router.get('/', authenticate, async (req, res) => {
                 purchaseCount,
                 lastPurchaseDate,
                 lastPurchase: lastPurchaseDate,
-                currentPayable
+                currentPayable: supplier.currentPayable
             };
         }));
 
@@ -171,7 +175,7 @@ router.post('/', authenticate, requirePermission('canManageSuppliers'), [
             panNumber,
             paymentTerms,
             notes,
-            currentPayable: openingBalance && !isNaN(parseFloat(openingBalance)) ? parseFloat(openingBalance) : 0
+            openingBalance: parseFloat(openingBalance) || 0
         });
 
         await supplier.save();
@@ -371,7 +375,7 @@ router.post('/bulk-import', authenticate, requirePermission('canManageSuppliers'
                 panNumber,
                 paymentTerms,
                 notes,
-                currentPayable: openingBalance
+                openingBalance: openingBalance
             });
         });
 

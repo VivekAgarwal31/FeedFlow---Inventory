@@ -52,10 +52,11 @@ router.get('/', authenticate, async (req, res) => {
                 paymentStatus: { $in: ['pending', 'partial'] }
             });
 
-            // Get unpaid direct sales
+            // Get unpaid direct sales (only credit transactions, not cash)
             const unpaidDirectSales = await DirectSale.find({
                 companyId,
                 clientId: client._id,
+                paymentType: 'credit', // Only include credit transactions
                 paymentStatus: { $in: ['pending', 'partial'] }
             });
 
@@ -70,7 +71,9 @@ router.get('/', authenticate, async (req, res) => {
                 return sum + amountDue;
             }, 0);
 
-            client.currentCredit = orderCredit + directSaleCredit;
+            // Total receivable = opening balance + unpaid transactions
+            const openingBalance = client.openingBalance || 0;
+            client.currentCredit = openingBalance + orderCredit + directSaleCredit;
 
             // Get all sales orders AND direct sales for total purchases
             const [allOrders, allDirectSales] = await Promise.all([
@@ -141,7 +144,7 @@ router.post('/', authenticate, requirePermission('canManageClients'), [
             address,
             gstNumber,
             notes,
-            currentCredit: openingBalance && !isNaN(parseFloat(openingBalance)) ? parseFloat(openingBalance) : 0
+            openingBalance: parseFloat(openingBalance) || 0
         });
 
         await client.save();
@@ -396,7 +399,7 @@ router.post('/bulk-import', authenticate, requirePermission('canManageClients'),
                 address,
                 gstNumber,
                 notes,
-                currentCredit: openingBalance
+                openingBalance: openingBalance
             });
         });
 

@@ -60,6 +60,12 @@ const clientSchema = new mongoose.Schema({
         default: 0,
         min: 0
     },
+    openingBalance: {
+        type: Number,
+        default: 0,
+        min: 0,
+        description: 'Initial receivable balance when client was created (never modified)'
+    },
     overpaidAmount: {
         type: Number,
         default: 0,

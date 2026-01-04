@@ -1,0 +1,39 @@
+STOCKWISE - YOUR LOGIN CODE
+============================
+
+Hello,
+
+We received a login request for your Stockwise account ({{EMAIL}}).
+
+YOUR LOGIN CODE: {{OTP}}
+
+This code is valid for {{EXPIRY_MINUTES}} minutes.
+
+SECURITY NOTICE
+---------------
+Never share this code with anyone. Stockwise staff will never ask for your login code.
+
+If you didn't request this code, please ignore this email or contact our support team immediately.
+
+{{#if SHOW_METADATA}}
+LOGIN DETAILS
+-------------
+{{#if IP_ADDRESS}}
+IP Address: {{IP_ADDRESS}}
+{{/if}}
+{{#if BROWSER}}
+Browser: {{BROWSER}}
+{{/if}}
+{{#if DEVICE}}
+Device: {{DEVICE}}
+{{/if}}
+{{#if TIMESTAMP}}
+Time: {{TIMESTAMP}}
+{{/if}}
+{{/if}}
+
+Need help? Contact us at support@stock-wise.in
+
+---
+© 2026 Stockwise. All rights reserved.
+stock-wise.in

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import ExcelJS from 'exceljs'
 import { Plus, Truck, Phone, Mail, MapPin, Loader2, ArrowLeft, Calendar, Filter, Eye, Download, Search, Trash2, DollarSign, FileText } from 'lucide-react'
 import { supplierAPI, purchaseAPI } from '../lib/api'
 import { getSupplierPayments, recordSupplierPayment } from '../lib/paymentApi'
@@ -130,7 +131,7 @@ const Suppliers = () => {
         ...directPurchases.map(dp => ({
           ...dp,
           _id: dp._id,
-          orderNumber: `DP-${dp.purchaseNumber}`,
+          orderNumber: `DP - ${dp.purchaseNumber} `,
           orderDate: dp.purchaseDate,
           orderStatus: dp.purchaseStatus,
           isDirect: true
@@ -272,7 +273,7 @@ const Suppliers = () => {
 
 
   const handleDeleteSupplier = async (supplierId, supplierName) => {
-    if (!window.confirm(`Are you sure you want to delete supplier "${supplierName}"? This action cannot be undone.`)) {
+    if (!window.confirm(`Are you sure you want to delete supplier "${supplierName}" ? This action cannot be undone.`)) {
       return
     }
 
@@ -339,7 +340,7 @@ const Suppliers = () => {
 
       toast({
         title: 'Success',
-        description: `Payment recorded! ${response.deliveriesUpdated?.length || 0} bill(s) updated.${response.overpaidAmount > 0 ? ` Overpaid: ${formatCurrency(response.overpaidAmount)}` : ''}`
+        description: `Payment recorded! ${response.deliveriesUpdated?.length || 0} bill(s) updated.${response.overpaidAmount > 0 ? ` Overpaid: ${formatCurrency(response.overpaidAmount)}` : ''} `
       })
 
       setSupplierPaymentDialogOpen(false)
@@ -413,12 +414,12 @@ const Suppliers = () => {
       const transactions = filteredPurchases.map(purchase => ({
         _id: purchase._id,
         createdAt: purchase.createdAt,
-        reference: purchase.referenceNumber || `PUR-${purchase._id.slice(-6)}`,
+        reference: purchase.referenceNumber || `PUR - ${purchase._id.slice(-6)} `,
         itemName: purchase.stockItemId?.itemName || 'Unknown Item',
         quantity: purchase.quantity,
         unitCost: purchase.unitCost,
         totalCost: purchase.totalCost,
-        notes: purchase.notes || `Purchase from ${purchase.supplierName}`
+        notes: purchase.notes || `Purchase from ${purchase.supplierName} `
       }))
 
       const dateRange = {
@@ -450,7 +451,6 @@ const Suppliers = () => {
 
   // Bulk import functions
   const handleDownloadTemplate = () => {
-    const ExcelJS = require('exceljs')
     const workbook = new ExcelJS.Workbook()
     const worksheet = workbook.addWorksheet('Suppliers Template')
 

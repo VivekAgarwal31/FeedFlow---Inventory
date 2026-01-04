@@ -6,7 +6,8 @@ import OTP from '../models/OTP.js';
 import Plan from '../models/Plan.js';
 import UserSubscription from '../models/UserSubscription.js';
 import { authenticate } from '../middleware/auth.js';
-import { generateOTP, sendOTPEmail } from '../utils/email.js';
+import { generateOTP } from '../utils/email.js';
+import { sendOtpEmail } from '../emails/services/emailService.js';
 
 const router = express.Router();
 
@@ -69,7 +70,7 @@ router.post('/register', [
     });
 
     // Send verification email
-    await sendOTPEmail(email, user.fullName, otpCode);
+    await sendOtpEmail(email, otpCode, req);
 
     res.status(201).json({
       message: 'Account created successfully! Please check your email to verify your account.',
@@ -124,7 +125,7 @@ router.post('/login', [
       });
 
       // Send verification email
-      await sendOTPEmail(email, user.fullName, otpCode);
+      await sendOtpEmail(email, otpCode, req);
 
       return res.status(403).json({
         message: 'Email not verified. A new verification code has been sent to your email.',
@@ -268,9 +269,18 @@ router.post('/request-otp', [
     });
 
     // Send email
-    await sendOTPEmail(email, user.fullName, otpCode);
-
-    res.json({ message: 'Verification code sent to your email' });
+    try {
+      await sendOtpEmail(email, otpCode, req);
+      res.json({ message: 'Verification code sent to your email' });
+    } catch (emailError) {
+      // Handle rate limit error
+      if (emailError.code === 'RATE_LIMIT_EXCEEDED') {
+        return res.status(429).json({
+          message: `Too many requests. Please try again in ${emailError.waitMinutes} minutes.`
+        });
+      }
+      throw emailError;
+    }
   } catch (error) {
     console.error('Request OTP error:', error);
 

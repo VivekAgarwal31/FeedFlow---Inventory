@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Your Stockwise Login Code</title>
+</head>
+
+<body
+    style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; background-color: #F0F4F8;">
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+        style="background-color: #F0F4F8; padding: 40px 20px;">
+        <tr>
+            <td align="center">
+
+                <!-- Logo at Top -->
+                <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"
+                    style="max-width: 600px; margin-bottom: 24px;">
+                    <tr>
+                        <td align="center">
+                            <svg width="48" height="48" viewBox="0 0 48 48" fill="none"
+                                xmlns="http://www.w3.org/2000/svg">
+                                <rect width="48" height="48" rx="12" fill="url(#gradient1)" />
+                                <path d="M24 12L14 17L24 22L34 17L24 12Z" fill="white" opacity="0.95" />
+                                <path d="M14 27L24 32L34 27" stroke="white" stroke-width="2.5" stroke-linecap="round"
+                                    stroke-linejoin="round" opacity="0.95" />
+                                <path d="M14 22L24 27L34 22" stroke="white" stroke-width="2.5" stroke-linecap="round"
+                                    stroke-linejoin="round" opacity="0.95" />
+                                <defs>
+                                    <linearGradient id="gradient1" x1="0" y1="0" x2="48" y2="48"
+                                        gradientUnits="userSpaceOnUse">
+                                        <stop stop-color="#0F766E" />
+                                        <stop offset="1" stop-color="#0D9488" />
+                                    </linearGradient>
+                                </defs>
+                            </svg>
+                        </td>
+                    </tr>
+                </table>
+
+                <!-- Main Container -->
+                <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"
+                    style="max-width: 600px; background: #ffffff; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); overflow: hidden;">
+
+                    <!-- Header Banner -->
+                    <tr>
+                        <td
+                            style="background: linear-gradient(135deg, #0F766E 0%, #0D9488 100%); padding: 0; position: relative; height: 160px;">
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                                <tr>
+                                    <td style="padding: 40px; position: relative;">
+                                        <!-- Decorative Pattern -->
+                                        <div style="position: absolute; top: 0; right: 0; opacity: 0.1;">
+                                            <svg width="200" height="160" viewBox="0 0 200 160" fill="none">
+                                                <circle cx="150" cy="30" r="60" fill="white" />
+                                                <circle cx="180" cy="100" r="40" fill="white" />
+                                            </svg>
+                                        </div>
+
+                                        <h1
+                                            style="margin: 0; font-size: 28px; font-weight: 700; color: #ffffff; letter-spacing: -0.5px; position: relative; z-index: 1;">
+                                            Stockwise</h1>
+                                        <p
+                                            style="margin: 6px 0 0 0; font-size: 14px; color: rgba(255,255,255,0.9); font-weight: 500; position: relative; z-index: 1;">
+                                            Smart Inventory Management</p>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- Body Content -->
+                    <tr>
+                        <td style="padding: 48px 40px;">
+
+                            <!-- Greeting -->
+                            <p style="margin: 0 0 8px 0; font-size: 15px; color: #64748B; font-weight: 500;">Hi there,
+                            </p>
+
+                            <h2
+                                style="margin: 0 0 16px 0; font-size: 22px; font-weight: 700; color: #0F172A; line-height: 1.3;">
+                                Your One-Time Password</h2>
+
+                            <p style="margin: 0 0 32px 0; font-size: 15px; color: #475569; line-height: 1.6;">
+                                We received a login request for <strong style="color: #0F172A;">{{EMAIL}}</strong>.
+                                Please use the code below to verify your email address and complete your login.
+                            </p>
+
+                            <!-- OTP Code Box -->
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                                style="margin: 0 0 32px 0;">
+                                <tr>
+                                    <td align="center"
+                                        style="background: #F8FAFC; border-radius: 12px; padding: 32px; border: 2px solid #E2E8F0;">
+                                        <p
+                                            style="margin: 0 0 12px 0; font-size: 12px; color: #64748B; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700;">
+                                            Verification Code</p>
+
+                                        <!-- OTP Digits -->
+                                        <table role="presentation" cellpadding="0" cellspacing="0" border="0"
+                                            style="margin: 0 auto;">
+                                            <tr>
+                                                <td
+                                                    style="background: linear-gradient(135deg, #0F766E 0%, #0D9488 100%); border-radius: 10px; padding: 16px 32px; box-shadow: 0 4px 16px rgba(15,118,110,0.25);">
+                                                    <p
+                                                        style="margin: 0; font-size: 36px; font-weight: 800; color: #ffffff; letter-spacing: 10px; font-family: 'Courier New', Consolas, monospace; text-align: center;">
+                                                        {{OTP}}</p>
+                                                </td>
+                                            </tr>
+                                        </table>
+
+                                        <p
+                                            style="margin: 16px 0 0 0; font-size: 13px; color: #64748B; font-weight: 500;">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                                style="vertical-align: middle; margin-right: 4px;">
+                                                <circle cx="12" cy="12" r="10" stroke="#64748B" stroke-width="2" />
+                                                <path d="M12 6V12L16 14" stroke="#64748B" stroke-width="2"
+                                                    stroke-linecap="round" />
+                                            </svg>
+                                            Code expires in {{EXPIRY_MINUTES}} minutes
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Security Alert -->
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                                style="margin: 0 0 32px 0;">
+                                <tr>
+                                    <td
+                                        style="background: #FEF3C7; border-left: 3px solid #F59E0B; border-radius: 8px; padding: 16px 20px;">
+                                        <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                                            <tr>
+                                                <td width="24" valign="top" style="padding-right: 12px;">
+                                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                                                        <path
+                                                            d="M12 2L2 7V12C2 17.55 6.84 22.74 12 24C17.16 22.74 22 17.55 22 12V7L12 2Z"
+                                                            fill="#F59E0B" />
+                                                        <path d="M12 8V13M12 16H12.01" stroke="white" stroke-width="2"
+                                                            stroke-linecap="round" />
+                                                    </svg>
+                                                </td>
+                                                <td>
+                                                    <p
+                                                        style="margin: 0; font-size: 13px; color: #92400E; line-height: 1.5; font-weight: 600;">
+                                                        <strong>Security Notice:</strong> Never share this code.
+                                                        Stockwise staff will never ask for your verification code.
+                                                    </p>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Additional Info -->
+                            <p style="margin: 0 0 24px 0; font-size: 14px; color: #64748B; line-height: 1.6;">
+                                If you didn't request this code, you can safely ignore this email. Your account remains
+                                secure.
+                            </p>
+
+                            <!-- Login Details Card -->
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                                style="margin: 0; background: #F8FAFC; border-radius: 10px; padding: 20px; border: 1px solid #E2E8F0;">
+                                <tr>
+                                    <td>
+                                        <p
+                                            style="margin: 0 0 12px 0; font-size: 12px; color: #64748B; text-transform: uppercase; letter-spacing: 1px; font-weight: 700;">
+                                            Login Details</p>
+
+                                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+                                            border="0">
+                                            <tr>
+                                                <td style="padding: 6px 0;">
+                                                    <p style="margin: 0; font-size: 13px; color: #0F172A;">
+                                                        <span
+                                                            style="display: inline-block; width: 90px; color: #64748B; font-weight: 500;">IP
+                                                            Address:</span>
+                                                        <span
+                                                            style="color: #334155; font-weight: 600;">{{IP_ADDRESS}}</span>
+                                                    </p>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 6px 0;">
+                                                    <p style="margin: 0; font-size: 13px; color: #0F172A;">
+                                                        <span
+                                                            style="display: inline-block; width: 90px; color: #64748B; font-weight: 500;">Browser:</span>
+                                                        <span
+                                                            style="color: #334155; font-weight: 600;">{{BROWSER}}</span>
+                                                    </p>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 6px 0;">
+                                                    <p style="margin: 0; font-size: 13px; color: #0F172A;">
+                                                        <span
+                                                            style="display: inline-block; width: 90px; color: #64748B; font-weight: 500;">Device:</span>
+                                                        <span
+                                                            style="color: #334155; font-weight: 600;">{{DEVICE}}</span>
+                                                    </p>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 6px 0;">
+                                                    <p style="margin: 0; font-size: 13px; color: #0F172A;">
+                                                        <span
+                                                            style="display: inline-block; width: 90px; color: #64748B; font-weight: 500;">Time:</span>
+                                                        <span
+                                                            style="color: #334155; font-weight: 600;">{{TIMESTAMP}}</span>
+                                                    </p>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background: #F8FAFC; padding: 32px 40px; border-top: 1px solid #E2E8F0;">
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                                <tr>
+                                    <td align="center">
+                                        <p
+                                            style="margin: 0 0 16px 0; font-size: 14px; color: #64748B; line-height: 1.5;">
+                                            Need assistance? Our support team is ready to help.
+                                        </p>
+
+                                        <a href="mailto:support@stock-wise.in"
+                                            style="display: inline-block; background: linear-gradient(135deg, #0F766E 0%, #0D9488 100%); color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-size: 14px; font-weight: 600; box-shadow: 0 2px 8px rgba(15,118,110,0.25); margin: 0 0 20px 0;">
+                                            Contact Support
+                                        </a>
+
+                                        <p style="margin: 0; font-size: 12px; color: #94A3B8;">
+                                            &copy; 2026 Stockwise. All rights reserved.
+                                        </p>
+                                        <p style="margin: 6px 0 0 0; font-size: 12px;">
+                                            <a href="https://stock-wise.in"
+                                                style="color: #0D9488; text-decoration: none; font-weight: 500;">stock-wise.in</a>
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                </table>
+
+                <!-- Footer Text -->
+                <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"
+                    style="max-width: 600px; margin-top: 24px;">
+                    <tr>
+                        <td align="center">
+                            <p style="margin: 0; font-size: 12px; color: #94A3B8; line-height: 1.5;">
+                                This email was sent to {{EMAIL}} because a login was requested for your Stockwise
+                                account.
+                            </p>
+                            <p style="margin: 8px 0 0 0; font-size: 11px; color: #CBD5E1;">
+                                <a href="#" style="color: #94A3B8; text-decoration: none;">Privacy Policy</a> •
+                                <a href="#" style="color: #94A3B8; text-decoration: none;">Terms of Service</a>
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+
+            </td>
+        </tr>
+    </table>
+
+</body>
+
+</html>

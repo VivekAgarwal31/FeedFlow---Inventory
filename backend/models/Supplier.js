@@ -64,6 +64,12 @@ const supplierSchema = new mongoose.Schema({
         default: 0,
         min: 0
     },
+    openingBalance: {
+        type: Number,
+        default: 0,
+        min: 0,
+        description: 'Initial payable balance when supplier was created (never modified)'
+    },
     overduePayable: {
         type: Number,
         default: 0,

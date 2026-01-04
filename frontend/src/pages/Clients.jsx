@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import ExcelJS from 'exceljs'
 import { Plus, Users, Phone, Mail, MapPin, Loader2, ArrowLeft, Calendar, Filter, Eye, Download, Search, Trash2, CreditCard, DollarSign, FileText } from 'lucide-react'
 import { clientAPI, saleAPI } from '../lib/api'
 import { downloadInvoiceBySale, downloadInvoiceByOrder, downloadBlob, getClientPayments, recordClientPayment } from '../lib/paymentApi'
@@ -488,7 +489,6 @@ const Clients = () => {
 
   // Bulk import functions
   const handleDownloadTemplate = () => {
-    const ExcelJS = require('exceljs')
     const workbook = new ExcelJS.Workbook()
     const worksheet = workbook.addWorksheet('Clients Template')
 

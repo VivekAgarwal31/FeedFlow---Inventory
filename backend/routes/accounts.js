@@ -26,6 +26,7 @@ router.get('/receivable', async (req, res) => {
             }),
             DirectSale.find({
                 companyId: userCompanyId,
+                paymentType: 'credit', // Only include credit transactions
                 paymentStatus: { $in: ['pending', 'partial'] }
             })
         ]);
@@ -33,6 +34,9 @@ router.get('/receivable', async (req, res) => {
         let totalOutstanding = 0;
         let overdueAmount = 0;
         const today = new Date();
+
+        // Client breakdown map
+        const clientBreakdownMap = new Map();
 
         // Aging analysis
         const aging = {
@@ -50,18 +54,38 @@ router.get('/receivable', async (req, res) => {
                 overdueAmount += order.amountDue;
             }
 
-            // Calculate aging
-            const orderDate = new Date(order.orderDate);
-            const daysOld = Math.floor((today - orderDate) / (1000 * 60 * 60 * 24));
-
-            if (daysOld <= 30) {
+            // Aging analysis
+            const daysOutstanding = Math.floor((today - new Date(order.orderDate)) / (1000 * 60 * 60 * 24));
+            if (daysOutstanding <= 30) {
                 aging.current += order.amountDue;
-            } else if (daysOld <= 60) {
+            } else if (daysOutstanding <= 60) {
                 aging.days31_60 += order.amountDue;
-            } else if (daysOld <= 90) {
+            } else if (daysOutstanding <= 90) {
                 aging.days61_90 += order.amountDue;
             } else {
                 aging.days90Plus += order.amountDue;
+            }
+
+            // Client breakdown - add to existing or create new
+            const clientId = order.clientId?._id.toString();
+            const clientName = order.clientId?.clientName || order.clientId?.name || 'Unknown Client';
+
+            if (clientId) {
+                if (!clientBreakdownMap.has(clientId)) {
+                    clientBreakdownMap.set(clientId, {
+                        _id: clientId,
+                        clientName: clientName,
+                        totalDue: 0,
+                        salesCount: 0,
+                        overdueAmount: 0
+                    });
+                }
+                const clientData = clientBreakdownMap.get(clientId);
+                clientData.totalDue += order.amountDue;
+                clientData.salesCount += 1;
+                if (order.isOverdue) {
+                    clientData.overdueAmount += order.amountDue;
+                }
             }
         });
 
@@ -70,27 +94,51 @@ router.get('/receivable', async (req, res) => {
             const amountDue = sale.totalAmount - (sale.amountPaid || 0);
             totalOutstanding += amountDue;
 
-            // Direct sales don't have isOverdue, calculate based on date
-            const saleDate = new Date(sale.saleDate);
-            const daysOld = Math.floor((today - saleDate) / (1000 * 60 * 60 * 24));
+            // For direct sales, we don't have isOverdue, so we check the date
+            const daysOutstanding = Math.floor((today - new Date(sale.saleDate || sale.createdAt)) / (1000 * 60 * 60 * 24));
+            const isOverdue = daysOutstanding > 30; // Assuming 30 days payment term
 
-            if (daysOld > 30) {
+            if (isOverdue) {
                 overdueAmount += amountDue;
             }
 
-            // Calculate aging
-            if (daysOld <= 30) {
+            // Aging analysis
+            if (daysOutstanding <= 30) {
                 aging.current += amountDue;
-            } else if (daysOld <= 60) {
+            } else if (daysOutstanding <= 60) {
                 aging.days31_60 += amountDue;
-            } else if (daysOld <= 90) {
+            } else if (daysOutstanding <= 90) {
                 aging.days61_90 += amountDue;
             } else {
                 aging.days90Plus += amountDue;
             }
+
+            // Client breakdown - add to existing or create new
+            const clientId = sale.clientId?._id.toString();
+            const clientName = sale.clientId?.clientName || sale.clientId?.name || 'Unknown Client';
+
+            if (clientId) {
+                if (!clientBreakdownMap.has(clientId)) {
+                    clientBreakdownMap.set(clientId, {
+                        _id: clientId,
+                        clientName: clientName,
+                        totalDue: 0,
+                        salesCount: 0,
+                        overdueAmount: 0
+                    });
+                }
+                const clientData = clientBreakdownMap.get(clientId);
+                clientData.totalDue += amountDue;
+                clientData.salesCount += 1; // Direct sales also count as a sale
+                if (isOverdue) {
+                    clientData.overdueAmount += amountDue;
+                }
+            }
         });
 
-        // Get client-wise breakdown from both sources
+        // Get client-wise breakdown from both sources (this part is now redundant for topClients as clientBreakdownMap handles it)
+        // However, the aggregation pipelines below are still useful for getting a comprehensive list if needed,
+        // but for the topClients, we will use the clientBreakdownMap.
         const [orderBreakdown, directBreakdown] = await Promise.all([
             SalesOrder.aggregate([
                 {
@@ -143,6 +191,30 @@ router.get('/receivable', async (req, res) => {
                 existing.salesCount += item.salesCount;
             } else {
                 clientMap.set(key, { ...item });
+            }
+        });
+
+        // Get all clients with opening balance
+        const allClients = await Client.find({ companyId: userCompanyId }).lean();
+
+        // Initialize client breakdown with opening balances and add to total outstanding/aging
+        allClients.forEach(client => {
+            if (client.openingBalance && client.openingBalance > 0) {
+                const key = client._id.toString();
+                if (clientMap.has(key)) {
+                    const existing = clientMap.get(key);
+                    existing.totalDue += client.openingBalance;
+                    // For opening balance, we don't increment salesCount
+                } else {
+                    clientMap.set(key, {
+                        _id: client._id,
+                        clientName: client.clientName || client.name, // Use clientName if available, else name
+                        totalDue: client.openingBalance,
+                        salesCount: 0 // Opening balance is not a 'sale'
+                    });
+                }
+                totalOutstanding += client.openingBalance;
+                aging.current += client.openingBalance; // Opening balance is considered current unless specified otherwise
             }
         });
 
