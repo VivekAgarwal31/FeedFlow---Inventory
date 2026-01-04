@@ -148,11 +148,8 @@ router.post('/out', authenticate, requirePermission('canManageSales'), [
                 return res.status(404).json({ message: `Stock item ${deliveryItem.itemName} not found in warehouse` });
             }
 
-            if (stockItem.quantity < deliveryItem.quantity) {
-                return res.status(400).json({
-                    message: `Insufficient stock for ${deliveryItem.itemName}. Available: ${stockItem.quantity}`
-                });
-            }
+            // Allow negative stock - no validation check
+            // Stock will go negative if quantity exceeds available
 
             totalAmount += deliveryItem.total;
         }

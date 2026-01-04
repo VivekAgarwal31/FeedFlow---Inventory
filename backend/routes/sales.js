@@ -198,12 +198,8 @@ router.post('/', authenticate, requirePermission('canManageSales'), [
                 });
             }
 
-            // Check if sufficient stock is available
-            if (stockItem.quantity < item.quantity) {
-                return res.status(400).json({
-                    message: `Insufficient stock for "${item.itemName}". Available: ${stockItem.quantity}, Required: ${item.quantity}`
-                });
-            }
+            // Allow negative stock - no validation check
+            // Stock will go negative if quantity exceeds available
 
             // Deduct stock
             stockItem.quantity -= item.quantity;

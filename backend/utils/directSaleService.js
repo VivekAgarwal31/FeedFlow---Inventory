@@ -45,9 +45,8 @@ export const createDirectSale = async (saleData, userId) => {
                 throw new Error(`Stock item not found: ${item.itemName} in ${item.warehouseName}`);
             }
 
-            if (stockItem.quantity < item.quantity) {
-                throw new Error(`Insufficient stock for ${item.itemName} in ${item.warehouseName}. Available: ${stockItem.quantity}, Required: ${item.quantity}`);
-            }
+            // Allow negative stock - no validation check
+            // Stock will go negative if quantity exceeds available
 
             const lineTotal = item.quantity * item.sellingPrice;
             totalAmount += lineTotal;
