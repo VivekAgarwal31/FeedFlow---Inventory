@@ -23,7 +23,7 @@ const CheckoutPage = () => {
     const [error, setError] = useState(null);
 
     const planType = searchParams.get('plan') || 'paid';
-    const planPrice = 999; // ₹999 for paid plan
+    const planPrice = 2499; // ₹2,499 for paid plan
 
     // Coupon state
     const [couponCode, setCouponCode] = useState('');

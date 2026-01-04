@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { List, Calendar, Filter, Download, Search, ArrowUpFromLine, ArrowDownToLine, Settings, ArrowLeftRight, TrendingUp, Eye, Trash2 } from 'lucide-react'
+import { List, Calendar, Filter, Download, Search, ArrowUpFromLine, ArrowDownToLine, Settings, ArrowLeftRight, TrendingUp, TrendingDown, Eye, Trash2 } from 'lucide-react'
 import { stockTransactionAPI } from '../lib/api'
 import { formatCurrency, formatDate } from '../lib/utils'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
@@ -20,6 +20,8 @@ const StockTransactions = () => {
   const [searchTerm, setSearchTerm] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
   const [dateFilter, setDateFilter] = useState('all')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
   const [selectedTransaction, setSelectedTransaction] = useState(null)
 
   // Pagination state
@@ -46,7 +48,7 @@ const StockTransactions = () => {
 
   useEffect(() => {
     filterTransactions()
-  }, [transactions, searchTerm, typeFilter, dateFilter])
+  }, [transactions, searchTerm, typeFilter, dateFilter, startDate, endDate])
 
   const fetchTransactions = async () => {
     try {
@@ -91,26 +93,59 @@ const StockTransactions = () => {
     // Filter by date
     if (dateFilter !== 'all') {
       const now = new Date()
-      let filterDate = new Date()
+      let filterStartDate = null
+      let filterEndDate = null
 
-      switch (dateFilter) {
-        case 'today':
-          filterDate.setHours(0, 0, 0, 0)
-          break
-        case 'week':
-          filterDate.setDate(now.getDate() - 7)
-          break
-        case 'month':
-          filterDate.setMonth(now.getMonth() - 1)
-          break
-        default:
-          filterDate = null
+      if (dateFilter === 'custom') {
+        // Custom date range
+        if (startDate) {
+          filterStartDate = new Date(startDate)
+          filterStartDate.setHours(0, 0, 0, 0)
+        }
+        if (endDate) {
+          filterEndDate = new Date(endDate)
+          filterEndDate.setHours(23, 59, 59, 999)
+        } else if (startDate) {
+          // If only start date is provided, treat as single day
+          filterEndDate = new Date(startDate)
+          filterEndDate.setHours(23, 59, 59, 999)
+        }
+      } else {
+        // Preset date ranges
+        switch (dateFilter) {
+          case 'today':
+            filterStartDate = new Date()
+            filterStartDate.setHours(0, 0, 0, 0)
+            filterEndDate = new Date()
+            filterEndDate.setHours(23, 59, 59, 999)
+            break
+          case 'week':
+            filterStartDate = new Date()
+            filterStartDate.setDate(now.getDate() - 7)
+            filterStartDate.setHours(0, 0, 0, 0)
+            filterEndDate = now
+            break
+          case 'month':
+            filterStartDate = new Date()
+            filterStartDate.setMonth(now.getMonth() - 1)
+            filterStartDate.setHours(0, 0, 0, 0)
+            filterEndDate = now
+            break
+        }
       }
 
-      if (filterDate) {
-        filtered = filtered.filter(transaction =>
-          new Date(transaction.transactionDate || transaction.createdAt) >= filterDate
-        )
+      if (filterStartDate || filterEndDate) {
+        filtered = filtered.filter(transaction => {
+          const transactionDate = new Date(transaction.transactionDate || transaction.createdAt)
+          if (filterStartDate && filterEndDate) {
+            return transactionDate >= filterStartDate && transactionDate <= filterEndDate
+          } else if (filterStartDate) {
+            return transactionDate >= filterStartDate
+          } else if (filterEndDate) {
+            return transactionDate <= filterEndDate
+          }
+          return true
+        })
       }
     }
 
@@ -326,6 +361,49 @@ const StockTransactions = () => {
 
   const getTransactionBadge = (type) => {
     switch (type) {
+      case 'delivery_in':
+        return (
+          <Badge variant="default" className="bg-green-500 hover:bg-green-600">
+            <ArrowDownToLine className="mr-1 h-3 w-3" />
+            Delivery In
+          </Badge>
+        )
+      case 'delivery_out':
+        return (
+          <Badge variant="default" className="bg-blue-500 hover:bg-blue-600">
+            <ArrowUpFromLine className="mr-1 h-3 w-3" />
+            Delivery Out
+          </Badge>
+        )
+      case 'direct_sale':
+        return (
+          <Badge variant="default" className="bg-indigo-500 hover:bg-indigo-600">
+            <TrendingUp className="mr-1 h-3 w-3" />
+            Direct Sale
+          </Badge>
+        )
+      case 'direct_purchase':
+        return (
+          <Badge variant="default" className="bg-emerald-500 hover:bg-emerald-600">
+            <TrendingDown className="mr-1 h-3 w-3" />
+            Direct Purchase
+          </Badge>
+        )
+      case 'stock_adjust':
+        return (
+          <Badge variant="default" className="bg-yellow-500 hover:bg-yellow-600">
+            <Settings className="mr-1 h-3 w-3" />
+            Adjustment
+          </Badge>
+        )
+      case 'stock_move':
+        return (
+          <Badge variant="default" className="bg-purple-500 hover:bg-purple-600">
+            <ArrowLeftRight className="mr-1 h-3 w-3" />
+            Stock Move
+          </Badge>
+        )
+      // Legacy types (for old data)
       case 'purchase':
         return (
           <Badge variant="default" className="bg-green-500 hover:bg-green-600">
@@ -340,22 +418,8 @@ const StockTransactions = () => {
             Sale
           </Badge>
         )
-      case 'adjustment':
-        return (
-          <Badge variant="default" className="bg-yellow-500 hover:bg-yellow-600">
-            <Settings className="mr-1 h-3 w-3" />
-            Adjustment
-          </Badge>
-        )
-      case 'transfer':
-        return (
-          <Badge variant="default" className="bg-purple-500 hover:bg-purple-600">
-            <ArrowLeftRight className="mr-1 h-3 w-3" />
-            Transfer
-          </Badge>
-        )
       default:
-        return <Badge>{type}</Badge>
+        return <Badge>{type.replace('_', ' ')}</Badge>
     }
   }
 
@@ -421,7 +485,7 @@ const StockTransactions = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className={`grid grid-cols-1 gap-4 ${dateFilter === 'custom' ? 'md:grid-cols-2 lg:grid-cols-3' : 'md:grid-cols-4'}`}>
             <div className="space-y-2">
               <Label htmlFor="search">Search</Label>
               <div className="relative">
@@ -444,10 +508,10 @@ const StockTransactions = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="stock_in">Stock In</SelectItem>
-                  <SelectItem value="stock_out">Stock Out</SelectItem>
-                  <SelectItem value="sale">Sales</SelectItem>
-                  <SelectItem value="purchase">Purchases</SelectItem>
+                  <SelectItem value="delivery_in">Delivery In</SelectItem>
+                  <SelectItem value="delivery_out">Delivery Out</SelectItem>
+                  <SelectItem value="direct_sale">Direct Sale</SelectItem>
+                  <SelectItem value="direct_purchase">Direct Purchase</SelectItem>
                   <SelectItem value="stock_adjust">Adjustments</SelectItem>
                   <SelectItem value="stock_move">Stock Moves</SelectItem>
                 </SelectContent>
@@ -456,7 +520,13 @@ const StockTransactions = () => {
 
             <div className="space-y-2">
               <Label htmlFor="date-filter">Date Range</Label>
-              <Select value={dateFilter} onValueChange={setDateFilter}>
+              <Select value={dateFilter} onValueChange={(value) => {
+                setDateFilter(value)
+                if (value !== 'custom') {
+                  setStartDate('')
+                  setEndDate('')
+                }
+              }}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -465,18 +535,48 @@ const StockTransactions = () => {
                   <SelectItem value="today">Today</SelectItem>
                   <SelectItem value="week">Last 7 Days</SelectItem>
                   <SelectItem value="month">Last 30 Days</SelectItem>
+                  <SelectItem value="custom">Custom Range</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Custom Date Range Inputs */}
+            {dateFilter === 'custom' && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="start-date">Start Date</Label>
+                  <Input
+                    id="start-date"
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    max={endDate || undefined}
+                  />
+                  <p className="text-xs text-muted-foreground">Leave end date empty for single day</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="end-date">End Date (Optional)</Label>
+                  <Input
+                    id="end-date"
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    min={startDate || undefined}
+                  />
+                </div>
+              </>
+            )}
 
             <div className="space-y-2">
               <Label>Results</Label>
               <div className="flex items-center h-10 px-3 py-2 border rounded-md bg-muted">
                 <span className="text-sm font-medium">
-                  {filteredTransactions.length} transactions
+                  {filteredTransactions.length} transactions • {filteredTransactions.reduce((sum, t) => sum + (t.quantity || 0), 0)} bags
                 </span>
               </div>
             </div>
+
           </div>
         </CardContent>
       </Card>

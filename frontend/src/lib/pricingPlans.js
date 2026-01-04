@@ -49,8 +49,8 @@ export const pricingPlans = [
     {
         id: 'paid',
         name: 'Professional',
-        price: 999,
-        priceLabel: '₹999/month',
+        price: 2499,
+        priceLabel: '₹2,499/month',
         description: 'For growing businesses with advanced needs',
         features: [
             'Unlimited warehouses',

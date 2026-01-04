@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Plus, Settings, Loader2, Trash2 } from 'lucide-react'
-import { stockAPI, warehouseAPI } from '../lib/api'
+import { stockAPI, warehouseAPI, stockTransactionAPI } from '../lib/api'
 import { formatCurrency, formatDate } from '../lib/utils'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
@@ -37,13 +37,15 @@ const StockAdjust = () => {
   const fetchData = async () => {
     try {
       setLoading(true)
-      const [stockResponse, warehousesResponse] = await Promise.all([
+      const [stockResponse, warehousesResponse, adjustmentsResponse] = await Promise.all([
         stockAPI.getAll(),
-        warehouseAPI.getAll()
+        warehouseAPI.getAll(),
+        stockTransactionAPI.getAll({ type: 'stock_adjust' })
       ])
 
       setStockItems(stockResponse.data.stockItems || [])
       setWarehouses(warehousesResponse.data.warehouses || [])
+      setAdjustments(adjustmentsResponse.data.transactions || [])
     } catch (error) {
       console.error('Failed to fetch data:', error)
       toast({
@@ -422,11 +424,10 @@ const StockAdjust = () => {
                 <TableRow>
                   <TableHead>Date</TableHead>
                   <TableHead>Item</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Quantity</TableHead>
-                  <TableHead>Previous</TableHead>
-                  <TableHead>New</TableHead>
+                  <TableHead>Warehouse</TableHead>
+                  <TableHead>Adjustment</TableHead>
                   <TableHead>Reason</TableHead>
+                  <TableHead>Performed By</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -434,15 +435,20 @@ const StockAdjust = () => {
                   <TableRow key={adjustment._id}>
                     <TableCell>{formatDate(adjustment.createdAt)}</TableCell>
                     <TableCell className="font-medium">
-                      {adjustment.stockItemId?.itemName || 'Unknown Item'}
+                      {adjustment.itemName || 'Unknown Item'}
                     </TableCell>
                     <TableCell>
-                      {getAdjustmentBadge(adjustment.adjustmentType)}
+                      <Badge variant="outline">{adjustment.warehouseName}</Badge>
                     </TableCell>
-                    <TableCell className="font-mono">{adjustment.quantity}</TableCell>
-                    <TableCell className="font-mono">{adjustment.previousQuantity}</TableCell>
-                    <TableCell className="font-mono font-medium">{adjustment.newQuantity}</TableCell>
-                    <TableCell className="capitalize">{adjustment.reason}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Badge className={adjustment.quantity >= 0 ? "bg-success/10 text-success border-success/20" : "bg-destructive/10 text-destructive border-destructive/20"}>
+                          {adjustment.quantity >= 0 ? '+' : ''}{adjustment.quantity} bags
+                        </Badge>
+                      </div>
+                    </TableCell>
+                    <TableCell className="capitalize">{adjustment.reason || '-'}</TableCell>
+                    <TableCell>{adjustment.staffName || 'Unknown'}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
