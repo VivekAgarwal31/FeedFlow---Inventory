@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, PackageCheck, Loader2, Trash2, Search, Eye } from 'lucide-react'
+import { Plus, PackageCheck, Loader2, Trash2, Search, Eye, Pencil } from 'lucide-react'
 import { deliveryAPI, purchaseOrderAPI, supplierAPI, warehouseAPI } from '../lib/api'
 import { formatCurrency, formatDate } from '../lib/utils'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
@@ -24,6 +24,9 @@ const DeliveryIn = () => {
     const [dialogOpen, setDialogOpen] = useState(false)
     const [viewDialogOpen, setViewDialogOpen] = useState(false)
     const [viewingDelivery, setViewingDelivery] = useState(null)
+    const [editDialogOpen, setEditDialogOpen] = useState(false)
+    const [editingDelivery, setEditingDelivery] = useState(null)
+    const [editForm, setEditForm] = useState({ items: [], notes: '' })
     const [submitting, setSubmitting] = useState(false)
     const [error, setError] = useState('')
     const [supplierSearch, setSupplierSearch] = useState('')
@@ -329,6 +332,79 @@ const DeliveryIn = () => {
     const viewDelivery = (delivery) => {
         setViewingDelivery(delivery)
         setViewDialogOpen(true)
+    }
+
+    const editDelivery = (delivery) => {
+        setEditingDelivery(delivery)
+        setEditForm({
+            items: delivery.items.map(item => ({ ...item })),
+            notes: delivery.notes || ''
+        })
+        setEditDialogOpen(true)
+    }
+
+    const handleEditItemChange = (index, field, value) => {
+        const updatedItems = [...editForm.items]
+        if (field === 'quantity') {
+            updatedItems[index].quantity = parseInt(value) || 0
+        } else if (field === 'costPrice') {
+            updatedItems[index].costPrice = parseFloat(value) || 0
+        }
+        updatedItems[index].total = updatedItems[index].quantity * updatedItems[index].costPrice
+        setEditForm({ ...editForm, items: updatedItems })
+    }
+
+    const calculateEditTotal = () => {
+        return editForm.items.reduce((sum, item) => sum + item.total, 0)
+    }
+
+    const handleEditSubmit = async () => {
+        if (!editingDelivery) return
+
+        if (editForm.items.length === 0) {
+            toast({
+                title: 'Validation Error',
+                description: 'At least one item is required',
+                variant: 'destructive'
+            })
+            return
+        }
+
+        for (const item of editForm.items) {
+            if (!item.itemName || !item.warehouseId || item.quantity <= 0) {
+                toast({
+                    title: 'Validation Error',
+                    description: 'All items must have name, warehouse, and positive quantity',
+                    variant: 'destructive'
+                })
+                return
+            }
+        }
+
+        try {
+            setSubmitting(true)
+            await deliveryAPI.updateIn(editingDelivery._id, {
+                items: editForm.items,
+                notes: editForm.notes
+            })
+
+            toast({
+                title: 'Success',
+                description: 'Receipt updated successfully'
+            })
+
+            setEditDialogOpen(false)
+            setEditingDelivery(null)
+            fetchData()
+        } catch (error) {
+            toast({
+                title: 'Error',
+                description: error.response?.data?.message || 'Failed to update receipt',
+                variant: 'destructive'
+            })
+        } finally {
+            setSubmitting(false)
+        }
     }
 
     const totalPages = Math.ceil(deliveries.length / itemsPerPage)
@@ -690,6 +766,14 @@ const DeliveryIn = () => {
                                                     <Button
                                                         variant="ghost"
                                                         size="sm"
+                                                        onClick={() => editDelivery(delivery)}
+                                                        className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                                    >
+                                                        <Pencil className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
                                                         onClick={() => viewDelivery(delivery)}
                                                         className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                                                     >
@@ -791,6 +875,128 @@ const DeliveryIn = () => {
                                     <p className="mt-1">{viewingDelivery.notes}</p>
                                 </div>
                             )}
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
+
+            {/* Edit Delivery In Dialog */}
+            <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Edit Delivery In - GRN #{editingDelivery?.grnNumber}</DialogTitle>
+                        <DialogDescription>
+                            Update receipt quantities and prices (affects stock and financials)
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {editingDelivery && (
+                        <div className="space-y-6">
+                            {/* Read-only Order Info */}
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-muted/50 rounded-lg">
+                                <div>
+                                    <Label className="text-muted-foreground">Purchase Order</Label>
+                                    <p className="font-mono font-medium">#{editingDelivery.purchaseOrderNumber}</p>
+                                </div>
+                                <div>
+                                    <Label className="text-muted-foreground">Supplier</Label>
+                                    <p className="font-medium">{editingDelivery.supplierName}</p>
+                                </div>
+                                <div>
+                                    <Label className="text-muted-foreground">Receipt Date</Label>
+                                    <p className="font-medium">{formatDate(editingDelivery.receiptDate)}</p>
+                                </div>
+                            </div>
+
+                            {/* Editable Items */}
+                            <div>
+                                <h3 className="font-semibold mb-3">Items</h3>
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Item</TableHead>
+                                            <TableHead>Warehouse</TableHead>
+                                            <TableHead>Quantity</TableHead>
+                                            <TableHead>Cost Price</TableHead>
+                                            <TableHead>Total</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {editForm.items.map((item, index) => (
+                                            <TableRow key={index}>
+                                                <TableCell className="font-medium">{item.itemName}</TableCell>
+                                                <TableCell className="text-muted-foreground">{item.warehouseName}</TableCell>
+                                                <TableCell>
+                                                    <Input
+                                                        type="number"
+                                                        min="0"
+                                                        step="1"
+                                                        value={item.quantity}
+                                                        onChange={(e) => handleEditItemChange(index, 'quantity', e.target.value)}
+                                                        className="w-24"
+                                                    />
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Input
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.01"
+                                                        value={item.costPrice}
+                                                        onChange={(e) => handleEditItemChange(index, 'costPrice', e.target.value)}
+                                                        className="w-28"
+                                                    />
+                                                </TableCell>
+                                                <TableCell className="font-mono font-medium">
+                                                    {formatCurrency(item.total)}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                        <TableRow>
+                                            <TableCell colSpan={3} className="font-semibold">Total Amount</TableCell>
+                                            <TableCell className="font-mono font-bold text-lg" colSpan={2}>
+                                                {formatCurrency(calculateEditTotal())}
+                                            </TableCell>
+                                        </TableRow>
+                                    </TableBody>
+                                </Table>
+                            </div>
+
+                            {/* Notes */}
+                            <div className="space-y-2">
+                                <Label htmlFor="edit-notes">Notes</Label>
+                                <Input
+                                    id="edit-notes"
+                                    placeholder="Additional notes..."
+                                    value={editForm.notes}
+                                    onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                                />
+                            </div>
+
+                            {/* Actions */}
+                            <div className="flex gap-3 pt-4">
+                                <Button
+                                    onClick={handleEditSubmit}
+                                    disabled={submitting}
+                                    className="flex-1"
+                                >
+                                    {submitting ? (
+                                        <>
+                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            Updating...
+                                        </>
+                                    ) : (
+                                        `Update Receipt - ${formatCurrency(calculateEditTotal())}`
+                                    )}
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => setEditDialogOpen(false)}
+                                    disabled={submitting}
+                                >
+                                    Cancel
+                                </Button>
+                            </div>
                         </div>
                     )}
                 </DialogContent>

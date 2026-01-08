@@ -328,6 +328,22 @@ router.put('/:id', authenticate, requirePermission('canManageSales'), async (req
 
         const { clientName, clientPhone, clientEmail, items, wages, totalAmount, paymentTerms, dueDate, notes } = req.body;
 
+        // Validate items if provided
+        if (items) {
+            if (!Array.isArray(items) || items.length === 0) {
+                return res.status(400).json({ message: 'At least one item is required' });
+            }
+
+            for (const item of items) {
+                if (!item.itemId || !item.itemName || !item.quantity || item.quantity <= 0) {
+                    return res.status(400).json({ message: 'All items must have itemId, itemName, and positive quantity' });
+                }
+                if (item.sellingPrice < 0) {
+                    return res.status(400).json({ message: 'Selling price cannot be negative' });
+                }
+            }
+        }
+
         if (clientName) salesOrder.clientName = clientName;
         if (clientPhone) salesOrder.clientPhone = clientPhone;
         if (clientEmail) salesOrder.clientEmail = clientEmail;

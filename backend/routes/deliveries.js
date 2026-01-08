@@ -379,6 +379,186 @@ router.delete('/out/:id', authenticate, requirePermission('canManageSales'), asy
     }
 });
 
+// Update delivery out (edit delivery)
+router.put('/out/:id', authenticate, requirePermission('canManageSales'), async (req, res) => {
+    try {
+        const companyId = req.user.companyId?._id || req.user.companyId;
+
+        const { items, wages, notes } = req.body;
+
+        // Validate items
+        if (!items || items.length === 0) {
+            return res.status(400).json({ message: 'At least one item is required' });
+        }
+
+        for (const item of items) {
+            if (!item.itemName || !item.warehouseId || item.quantity <= 0) {
+                return res.status(400).json({ message: 'All items must have name, warehouse, and positive quantity' });
+            }
+        }
+
+        // Find existing delivery
+        const delivery = await DeliveryOut.findOne({
+            _id: req.params.id,
+            companyId
+        });
+
+        if (!delivery) {
+            return res.status(404).json({ message: 'Delivery not found' });
+        }
+
+        // Get sales order
+        const salesOrder = await SalesOrder.findById(delivery.salesOrderId);
+        if (!salesOrder) {
+            return res.status(404).json({ message: 'Sales order not found' });
+        }
+
+        const oldItems = delivery.items;
+        const oldTotalAmount = delivery.totalAmount;
+        const newTotalAmount = items.reduce((sum, item) => sum + item.total, 0) + (wages || 0);
+
+        // Step 1: Revert old stock changes (add back quantities)
+        for (const item of oldItems) {
+            const stockItem = await StockItem.findOne({
+                itemName: item.itemName,
+                warehouseId: item.warehouseId,
+                companyId
+            });
+
+            if (stockItem) {
+                stockItem.quantity += item.quantity;
+                await stockItem.save();
+            }
+        }
+
+        // Step 2: Revert old delivered quantities in sales order
+        const oldItemQuantities = {};
+        for (const item of oldItems) {
+            if (!oldItemQuantities[item.itemId]) {
+                oldItemQuantities[item.itemId] = 0;
+            }
+            oldItemQuantities[item.itemId] += item.quantity;
+        }
+
+        for (const [itemId, totalQty] of Object.entries(oldItemQuantities)) {
+            const orderItem = salesOrder.items.find(i => i.itemId.toString() === itemId.toString());
+            if (orderItem) {
+                orderItem.deliveredQuantity = Math.max(0, orderItem.deliveredQuantity - totalQty);
+            }
+        }
+
+        // Step 3: Apply new stock changes (subtract new quantities)
+        for (const item of items) {
+            const stockItem = await StockItem.findOne({
+                itemName: item.itemName,
+                warehouseId: item.warehouseId,
+                companyId
+            });
+
+            if (!stockItem) {
+                return res.status(404).json({ message: `Stock item ${item.itemName} not found in warehouse` });
+            }
+
+            // Allow negative stock - no validation
+            stockItem.quantity -= item.quantity;
+            await stockItem.save();
+        }
+
+        // Step 4: Apply new delivered quantities in sales order
+        const newItemQuantities = {};
+        for (const item of items) {
+            if (!newItemQuantities[item.itemId]) {
+                newItemQuantities[item.itemId] = 0;
+            }
+            newItemQuantities[item.itemId] += item.quantity;
+        }
+
+        for (const [itemId, totalQty] of Object.entries(newItemQuantities)) {
+            const orderItem = salesOrder.items.find(i => i.itemId.toString() === itemId.toString());
+            if (orderItem) {
+                orderItem.deliveredQuantity += totalQty;
+            }
+        }
+
+        // Step 5: Update sales order status
+        salesOrder.updateOrderStatus();
+        await salesOrder.save();
+
+        // Step 6: Update client financials
+        if (delivery.clientId) {
+            const client = await Client.findById(delivery.clientId);
+            if (client) {
+                // Revert old amount
+                client.totalPurchases = Math.max(0, (client.totalPurchases || 0) - oldTotalAmount);
+                client.totalRevenue = Math.max(0, (client.totalRevenue || 0) - oldTotalAmount);
+
+                // Apply new amount
+                client.totalPurchases = (client.totalPurchases || 0) + newTotalAmount;
+                client.totalRevenue = (client.totalRevenue || 0) + newTotalAmount;
+
+                await client.save();
+            }
+        }
+
+        // Step 7: Delete old stock transaction
+        await StockTransaction.deleteMany({
+            referenceId: delivery._id,
+            referenceModel: 'DeliveryOut'
+        });
+
+        // Step 8: Create new stock transaction
+        const uniqueWarehouses = new Set(items.map(item => item.warehouseId));
+        const totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0);
+
+        const warehouseIds = [...uniqueWarehouses];
+        const warehouses = await Warehouse.find({ _id: { $in: warehouseIds } }).select('_id name').lean();
+        const warehouseMap = new Map(warehouses.map(w => [w._id.toString(), w.name]));
+
+        const warehouseNames = [...warehouseMap.values()];
+        const warehouseSummary = warehouseNames.length === 1
+            ? warehouseNames[0]
+            : `${warehouseNames.length} warehouses`;
+
+        const transaction = new StockTransaction({
+            companyId,
+            type: 'delivery_out',
+            items: items.map(item => ({
+                itemId: item.itemId,
+                itemName: item.itemName,
+                quantity: item.quantity,
+                warehouseId: item.warehouseId,
+                warehouseName: warehouseMap.get(item.warehouseId.toString()) || 'Unknown'
+            })),
+            warehouses: uniqueWarehouses.size,
+            warehouseName: warehouseSummary,
+            quantity: totalQuantity,
+            referenceId: delivery._id,
+            referenceModel: 'DeliveryOut',
+            reason: `Delivery to ${salesOrder.clientName} (SO #${salesOrder.orderNumber})`,
+            transactionDate: delivery.deliveryDate,
+            performedBy: req.user._id,
+            staffName: req.user.fullName
+        });
+        await transaction.save();
+
+        // Step 9: Update delivery record
+        delivery.items = items;
+        delivery.wages = wages || 0;
+        delivery.totalAmount = newTotalAmount;
+        delivery.notes = notes || '';
+        await delivery.save();
+
+        res.json({
+            message: 'Delivery updated successfully',
+            delivery,
+            salesOrderStatus: salesOrder.orderStatus
+        });
+    } catch (error) {
+        console.error('Update delivery out error:', error);
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+});
+
 // ==================== DELIVERY IN (Purchase) ====================
 
 // Get all delivery ins with pagination
@@ -748,6 +928,209 @@ router.delete('/in/:id', authenticate, requirePermission('canManagePurchases'), 
     } catch (error) {
         console.error('Delete delivery in error:', error);
         res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// Update delivery in (edit receipt)
+router.put('/in/:id', authenticate, requirePermission('canManagePurchases'), async (req, res) => {
+    try {
+        const companyId = req.user.companyId?._id || req.user.companyId;
+
+        const { items, notes } = req.body;
+
+        // Validate items
+        if (!items || items.length === 0) {
+            return res.status(400).json({ message: 'At least one item is required' });
+        }
+
+        for (const item of items) {
+            if (!item.itemName || !item.warehouseId || item.quantity <= 0) {
+                return res.status(400).json({ message: 'All items must have name, warehouse, and positive quantity' });
+            }
+        }
+
+        // Find existing delivery
+        const delivery = await DeliveryIn.findOne({
+            _id: req.params.id,
+            companyId
+        });
+
+        if (!delivery) {
+            return res.status(404).json({ message: 'Delivery not found' });
+        }
+
+        // Get purchase order
+        const purchaseOrder = await PurchaseOrder.findById(delivery.purchaseOrderId);
+        if (!purchaseOrder) {
+            return res.status(404).json({ message: 'Purchase order not found' });
+        }
+
+        const oldItems = delivery.items;
+        const oldTotalAmount = delivery.totalAmount;
+        const newTotalAmount = items.reduce((sum, item) => sum + item.total, 0);
+
+        // Step 1: Revert old stock changes (subtract old quantities)
+        for (const item of oldItems) {
+            const stockItem = await StockItem.findOne({
+                itemName: item.itemName,
+                warehouseId: item.warehouseId,
+                companyId
+            });
+
+            if (stockItem) {
+                stockItem.quantity = Math.max(0, stockItem.quantity - item.quantity);
+                await stockItem.save();
+            }
+        }
+
+        // Step 2: Revert old received quantities in purchase order
+        const oldItemQuantities = {};
+        for (const item of oldItems) {
+            if (!oldItemQuantities[item.itemId]) {
+                oldItemQuantities[item.itemId] = 0;
+            }
+            oldItemQuantities[item.itemId] += item.quantity;
+        }
+
+        for (const [itemId, totalQty] of Object.entries(oldItemQuantities)) {
+            const orderItem = purchaseOrder.items.find(i => i.itemId.toString() === itemId.toString());
+            if (orderItem) {
+                orderItem.receivedQuantity = Math.max(0, orderItem.receivedQuantity - totalQty);
+            }
+        }
+
+        // Step 3: Apply new stock changes (add new quantities)
+        for (const item of items) {
+            // Get original item details for bagSize
+            const originalItem = await StockItem.findOne({
+                _id: item.itemId,
+                companyId
+            }).select('itemName bagSize category itemCategory costPrice sellingPrice lowStockAlert').lean();
+
+            if (!originalItem) {
+                return res.status(404).json({ message: `Original stock item not found for ${item.itemName}` });
+            }
+
+            // Find or create stock item in target warehouse
+            let stockItem = await StockItem.findOne({
+                itemName: originalItem.itemName,
+                bagSize: originalItem.bagSize,
+                warehouseId: item.warehouseId,
+                companyId
+            });
+
+            if (stockItem) {
+                stockItem.quantity += item.quantity;
+                await stockItem.save();
+            } else {
+                // Create new stock item in this warehouse
+                stockItem = new StockItem({
+                    companyId,
+                    warehouseId: item.warehouseId,
+                    itemName: originalItem.itemName,
+                    bagSize: originalItem.bagSize,
+                    category: originalItem.category || 'finished_product',
+                    itemCategory: originalItem.itemCategory || '',
+                    quantity: item.quantity,
+                    costPrice: item.costPrice || originalItem.costPrice || 0,
+                    sellingPrice: originalItem.sellingPrice || 0,
+                    lowStockAlert: originalItem.lowStockAlert || 10
+                });
+                await stockItem.save();
+            }
+        }
+
+        // Step 4: Apply new received quantities in purchase order
+        const newItemQuantities = {};
+        for (const item of items) {
+            if (!newItemQuantities[item.itemId]) {
+                newItemQuantities[item.itemId] = 0;
+            }
+            newItemQuantities[item.itemId] += item.quantity;
+        }
+
+        for (const [itemId, totalQty] of Object.entries(newItemQuantities)) {
+            const orderItem = purchaseOrder.items.find(i => i.itemId.toString() === itemId.toString());
+            if (orderItem) {
+                orderItem.receivedQuantity += totalQty;
+            }
+        }
+
+        // Step 5: Update purchase order status
+        purchaseOrder.updateOrderStatus();
+        await purchaseOrder.save();
+
+        // Step 6: Update supplier financials
+        if (delivery.supplierId) {
+            const supplier = await Supplier.findById(delivery.supplierId);
+            if (supplier) {
+                // Revert old amount
+                supplier.totalPurchases = Math.max(0, (supplier.totalPurchases || 0) - oldTotalAmount);
+                supplier.currentPayable = Math.max(0, (supplier.currentPayable || 0) - oldTotalAmount);
+
+                // Apply new amount
+                supplier.totalPurchases = (supplier.totalPurchases || 0) + newTotalAmount;
+                supplier.currentPayable = (supplier.currentPayable || 0) + newTotalAmount;
+
+                await supplier.save();
+            }
+        }
+
+        // Step 7: Delete old stock transaction
+        await StockTransaction.deleteMany({
+            referenceId: delivery._id,
+            referenceModel: 'DeliveryIn'
+        });
+
+        // Step 8: Create new stock transaction
+        const uniqueWarehouses = new Set(items.map(item => item.warehouseId));
+        const totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0);
+
+        const warehouseIds = [...uniqueWarehouses];
+        const warehouses = await Warehouse.find({ _id: { $in: warehouseIds } }).select('_id name').lean();
+        const warehouseMap = new Map(warehouses.map(w => [w._id.toString(), w.name]));
+
+        const warehouseNames = [...warehouseMap.values()];
+        const warehouseSummary = warehouseNames.length === 1
+            ? warehouseNames[0]
+            : `${warehouseNames.length} warehouses`;
+
+        const transaction = new StockTransaction({
+            companyId,
+            type: 'delivery_in',
+            items: items.map(item => ({
+                itemId: item.itemId,
+                itemName: item.itemName,
+                quantity: item.quantity,
+                warehouseId: item.warehouseId,
+                warehouseName: warehouseMap.get(item.warehouseId.toString()) || 'Unknown'
+            })),
+            warehouses: uniqueWarehouses.size,
+            warehouseName: warehouseSummary,
+            quantity: totalQuantity,
+            referenceId: delivery._id,
+            referenceModel: 'DeliveryIn',
+            reason: `Receipt from ${purchaseOrder.supplierName} (PO #${purchaseOrder.orderNumber})`,
+            transactionDate: delivery.receiptDate,
+            performedBy: req.user._id,
+            staffName: req.user.fullName
+        });
+        await transaction.save();
+
+        // Step 9: Update delivery record
+        delivery.items = items;
+        delivery.totalAmount = newTotalAmount;
+        delivery.notes = notes || '';
+        await delivery.save();
+
+        res.json({
+            message: 'Delivery in updated successfully',
+            delivery,
+            purchaseOrderStatus: purchaseOrder.orderStatus
+        });
+    } catch (error) {
+        console.error('Update delivery in error:', error);
+        res.status(500).json({ message: 'Server error', error: error.message });
     }
 });
 

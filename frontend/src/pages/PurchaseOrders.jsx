@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, ShoppingCart, Loader2, Trash2, Search, Eye, TrendingDown } from 'lucide-react'
+import { Plus, ShoppingCart, Loader2, Trash2, Search, Eye, TrendingDown, Pencil } from 'lucide-react'
 import { purchaseOrderAPI, stockAPI, supplierAPI } from '../lib/api'
 import { formatCurrency, formatDate } from '../lib/utils'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
@@ -28,6 +28,9 @@ const PurchaseOrders = () => {
     const [showSupplierDropdown, setShowSupplierDropdown] = useState(false)
     const [selectedOrder, setSelectedOrder] = useState(null)
     const [detailsDialogOpen, setDetailsDialogOpen] = useState(false)
+    const [editDialogOpen, setEditDialogOpen] = useState(false)
+    const [editingOrder, setEditingOrder] = useState(null)
+    const [editForm, setEditForm] = useState({ items: [], notes: '' })
 
     const [currentPage, setCurrentPage] = useState(1)
     const itemsPerPage = 12
@@ -265,6 +268,42 @@ const PurchaseOrders = () => {
             case 'partially_received': return 'secondary'
             case 'cancelled': return 'destructive'
             default: return 'outline'
+        }
+    }
+
+    const editOrder = (order) => {
+        if (order.orderStatus === 'completed') {
+            toast({ title: 'Cannot Edit', description: 'Completed orders cannot be edited', variant: 'destructive' })
+            return
+        }
+        setEditingOrder(order)
+        setEditForm({ items: order.items.map(item => ({ ...item })), notes: order.notes || '' })
+        setEditDialogOpen(true)
+    }
+
+    const handleEditItemChange = (index, field, value) => {
+        const updatedItems = [...editForm.items]
+        if (field === 'quantity') updatedItems[index].quantity = parseInt(value) || 0
+        else if (field === 'costPrice') updatedItems[index].costPrice = parseFloat(value) || 0
+        updatedItems[index].total = updatedItems[index].quantity * updatedItems[index].costPrice
+        setEditForm({ ...editForm, items: updatedItems })
+    }
+
+    const calculateEditTotal = () => editForm.items.reduce((sum, item) => sum + item.total, 0)
+
+    const handleEditSubmit = async () => {
+        if (!editingOrder || editForm.items.length === 0) return
+        try {
+            setSubmitting(true)
+            await purchaseOrderAPI.update(editingOrder._id, { items: editForm.items, totalAmount: calculateEditTotal(), notes: editForm.notes })
+            toast({ title: 'Success', description: 'Purchase order updated successfully' })
+            setEditDialogOpen(false)
+            setEditingOrder(null)
+            fetchData()
+        } catch (error) {
+            toast({ title: 'Error', description: error.response?.data?.message || 'Failed to update order', variant: 'destructive' })
+        } finally {
+            setSubmitting(false)
         }
     }
 
@@ -588,6 +627,16 @@ const PurchaseOrders = () => {
                                             </TableCell>
                                             <TableCell>
                                                 <div className="flex gap-2">
+                                                    {order.orderStatus !== 'completed' && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => editOrder(order)}
+                                                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                                        >
+                                                            <Pencil className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
                                                     <Button
                                                         variant="ghost"
                                                         size="sm"
@@ -714,6 +763,38 @@ const PurchaseOrders = () => {
                                     <p className="mt-1">{viewingOrder.notes}</p>
                                 </div>
                             )}
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Edit Purchase Order - #{editingOrder?.orderNumber}</DialogTitle>
+                        <DialogDescription>Update order quantities and prices</DialogDescription>
+                    </DialogHeader>
+                    {editingOrder && (
+                        <div className="space-y-6">
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-muted/50 rounded-lg">
+                                <div><Label className="text-muted-foreground">Order #</Label><p className="font-mono font-medium">#{editingOrder.orderNumber}</p></div>
+                                <div><Label className="text-muted-foreground">Supplier</Label><p className="font-medium">{editingOrder.supplierName}</p></div>
+                                <div><Label className="text-muted-foreground">Date</Label><p className="font-medium">{formatDate(editingOrder.orderDate)}</p></div>
+                            </div>
+                            <div><h3 className="font-semibold mb-3">Items</h3>
+                                <Table>
+                                    <TableHeader><TableRow><TableHead>Item</TableHead><TableHead>Quantity</TableHead><TableHead>Cost Price</TableHead><TableHead>Total</TableHead></TableRow></TableHeader>
+                                    <TableBody>
+                                        {editForm.items.map((item, idx) => (<TableRow key={idx}><TableCell className="font-medium">{item.itemName}</TableCell><TableCell><Input type="number" min="0" value={item.quantity} onChange={(e) => handleEditItemChange(idx, 'quantity', e.target.value)} className="w-24" /></TableCell><TableCell><Input type="number" min="0" step="0.01" value={item.costPrice} onChange={(e) => handleEditItemChange(idx, 'costPrice', e.target.value)} className="w-28" /></TableCell><TableCell className="font-mono font-medium">{formatCurrency(item.total)}</TableCell></TableRow>))}
+                                        <TableRow><TableCell colSpan={2} className="font-semibold">Total</TableCell><TableCell className="font-mono font-bold text-lg" colSpan={2}>{formatCurrency(calculateEditTotal())}</TableCell></TableRow>
+                                    </TableBody>
+                                </Table>
+                            </div>
+                            <div className="space-y-2"><Label>Notes</Label><Input placeholder="Notes..." value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} /></div>
+                            <div className="flex gap-3 pt-4">
+                                <Button onClick={handleEditSubmit} disabled={submitting} className="flex-1">{submitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Updating...</> : `Update - ${formatCurrency(calculateEditTotal())}`}</Button>
+                                <Button variant="outline" onClick={() => setEditDialogOpen(false)} disabled={submitting}>Cancel</Button>
+                            </div>
                         </div>
                     )}
                 </DialogContent>

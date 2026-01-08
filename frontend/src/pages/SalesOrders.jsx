@@ -27,6 +27,9 @@ const SalesOrders = () => {
     const [showClientDropdown, setShowClientDropdown] = useState(false)
     const [selectedOrder, setSelectedOrder] = useState(null)
     const [detailsDialogOpen, setDetailsDialogOpen] = useState(false)
+    const [editDialogOpen, setEditDialogOpen] = useState(false)
+    const [editingOrder, setEditingOrder] = useState(null)
+    const [editForm, setEditForm] = useState({ items: [], wages: 0, notes: '' })
 
     const [currentPage, setCurrentPage] = useState(1)
     const itemsPerPage = 12
@@ -297,6 +300,81 @@ const SalesOrders = () => {
             case 'partially_delivered': return 'secondary'
             case 'cancelled': return 'destructive'
             default: return 'outline'
+        }
+    }
+
+    const editOrder = (order) => {
+        if (order.orderStatus === 'completed') {
+            toast({
+                title: 'Cannot Edit',
+                description: 'Completed orders cannot be edited',
+                variant: 'destructive'
+            })
+            return
+        }
+        setEditingOrder(order)
+        setEditForm({
+            items: order.items.map(item => ({ ...item })),
+            wages: order.wages || 0,
+            notes: order.notes || ''
+        })
+        setEditDialogOpen(true)
+    }
+
+    const handleEditItemChange = (index, field, value) => {
+        const updatedItems = [...editForm.items]
+        if (field === 'quantity') {
+            updatedItems[index].quantity = parseInt(value) || 0
+        } else if (field === 'sellingPrice') {
+            updatedItems[index].sellingPrice = parseFloat(value) || 0
+        }
+        updatedItems[index].total = updatedItems[index].quantity * updatedItems[index].sellingPrice
+        setEditForm({ ...editForm, items: updatedItems })
+    }
+
+    const calculateEditTotal = () => {
+        const itemsTotal = editForm.items.reduce((sum, item) => sum + item.total, 0)
+        const wages = parseFloat(editForm.wages) || 0
+        return itemsTotal + wages
+    }
+
+    const handleEditSubmit = async () => {
+        if (!editingOrder) return
+
+        if (editForm.items.length === 0) {
+            toast({
+                title: 'Validation Error',
+                description: 'At least one item is required',
+                variant: 'destructive'
+            })
+            return
+        }
+
+        try {
+            setSubmitting(true)
+            await salesOrderAPI.update(editingOrder._id, {
+                items: editForm.items,
+                wages: editForm.wages,
+                totalAmount: calculateEditTotal(),
+                notes: editForm.notes
+            })
+
+            toast({
+                title: 'Success',
+                description: 'Sales order updated successfully'
+            })
+
+            setEditDialogOpen(false)
+            setEditingOrder(null)
+            fetchData()
+        } catch (error) {
+            toast({
+                title: 'Error',
+                description: error.response?.data?.message || 'Failed to update order',
+                variant: 'destructive'
+            })
+        } finally {
+            setSubmitting(false)
         }
     }
 
@@ -689,6 +767,16 @@ const SalesOrders = () => {
                                                             <Eye className="h-4 w-4" />
                                                         </Button>
                                                     )}
+                                                    {order.orderStatus !== 'completed' && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => editOrder(order)}
+                                                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                                        >
+                                                            <Edit className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
                                                     <Button
                                                         variant="ghost"
                                                         size="sm"
@@ -821,6 +909,140 @@ const SalesOrders = () => {
                                     <p className="mt-1">{selectedOrder.notes}</p>
                                 </div>
                             )}
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
+
+            {/* Edit Sales Order Dialog */}
+            <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Edit Sales Order - #{editingOrder?.orderNumber}</DialogTitle>
+                        <DialogDescription>
+                            Update order quantities and prices (preserves delivery progress)
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {editingOrder && (
+                        <div className="space-y-6">
+                            {/* Read-only Order Info */}
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-muted/50 rounded-lg">
+                                <div>
+                                    <Label className="text-muted-foreground">Order Number</Label>
+                                    <p className="font-mono font-medium">#{editingOrder.orderNumber}</p>
+                                </div>
+                                <div>
+                                    <Label className="text-muted-foreground">Customer</Label>
+                                    <p className="font-medium">{editingOrder.clientName}</p>
+                                </div>
+                                <div>
+                                    <Label className="text-muted-foreground">Order Date</Label>
+                                    <p className="font-medium">{formatDate(editingOrder.orderDate)}</p>
+                                </div>
+                            </div>
+
+                            {/* Editable Items */}
+                            <div>
+                                <h3 className="font-semibold mb-3">Items</h3>
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Item</TableHead>
+                                            <TableHead>Quantity</TableHead>
+                                            <TableHead>Selling Price</TableHead>
+                                            <TableHead>Total</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {editForm.items.map((item, index) => (
+                                            <TableRow key={index}>
+                                                <TableCell className="font-medium">{item.itemName}</TableCell>
+                                                <TableCell>
+                                                    <Input
+                                                        type="number"
+                                                        min="0"
+                                                        step="1"
+                                                        value={item.quantity}
+                                                        onChange={(e) => handleEditItemChange(index, 'quantity', e.target.value)}
+                                                        className="w-24"
+                                                    />
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Input
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.01"
+                                                        value={item.sellingPrice}
+                                                        onChange={(e) => handleEditItemChange(index, 'sellingPrice', e.target.value)}
+                                                        className="w-28"
+                                                    />
+                                                </TableCell>
+                                                <TableCell className="font-mono font-medium">
+                                                    {formatCurrency(item.total)}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                        <TableRow>
+                                            <TableCell colSpan={2} className="font-medium">Wages</TableCell>
+                                            <TableCell>
+                                                <Input
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.01"
+                                                    value={editForm.wages}
+                                                    onChange={(e) => setEditForm({ ...editForm, wages: e.target.value })}
+                                                    className="w-28"
+                                                />
+                                            </TableCell>
+                                            <TableCell></TableCell>
+                                        </TableRow>
+                                        <TableRow>
+                                            <TableCell colSpan={2} className="font-semibold">Total Amount</TableCell>
+                                            <TableCell className="font-mono font-bold text-lg" colSpan={2}>
+                                                {formatCurrency(calculateEditTotal())}
+                                            </TableCell>
+                                        </TableRow>
+                                    </TableBody>
+                                </Table>
+                            </div>
+
+                            {/* Notes */}
+                            <div className="space-y-2">
+                                <Label htmlFor="edit-notes">Notes</Label>
+                                <Input
+                                    id="edit-notes"
+                                    placeholder="Additional notes..."
+                                    value={editForm.notes}
+                                    onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                                />
+                            </div>
+
+                            {/* Actions */}
+                            <div className="flex gap-3 pt-4">
+                                <Button
+                                    onClick={handleEditSubmit}
+                                    disabled={submitting}
+                                    className="flex-1"
+                                >
+                                    {submitting ? (
+                                        <>
+                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            Updating...
+                                        </>
+                                    ) : (
+                                        `Update Order - ${formatCurrency(calculateEditTotal())}`
+                                    )}
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => setEditDialogOpen(false)}
+                                    disabled={submitting}
+                                >
+                                    Cancel
+                                </Button>
+                            </div>
                         </div>
                     )}
                 </DialogContent>

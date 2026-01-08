@@ -133,12 +133,14 @@ export const deliveryAPI = {
   getAllOut: (params) => api.get('/deliveries/out', { params }),
   getOutById: (id) => api.get(`/deliveries/out/${id}`),
   createOut: (data) => api.post('/deliveries/out', data),
+  updateOut: (id, data) => api.put(`/deliveries/out/${id}`, data),
   deleteOut: (id) => api.delete(`/deliveries/out/${id}`),
 
   // Delivery In (Purchase)
   getAllIn: (params) => api.get('/deliveries/in', { params }),
   getInById: (id) => api.get(`/deliveries/in/${id}`),
   createIn: (data) => api.post('/deliveries/in', data),
+  updateIn: (id, data) => api.put(`/deliveries/in/${id}`, data),
   deleteIn: (id) => api.delete(`/deliveries/in/${id}`)
 }
 

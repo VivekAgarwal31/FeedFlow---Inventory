@@ -240,6 +240,22 @@ router.put('/:id', authenticate, requirePermission('canManagePurchases'), async 
 
         const { supplierName, items, totalAmount, expectedDeliveryDate, dueDate, notes } = req.body;
 
+        // Validate items if provided
+        if (items) {
+            if (!Array.isArray(items) || items.length === 0) {
+                return res.status(400).json({ message: 'At least one item is required' });
+            }
+
+            for (const item of items) {
+                if (!item.itemId || !item.itemName || !item.quantity || item.quantity <= 0) {
+                    return res.status(400).json({ message: 'All items must have itemId, itemName, and positive quantity' });
+                }
+                if (item.costPrice < 0) {
+                    return res.status(400).json({ message: 'Cost price cannot be negative' });
+                }
+            }
+        }
+
         if (supplierName) purchaseOrder.supplierName = supplierName;
         if (items) {
             // Preserve received quantities
