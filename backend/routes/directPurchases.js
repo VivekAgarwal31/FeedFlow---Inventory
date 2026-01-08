@@ -3,7 +3,7 @@ import { body, validationResult } from 'express-validator';
 import DirectPurchase from '../models/DirectPurchase.js';
 import { authenticate } from '../middleware/auth.js';
 import { requirePermission } from '../middleware/rbac.js';
-import { createDirectPurchase, deleteDirectPurchase } from '../utils/directPurchaseService.js';
+import { createDirectPurchase, updateDirectPurchase, deleteDirectPurchase } from '../utils/directPurchaseService.js';
 
 const router = express.Router();
 
@@ -120,6 +120,45 @@ router.post(
             res.status(201).json(result);
         } catch (error) {
             console.error('Create direct purchase error:', error);
+            res.status(500).json({ message: error.message || 'Server error' });
+        }
+    }
+);
+
+// Update direct purchase
+router.put(
+    '/:id',
+    authenticate,
+    requirePermission('canManagePurchases'),
+    [
+        body('items').isArray({ min: 1 }).withMessage('At least one item is required'),
+        body('items.*.itemName').notEmpty().withMessage('Item name is required'),
+        body('items.*.warehouseId').notEmpty().withMessage('Warehouse is required'),
+        body('items.*.warehouseName').notEmpty().withMessage('Warehouse name is required'),
+        body('items.*.quantity').isFloat({ min: 0.01 }).withMessage('Valid quantity is required'),
+        body('items.*.costPrice').isFloat({ min: 0 }).withMessage('Valid cost price is required')
+    ],
+    async (req, res) => {
+        try {
+            const errors = validationResult(req);
+            if (!errors.isEmpty()) {
+                return res.status(400).json({ errors: errors.array() });
+            }
+
+            const companyId = req.user.companyId?._id || req.user.companyId;
+            const userId = req.user._id;
+            const purchaseId = req.params.id;
+
+            const updateData = {
+                items: req.body.items,
+                notes: req.body.notes
+            };
+
+            const result = await updateDirectPurchase(purchaseId, updateData, companyId, userId);
+
+            res.json(result);
+        } catch (error) {
+            console.error('Update direct purchase error:', error);
             res.status(500).json({ message: error.message || 'Server error' });
         }
     }

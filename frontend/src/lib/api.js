@@ -82,6 +82,7 @@ export const saleAPI = {
 export const stockTransactionAPI = {
   getAll: (params) => api.get('/stock-transactions', { params }),
   getById: (id) => api.get(`/stock-transactions/${id}`),
+  update: (id, data) => api.put(`/stock-transactions/${id}`, data),
   delete: (id) => api.delete(`/stock-transactions/${id}`)
 }
 
@@ -222,6 +223,24 @@ export const adminSubscriptionAPI = {
   getUserSubscription: (userId) => api.get(`/admin/subscription/subscriptions/${userId}`),
   updateUserPlan: (userId, planType, notes) => api.put(`/admin/subscription/subscriptions/${userId}/plan`, { planType, notes }),
   getStats: () => api.get('/admin/subscription/subscriptions-stats')
+}
+
+// Direct Sale API
+export const directSaleAPI = {
+  getAll: (params) => api.get('/direct-sales', { params }),
+  getById: (id) => api.get(`/direct-sales/${id}`),
+  create: (data) => api.post('/direct-sales', data),
+  update: (id, data) => api.put(`/direct-sales/${id}`, data),
+  delete: (id) => api.delete(`/direct-sales/${id}`)
+}
+
+// Direct Purchase API
+export const directPurchaseAPI = {
+  getAll: (params) => api.get('/direct-purchases', { params }),
+  getById: (id) => api.get(`/direct-purchases/${id}`),
+  create: (data) => api.post('/direct-purchases', data),
+  update: (id, data) => api.put(`/direct-purchases/${id}`, data),
+  delete: (id) => api.delete(`/direct-purchases/${id}`)
 }
 
 // Payment API (Razorpay)

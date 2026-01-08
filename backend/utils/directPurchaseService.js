@@ -3,6 +3,8 @@ import StockItem from '../models/StockItem.js';
 import Supplier from '../models/Supplier.js';
 import DirectPurchase from '../models/DirectPurchase.js';
 import StockTransaction from '../models/StockTransaction.js';
+import JournalEntry from '../models/JournalEntry.js';
+import JournalLine from '../models/JournalLine.js';
 import { createJournalEntry, initializeDefaultAccounts } from './journalEntry.js';
 
 /**
@@ -337,6 +339,217 @@ export const deleteDirectPurchase = async (purchaseId, companyId) => {
         return {
             success: true,
             message: `Direct Purchase #${purchase.purchaseNumber} cancelled successfully`
+        };
+
+    } catch (error) {
+        await session.abortTransaction();
+        throw error;
+    } finally {
+        session.endSession();
+    }
+};
+
+/**
+ * Update a direct purchase transaction
+ * This reverts old inventory/payables and applies new ones
+ * @param {String} purchaseId - Purchase ID to update
+ * @param {Object} updateData - Updated purchase data
+ * @param {String} companyId - Company ID
+ * @param {String} userId - User performing the update
+ * @returns {Promise<Object>} Update result
+ */
+export const updateDirectPurchase = async (purchaseId, updateData, companyId, userId) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        // 1. Find the existing purchase
+        const existingPurchase = await DirectPurchase.findOne({ _id: purchaseId, companyId }).session(session);
+        if (!existingPurchase) {
+            throw new Error('Direct purchase not found');
+        }
+
+        if (existingPurchase.purchaseStatus === 'cancelled') {
+            throw new Error('Cannot edit a cancelled purchase');
+        }
+
+        const { items, notes } = updateData;
+
+        // 2. Validate new items and calculate new total
+        let newTotalAmount = 0;
+        const validatedItems = [];
+
+        for (const item of items) {
+            let stockItem = await StockItem.findOne({
+                itemName: item.itemName,
+                companyId,
+                warehouseId: item.warehouseId
+            }).session(session);
+
+            // Create stock item if it doesn't exist
+            if (!stockItem) {
+                stockItem = new StockItem({
+                    companyId,
+                    itemName: item.itemName,
+                    warehouseId: item.warehouseId,
+                    quantity: 0,
+                    costPrice: item.costPrice,
+                    sellingPrice: item.costPrice * 1.2
+                });
+                await stockItem.save({ session });
+            }
+
+            const lineTotal = item.quantity * item.costPrice;
+            newTotalAmount += lineTotal;
+
+            validatedItems.push({
+                itemId: stockItem._id,
+                itemName: stockItem.itemName,
+                warehouseId: item.warehouseId,
+                warehouseName: item.warehouseName,
+                quantity: item.quantity,
+                costPrice: item.costPrice,
+                total: lineTotal
+            });
+        }
+
+        // 3. Revert old inventory changes (subtract the quantities)
+        for (const item of existingPurchase.items) {
+            await StockItem.findOneAndUpdate(
+                { _id: item.itemId, companyId, warehouseId: item.warehouseId },
+                { $inc: { quantity: -item.quantity } },
+                { session }
+            );
+        }
+
+        // 4. Apply new inventory changes (add the new quantities)
+        for (const item of validatedItems) {
+            await StockItem.findOneAndUpdate(
+                { _id: item.itemId, companyId, warehouseId: item.warehouseId },
+                { $inc: { quantity: item.quantity } },
+                { session }
+            );
+        }
+
+        // 5. Update supplier payables (only for credit purchases)
+        if (existingPurchase.paymentType === 'credit') {
+            const oldAmount = existingPurchase.totalAmount;
+            const amountDifference = newTotalAmount - oldAmount;
+
+            await Supplier.findByIdAndUpdate(
+                existingPurchase.supplierId,
+                {
+                    $inc: {
+                        totalPurchases: amountDifference,
+                        currentPayable: amountDifference,
+                        totalPayable: amountDifference
+                    }
+                },
+                { session }
+            );
+        } else {
+            // For cash purchases, only update totalPurchases
+            const amountDifference = newTotalAmount - existingPurchase.totalAmount;
+            await Supplier.findByIdAndUpdate(
+                existingPurchase.supplierId,
+                {
+                    $inc: {
+                        totalPurchases: amountDifference
+                    }
+                },
+                { session }
+            );
+        }
+
+        // 6. Update the purchase record
+        existingPurchase.items = validatedItems;
+        existingPurchase.totalAmount = newTotalAmount;
+        if (notes !== undefined) {
+            existingPurchase.notes = notes;
+        }
+        await existingPurchase.save({ session });
+
+        // 7. Update stock transaction record
+        await StockTransaction.findOneAndUpdate(
+            { referenceId: purchaseId, referenceModel: 'DirectPurchase', companyId },
+            {
+                items: validatedItems.map(item => ({
+                    itemId: item.itemId,
+                    itemName: item.itemName,
+                    quantity: item.quantity,
+                    warehouseId: item.warehouseId,
+                    warehouseName: item.warehouseName
+                })),
+                quantity: validatedItems.reduce((sum, item) => sum + item.quantity, 0)
+            },
+            { session }
+        );
+
+        // 8. Update journal entry
+        try {
+            // Delete old journal entries
+            const oldJournalEntries = await JournalEntry.find({
+                referenceType: 'DirectPurchase',
+                referenceId: purchaseId,
+                companyId
+            }).session(session);
+
+            for (const entry of oldJournalEntries) {
+                await JournalLine.deleteMany({ journalEntryId: entry._id }, { session });
+                await JournalEntry.findByIdAndDelete(entry._id, { session });
+            }
+
+            // Create new journal entry
+            const supplier = await Supplier.findById(existingPurchase.supplierId).session(session);
+            const journalLines = existingPurchase.paymentType === 'cash' ? [
+                {
+                    accountCode: 'PURCHASE',
+                    debit: newTotalAmount,
+                    credit: 0,
+                    description: `Purchase from ${supplier.name}`
+                },
+                {
+                    accountCode: 'CASH',
+                    debit: 0,
+                    credit: newTotalAmount,
+                    description: `Cash payment to ${supplier.name}`
+                }
+            ] : [
+                {
+                    accountCode: 'PURCHASE',
+                    debit: newTotalAmount,
+                    credit: 0,
+                    description: `Purchase from ${supplier.name}`
+                },
+                {
+                    accountCode: 'AP',
+                    debit: 0,
+                    credit: newTotalAmount,
+                    description: `Payable to ${supplier.name}`
+                }
+            ];
+
+            await createJournalEntry({
+                companyId,
+                entryDate: existingPurchase.purchaseDate,
+                entryType: 'purchase_invoice',
+                referenceType: 'DirectPurchase',
+                referenceId: existingPurchase._id,
+                description: `Direct Purchase #${existingPurchase.purchaseNumber} from ${supplier.name} (${existingPurchase.paymentType}) - Updated`,
+                lines: journalLines,
+                createdBy: userId
+            });
+        } catch (journalError) {
+            console.error('Journal entry update error:', journalError);
+            // Don't fail the update if journal entry fails
+        }
+
+        await session.commitTransaction();
+
+        return {
+            success: true,
+            directPurchase: existingPurchase,
+            message: `Direct Purchase #${existingPurchase.purchaseNumber} updated successfully`
         };
 
     } catch (error) {

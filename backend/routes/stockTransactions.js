@@ -97,7 +97,141 @@ router.get('/:id', authenticate, async (req, res) => {
     }
 });
 
+// Update stock transaction
+router.put('/:id', authenticate, requirePermission('canManageInventory'), async (req, res) => {
+    try {
+        const companyId = req.user.companyId?._id || req.user.companyId;
+        const { quantity, notes } = req.body;
+
+        // Find the existing transaction
+        const transaction = await StockTransaction.findOne({
+            _id: req.params.id,
+            companyId
+        });
+
+        if (!transaction) {
+            return res.status(404).json({ message: 'Transaction not found' });
+        }
+
+        // Don't allow editing transactions linked to sales/purchases
+        if (transaction.referenceId && transaction.referenceModel) {
+            return res.status(400).json({
+                message: `Cannot edit this transaction. It is linked to a ${transaction.referenceModel}. Please edit the ${transaction.referenceModel} instead.`
+            });
+        }
+
+        // Validate quantity
+        if (quantity === undefined || quantity === null || quantity <= 0) {
+            return res.status(400).json({ message: 'Valid quantity is required' });
+        }
+
+        const oldQuantity = transaction.quantity;
+        const quantityDifference = quantity - oldQuantity;
+
+        // If quantity hasn't changed, just update notes
+        if (quantityDifference === 0) {
+            if (notes !== undefined) {
+                transaction.notes = notes;
+                await transaction.save();
+            }
+            return res.json({
+                message: 'Transaction updated successfully',
+                transaction
+            });
+        }
+
+        // Revert old quantity and apply new quantity
+        const stockItem = await StockItem.findById(transaction.itemId);
+        if (!stockItem) {
+            return res.status(404).json({ message: 'Stock item not found' });
+        }
+
+        switch (transaction.type) {
+            case 'stock_in':
+                // For stock_in: revert old (subtract), apply new (add)
+                // Net effect: add the difference
+                stockItem.quantity += quantityDifference;
+                break;
+
+            case 'stock_out':
+                // For stock_out: revert old (add back), apply new (subtract)
+                // Net effect: subtract the difference
+                const newStockAfterOut = stockItem.quantity - quantityDifference;
+                if (newStockAfterOut < 0) {
+                    return res.status(400).json({
+                        message: `Insufficient stock. Available: ${stockItem.quantity}, Required: ${Math.abs(quantityDifference)} more`
+                    });
+                }
+                stockItem.quantity = newStockAfterOut;
+                break;
+
+            case 'stock_adjust':
+                // For adjustments, the quantity can be positive (increase) or negative (decrease)
+                // Revert old adjustment and apply new one
+                stockItem.quantity -= oldQuantity; // Revert old
+                stockItem.quantity += quantity; // Apply new
+
+                if (stockItem.quantity < 0) {
+                    return res.status(400).json({
+                        message: `Adjustment would result in negative stock. Current: ${stockItem.quantity + oldQuantity - quantity}`
+                    });
+                }
+                break;
+
+            case 'stock_move':
+                // For stock moves, we need to update both source and destination warehouses
+                const destStock = await StockItem.findOne({
+                    companyId,
+                    warehouseId: transaction.toWarehouseId,
+                    itemName: stockItem.itemName,
+                    bagSize: stockItem.bagSize,
+                    category: stockItem.category
+                });
+
+                if (!destStock) {
+                    return res.status(404).json({ message: 'Destination warehouse stock item not found' });
+                }
+
+                // Check if source warehouse has enough stock for the new quantity
+                const sourceStockAfterMove = stockItem.quantity - quantityDifference;
+                if (sourceStockAfterMove < 0) {
+                    return res.status(400).json({
+                        message: `Insufficient stock in source warehouse. Available: ${stockItem.quantity}, Required: ${Math.abs(quantityDifference)} more`
+                    });
+                }
+
+                // Update both warehouses
+                stockItem.quantity -= quantityDifference; // Remove difference from source
+                destStock.quantity += quantityDifference; // Add difference to destination
+                await destStock.save();
+                break;
+
+            default:
+                return res.status(400).json({ message: 'Invalid transaction type' });
+        }
+
+        // Save updated stock quantity
+        await stockItem.save();
+
+        // Update transaction record
+        transaction.quantity = quantity;
+        if (notes !== undefined) {
+            transaction.notes = notes;
+        }
+        await transaction.save();
+
+        res.json({
+            message: 'Transaction updated successfully',
+            transaction
+        });
+    } catch (error) {
+        console.error('Update transaction error:', error);
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+});
+
 // Delete stock transaction
+
 router.delete('/:id', authenticate, requirePermission('canManageInventory'), async (req, res) => {
     try {
         const companyId = req.user.companyId?._id || req.user.companyId;

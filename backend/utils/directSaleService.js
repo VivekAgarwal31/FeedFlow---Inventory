@@ -3,6 +3,8 @@ import StockItem from '../models/StockItem.js';
 import Client from '../models/Client.js';
 import DirectSale from '../models/DirectSale.js';
 import StockTransaction from '../models/StockTransaction.js';
+import JournalEntry from '../models/JournalEntry.js';
+import JournalLine from '../models/JournalLine.js';
 import { createJournalEntry, initializeDefaultAccounts } from './journalEntry.js';
 
 /**
@@ -324,3 +326,206 @@ export const deleteDirectSale = async (saleId, companyId) => {
         session.endSession();
     }
 };
+
+/**
+ * Update a direct sale transaction
+ * This reverts old inventory/receivables and applies new ones
+ * @param {String} saleId - Sale ID to update
+ * @param {Object} updateData - Updated sale data
+ * @param {String} companyId - Company ID
+ * @param {String} userId - User performing the update
+ * @returns {Promise<Object>} Update result
+ */
+export const updateDirectSale = async (saleId, updateData, companyId, userId) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        // 1. Find the existing sale
+        const existingSale = await DirectSale.findOne({ _id: saleId, companyId }).session(session);
+        if (!existingSale) {
+            throw new Error('Direct sale not found');
+        }
+
+        if (existingSale.saleStatus === 'cancelled') {
+            throw new Error('Cannot edit a cancelled sale');
+        }
+
+        const { items, notes } = updateData;
+
+        // 2. Validate new items and calculate new total
+        let newTotalAmount = 0;
+        const validatedItems = [];
+
+        for (const item of items) {
+            const stockItem = await StockItem.findOne({
+                itemName: item.itemName,
+                companyId,
+                warehouseId: item.warehouseId
+            }).session(session);
+
+            if (!stockItem) {
+                throw new Error(`Stock item not found: ${item.itemName} in ${item.warehouseName}`);
+            }
+
+            const lineTotal = item.quantity * item.sellingPrice;
+            newTotalAmount += lineTotal;
+
+            validatedItems.push({
+                itemId: stockItem._id,
+                itemName: stockItem.itemName,
+                warehouseId: item.warehouseId,
+                warehouseName: item.warehouseName,
+                quantity: item.quantity,
+                sellingPrice: item.sellingPrice,
+                total: lineTotal
+            });
+        }
+
+        // 3. Revert old inventory changes (add back the quantities)
+        for (const item of existingSale.items) {
+            await StockItem.findOneAndUpdate(
+                { _id: item.itemId, companyId, warehouseId: item.warehouseId },
+                { $inc: { quantity: item.quantity } },
+                { session }
+            );
+        }
+
+        // 4. Apply new inventory changes (subtract the new quantities)
+        for (const item of validatedItems) {
+            await StockItem.findOneAndUpdate(
+                { _id: item.itemId, companyId, warehouseId: item.warehouseId },
+                { $inc: { quantity: -item.quantity } },
+                { session }
+            );
+        }
+
+        // 5. Update client receivables (only for credit sales)
+        if (existingSale.paymentType === 'credit') {
+            const oldAmount = existingSale.totalAmount;
+            const amountDifference = newTotalAmount - oldAmount;
+
+            await Client.findByIdAndUpdate(
+                existingSale.clientId,
+                {
+                    $inc: {
+                        totalPurchases: amountDifference,
+                        currentCredit: amountDifference,
+                        totalReceivable: amountDifference
+                    }
+                },
+                { session }
+            );
+        } else {
+            // For cash sales, only update totalPurchases
+            const amountDifference = newTotalAmount - existingSale.totalAmount;
+            await Client.findByIdAndUpdate(
+                existingSale.clientId,
+                {
+                    $inc: {
+                        totalPurchases: amountDifference
+                    }
+                },
+                { session }
+            );
+        }
+
+        // 6. Update the sale record
+        existingSale.items = validatedItems;
+        existingSale.totalAmount = newTotalAmount;
+        if (notes !== undefined) {
+            existingSale.notes = notes;
+        }
+        await existingSale.save({ session });
+
+        // 7. Update stock transaction record
+        await StockTransaction.findOneAndUpdate(
+            { referenceId: saleId, referenceModel: 'DirectSale', companyId },
+            {
+                items: validatedItems.map(item => ({
+                    itemId: item.itemId,
+                    itemName: item.itemName,
+                    quantity: item.quantity,
+                    warehouseId: item.warehouseId,
+                    warehouseName: item.warehouseName
+                })),
+                quantity: validatedItems.reduce((sum, item) => sum + item.quantity, 0)
+            },
+            { session }
+        );
+
+        // 8. Update journal entry
+        try {
+            // Delete old journal entries
+            const oldJournalEntries = await JournalEntry.find({
+                referenceType: 'DirectSale',
+                referenceId: saleId,
+                companyId
+            }).session(session);
+
+            for (const entry of oldJournalEntries) {
+                await JournalLine.deleteMany({ journalEntryId: entry._id }, { session });
+                await JournalEntry.findByIdAndDelete(entry._id, { session });
+            }
+
+            // Create new journal entry
+            const client = await Client.findById(existingSale.clientId).session(session);
+            const journalLines = existingSale.paymentType === 'cash' ? [
+                {
+                    accountCode: 'CASH',
+                    debit: newTotalAmount,
+                    credit: 0,
+                    description: `Cash sale to ${client.name}`
+                },
+                {
+                    accountCode: 'SALES',
+                    debit: 0,
+                    credit: newTotalAmount,
+                    description: `Sale to ${client.name}`
+                }
+            ] : [
+                {
+                    accountCode: 'AR',
+                    debit: newTotalAmount,
+                    credit: 0,
+                    description: `Receivable from ${client.name}`
+                },
+                {
+                    accountCode: 'SALES',
+                    debit: 0,
+                    credit: newTotalAmount,
+                    description: `Sale to ${client.name}`
+                }
+            ];
+
+            await createJournalEntry({
+                companyId,
+                entryDate: existingSale.saleDate,
+                entryType: 'sales_invoice',
+                referenceType: 'DirectSale',
+                referenceId: existingSale._id,
+                description: `Direct Sale #${existingSale.saleNumber} to ${client.name} (${existingSale.paymentType}) - Updated`,
+                lines: journalLines,
+                createdBy: userId
+            });
+        } catch (journalError) {
+            console.error('Journal entry update error:', journalError);
+            // Don't fail the update if journal entry fails
+        }
+
+        await session.commitTransaction();
+
+        return {
+            success: true,
+            directSale: existingSale,
+            message: `Direct Sale #${existingSale.saleNumber} updated successfully`
+        };
+
+    } catch (error) {
+        await session.abortTransaction();
+        throw error;
+    } finally {
+        session.endSession();
+    }
+};
+

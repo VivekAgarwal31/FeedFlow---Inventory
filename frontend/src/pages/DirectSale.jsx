@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, Package, Loader2, Trash2, Search, Eye } from 'lucide-react'
-import { clientAPI, warehouseAPI, stockAPI } from '../lib/api'
+import { Plus, Package, Loader2, Trash2, Search, Eye, Pencil } from 'lucide-react'
+import { clientAPI, warehouseAPI, stockAPI, directSaleAPI } from '../lib/api'
 import { formatCurrency, formatDate } from '../lib/utils'
 import { useAuth } from '../contexts/AuthContext'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
@@ -24,6 +24,9 @@ const DirectSale = () => {
     const [dialogOpen, setDialogOpen] = useState(false)
     const [viewDialogOpen, setViewDialogOpen] = useState(false)
     const [viewingSale, setViewingSale] = useState(null)
+    const [editDialogOpen, setEditDialogOpen] = useState(false)
+    const [editingSale, setEditingSale] = useState(null)
+    const [editForm, setEditForm] = useState({ items: [], notes: '' })
     const [submitting, setSubmitting] = useState(false)
     const [error, setError] = useState('')
     const [clientSearch, setClientSearch] = useState('')
@@ -274,6 +277,106 @@ const DirectSale = () => {
     const viewSale = (sale) => {
         setViewingSale(sale)
         setViewDialogOpen(true)
+    }
+
+    const editSale = (sale) => {
+        setEditingSale(sale)
+        setEditForm({
+            items: sale.items.map(item => ({ ...item })),
+            notes: sale.notes || ''
+        })
+        setEditDialogOpen(true)
+    }
+
+    const handleEditItemChange = (index, field, value) => {
+        const updatedItems = [...editForm.items]
+
+        if (field === 'quantity') {
+            updatedItems[index].quantity = parseInt(value) || 0
+        } else if (field === 'sellingPrice') {
+            updatedItems[index].sellingPrice = parseFloat(value) || 0
+        }
+
+        // Recalculate total
+        updatedItems[index].total = updatedItems[index].quantity * updatedItems[index].sellingPrice
+
+        setEditForm({ ...editForm, items: updatedItems })
+    }
+
+    const addEditItem = () => {
+        setEditForm({
+            ...editForm,
+            items: [...editForm.items, {
+                itemId: '',
+                itemName: '',
+                warehouseId: '',
+                warehouseName: '',
+                quantity: 0,
+                sellingPrice: 0,
+                total: 0
+            }]
+        })
+    }
+
+    const removeEditItem = (index) => {
+        setEditForm({
+            ...editForm,
+            items: editForm.items.filter((_, i) => i !== index)
+        })
+    }
+
+    const calculateEditTotal = () => {
+        return editForm.items.reduce((sum, item) => sum + item.total, 0)
+    }
+
+    const handleEditSubmit = async () => {
+        if (!editingSale) return
+
+        if (editForm.items.length === 0) {
+            toast({
+                title: 'Validation Error',
+                description: 'Please add at least one item',
+                variant: 'destructive'
+            })
+            return
+        }
+
+        // Validate items
+        for (const item of editForm.items) {
+            if (!item.itemName || !item.warehouseId || item.quantity <= 0) {
+                toast({
+                    title: 'Validation Error',
+                    description: 'Please complete all item details',
+                    variant: 'destructive'
+                })
+                return
+            }
+        }
+
+        try {
+            setSubmitting(true)
+            await directSaleAPI.update(editingSale._id, {
+                items: editForm.items,
+                notes: editForm.notes
+            })
+
+            toast({
+                title: 'Success',
+                description: 'Direct sale updated successfully'
+            })
+
+            setEditDialogOpen(false)
+            setEditingSale(null)
+            fetchData()
+        } catch (error) {
+            toast({
+                title: 'Error',
+                description: error.response?.data?.message || 'Failed to update sale',
+                variant: 'destructive'
+            })
+        } finally {
+            setSubmitting(false)
+        }
     }
 
     const totalPages = Math.ceil(sales.length / itemsPerPage)
@@ -618,6 +721,16 @@ const DirectSale = () => {
                                             </TableCell>
                                             <TableCell>
                                                 <div className="flex gap-2">
+                                                    {sale.saleStatus === 'completed' && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => editSale(sale)}
+                                                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                                        >
+                                                            <Pencil className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
                                                     <Button
                                                         variant="ghost"
                                                         size="sm"
@@ -721,6 +834,145 @@ const DirectSale = () => {
                                     <p className="mt-1">{viewingSale.notes}</p>
                                 </div>
                             )}
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
+
+            {/* Edit Sale Dialog */}
+            <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+                <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Edit Direct Sale - #{editingSale?.saleNumber}</DialogTitle>
+                        <DialogDescription>
+                            Update items, quantities, prices, and notes
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {editingSale && (
+                        <div className="space-y-6">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label>Client (Read-only)</Label>
+                                    <Input value={editingSale.clientName} disabled className="bg-muted" />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Payment Type (Read-only)</Label>
+                                    <Input value={editingSale.paymentType === 'cash' ? 'Cash' : 'Credit'} disabled className="bg-muted" />
+                                </div>
+                            </div>
+
+                            <Card>
+                                <CardHeader>
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <CardTitle>Sale Items</CardTitle>
+                                            <CardDescription>Edit quantities and prices</CardDescription>
+                                        </div>
+                                        <Button type="button" onClick={addEditItem} variant="outline" size="sm">
+                                            <Plus className="mr-2 h-4 w-4" />
+                                            Add Item
+                                        </Button>
+                                    </div>
+                                </CardHeader>
+                                <CardContent>
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Item</TableHead>
+                                                <TableHead>Warehouse</TableHead>
+                                                <TableHead>Quantity</TableHead>
+                                                <TableHead>Price</TableHead>
+                                                <TableHead>Total</TableHead>
+                                                <TableHead></TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {editForm.items.map((item, index) => (
+                                                <TableRow key={index}>
+                                                    <TableCell className="font-medium">{item.itemName}</TableCell>
+                                                    <TableCell>{item.warehouseName}</TableCell>
+                                                    <TableCell>
+                                                        <Input
+                                                            type="number"
+                                                            min="1"
+                                                            value={item.quantity}
+                                                            onChange={(e) => handleEditItemChange(index, 'quantity', e.target.value)}
+                                                            className="w-20"
+                                                        />
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Input
+                                                            type="number"
+                                                            min="0"
+                                                            step="0.01"
+                                                            value={item.sellingPrice}
+                                                            onChange={(e) => handleEditItemChange(index, 'sellingPrice', e.target.value)}
+                                                            className="w-24"
+                                                        />
+                                                    </TableCell>
+                                                    <TableCell className="font-mono font-medium">
+                                                        {formatCurrency(item.total)}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => removeEditItem(index)}
+                                                            className="text-red-600"
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                            <TableRow>
+                                                <TableCell colSpan={4} className="font-medium text-right">Total Amount</TableCell>
+                                                <TableCell className="font-mono font-bold text-lg">
+                                                    {formatCurrency(calculateEditTotal())}
+                                                </TableCell>
+                                                <TableCell></TableCell>
+                                            </TableRow>
+                                        </TableBody>
+                                    </Table>
+                                </CardContent>
+                            </Card>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="edit-notes">Notes</Label>
+                                <Input
+                                    id="edit-notes"
+                                    placeholder="Additional notes..."
+                                    value={editForm.notes}
+                                    onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                                />
+                            </div>
+
+                            <div className="flex gap-3 pt-4">
+                                <Button
+                                    onClick={handleEditSubmit}
+                                    disabled={submitting || editForm.items.length === 0}
+                                    className="flex-1"
+                                >
+                                    {submitting ? (
+                                        <>
+                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            Updating...
+                                        </>
+                                    ) : (
+                                        `Update Sale - ${formatCurrency(calculateEditTotal())}`
+                                    )}
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => setEditDialogOpen(false)}
+                                    disabled={submitting}
+                                >
+                                    Cancel
+                                </Button>
+                            </div>
                         </div>
                     )}
                 </DialogContent>

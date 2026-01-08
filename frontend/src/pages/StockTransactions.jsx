@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { List, Calendar, Filter, Download, Search, ArrowUpFromLine, ArrowDownToLine, Settings, ArrowLeftRight, TrendingUp, TrendingDown, Eye, Trash2 } from 'lucide-react'
+import { List, Calendar, Filter, Download, Search, ArrowUpFromLine, ArrowDownToLine, Settings, ArrowLeftRight, TrendingUp, TrendingDown, Eye, Trash2, Pencil } from 'lucide-react'
 import { stockTransactionAPI } from '../lib/api'
 import { formatCurrency, formatDate } from '../lib/utils'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
@@ -28,6 +28,10 @@ const StockTransactions = () => {
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 12
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false)
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [editingTransaction, setEditingTransaction] = useState(null)
+  const [editQuantity, setEditQuantity] = useState('')
+  const [editNotes, setEditNotes] = useState('')
   const { toast } = useToast()
 
   useEffect(() => {
@@ -423,6 +427,61 @@ const StockTransactions = () => {
     }
   }
 
+  const editTransaction = (transaction) => {
+    // Only allow editing standalone transactions (not linked to sales/purchases)
+    if (transaction.referenceId && transaction.referenceModel) {
+      toast({
+        title: 'Cannot Edit',
+        description: `This transaction is linked to a ${transaction.referenceModel}. Please edit the ${transaction.referenceModel} instead.`,
+        variant: 'destructive'
+      })
+      return
+    }
+
+    setEditingTransaction(transaction)
+    setEditQuantity(transaction.quantity.toString())
+    setEditNotes(transaction.notes || '')
+    setEditDialogOpen(true)
+  }
+
+  const handleEditSubmit = async () => {
+    if (!editingTransaction) return
+
+    const quantity = parseFloat(editQuantity)
+    if (isNaN(quantity) || quantity <= 0) {
+      toast({
+        title: 'Invalid Quantity',
+        description: 'Please enter a valid quantity greater than 0',
+        variant: 'destructive'
+      })
+      return
+    }
+
+    try {
+      await stockTransactionAPI.update(editingTransaction._id, {
+        quantity,
+        notes: editNotes
+      })
+
+      toast({
+        title: 'Success',
+        description: 'Transaction updated successfully'
+      })
+
+      setEditDialogOpen(false)
+      setEditingTransaction(null)
+
+      // Refresh transactions
+      fetchTransactions()
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to update transaction',
+        variant: 'destructive'
+      })
+    }
+  }
+
   const deleteTransaction = async (transactionId, transactionType) => {
     if (!confirm(`Are you sure you want to delete this ${transactionType.replace('_', ' ')} transaction? This will reverse the stock changes and cannot be undone.`)) {
       return
@@ -668,6 +727,17 @@ const StockTransactions = () => {
                       <TableCell className="text-sm text-gray-600">{transaction.staffName || 'Unknown'}</TableCell>
                       <TableCell>
                         <div className="flex gap-2">
+                          {/* Edit button for standalone transactions only */}
+                          {!transaction.referenceId && !transaction.referenceModel && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => editTransaction(transaction)}
+                            >
+                              <Pencil className="h-4 w-4 mr-1" />
+                              Edit
+                            </Button>
+                          )}
                           {transaction.items && transaction.items.length > 0 && (
                             <Button
                               variant="ghost"
@@ -906,6 +976,85 @@ const StockTransactions = () => {
                     ))}
                   </TableBody>
                 </Table>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Transaction Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Transaction</DialogTitle>
+            <DialogDescription>
+              {editingTransaction && (
+                <>
+                  {getTransactionBadge(editingTransaction.type)} - {editingTransaction.itemName}
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          {editingTransaction && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Transaction Type (Read-only)</Label>
+                <Input
+                  value={editingTransaction.type.replace('_', ' ').toUpperCase()}
+                  disabled
+                  className="bg-muted"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Item Name (Read-only)</Label>
+                <Input
+                  value={editingTransaction.itemName}
+                  disabled
+                  className="bg-muted"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Warehouse (Read-only)</Label>
+                <Input
+                  value={editingTransaction.warehouseName || 'Unknown'}
+                  disabled
+                  className="bg-muted"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-quantity">Quantity *</Label>
+                <Input
+                  id="edit-quantity"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={editQuantity}
+                  onChange={(e) => setEditQuantity(e.target.value)}
+                  placeholder="Enter quantity"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-notes">Notes</Label>
+                <Input
+                  id="edit-notes"
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  placeholder="Optional notes"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4">
+                <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleEditSubmit}>
+                  Save Changes
+                </Button>
               </div>
             </div>
           )}
