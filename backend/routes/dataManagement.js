@@ -8,6 +8,15 @@ import { parseCSV, parseExcel, validateImportData, mapImportHeaders, importWithT
 import { createBackup, listBackups, restoreBackup, deleteBackup, getBackupFilePath } from '../utils/backup.js';
 import { archiveOldRecords, getArchivedRecords, restoreFromArchive, getArchiveStats } from '../utils/archival.js';
 import { analyzeOrphanedRecords, findDuplicates, cleanupOrphans, optimizeDatabase, getCleanupHistory } from '../utils/cleanup.js';
+import {
+    createFullBackup,
+    markBackupDownloaded,
+    getBackupHistory,
+    validateBackup,
+    restorePartial,
+    restoreFull,
+    getRestoreHistory
+} from '../utils/backupManager.js';
 import StockItem from '../models/StockItem.js';
 import SalesOrder from '../models/SalesOrder.js';
 import PurchaseOrder from '../models/PurchaseOrder.js';
@@ -33,12 +42,13 @@ const upload = multer({
         const allowedTypes = [
             'text/csv',
             'application/vnd.ms-excel',
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'application/json' // For backup files
         ];
         if (allowedTypes.includes(file.mimetype)) {
             cb(null, true);
         } else {
-            cb(new Error('Invalid file type. Only CSV and Excel files are allowed.'));
+            cb(new Error('Invalid file type. Only CSV, Excel, and JSON files are allowed.'));
         }
     }
 });
@@ -590,6 +600,187 @@ router.get('/cleanup/history', authenticate, requireOwner, async (req, res) => {
     } catch (error) {
         console.error('Cleanup history error:', error);
         res.status(500).json({ message: 'Failed to get cleanup history', error: error.message });
+    }
+});
+
+// ==================== BACKUP & RESTORE ENDPOINTS ====================
+
+/**
+ * Create full backup (download-only)
+ * POST /api/data-management/backup/create
+ */
+router.post('/backup/create', authenticate, async (req, res) => {
+    try {
+        const companyId = req.user.companyId._id;
+        const userId = req.user._id;
+
+        const result = await createFullBackup(companyId, userId);
+
+        // Mark as downloaded immediately since we're sending it
+        await markBackupDownloaded(result.backupId);
+
+        res.json({
+            backupId: result.backupId,
+            fileName: result.fileName,
+            data: result.backup,
+            metadata: result.metadata
+        });
+    } catch (error) {
+        console.error('Backup creation error:', error);
+        res.status(500).json({ message: 'Failed to create backup', error: error.message });
+    }
+});
+
+/**
+ * Get backup history
+ * GET /api/data-management/backup/history
+ */
+router.get('/backup/history', authenticate, async (req, res) => {
+    try {
+        const companyId = req.user.companyId._id;
+        const backups = await getBackupHistory(companyId);
+
+        res.json({ backups });
+    } catch (error) {
+        console.error('Backup history error:', error);
+        res.status(500).json({ message: 'Failed to get backup history', error: error.message });
+    }
+});
+
+/**
+ * Validate backup file
+ * POST /api/data-management/restore/validate
+ */
+router.post('/restore/validate', authenticate, upload.single('backupFile'), async (req, res) => {
+    try {
+        const companyId = req.user.companyId._id;
+
+        if (!req.file) {
+            return res.status(400).json({ message: 'No backup file provided' });
+        }
+
+        // Parse JSON
+        let backupData;
+        try {
+            backupData = JSON.parse(req.file.buffer.toString('utf-8'));
+        } catch (error) {
+            return res.status(400).json({ message: 'Invalid JSON file' });
+        }
+
+        // Validate
+        const validation = validateBackup(backupData, companyId);
+
+        if (!validation.valid) {
+            return res.status(400).json({
+                valid: false,
+                error: validation.error
+            });
+        }
+
+        res.json({
+            valid: true,
+            metadata: validation.metadata,
+            warnings: validation.warnings || []
+        });
+    } catch (error) {
+        console.error('Backup validation error:', error);
+        res.status(500).json({ message: 'Failed to validate backup', error: error.message });
+    }
+});
+
+/**
+ * Execute partial restore
+ * POST /api/data-management/restore/partial
+ */
+router.post('/restore/partial', authenticate, async (req, res) => {
+    try {
+        const companyId = req.user.companyId._id;
+        const userId = req.user._id;
+        const { backupData, modulesToRestore, confirmationPhrase } = req.body;
+
+        // Check if user is admin
+        if (req.user.role !== 'admin' && req.user.role !== 'owner') {
+            return res.status(403).json({ message: 'Admin access required for restore operations' });
+        }
+
+        // Validate confirmation phrase
+        const companyName = req.user.companyId.name;
+        if (confirmationPhrase !== companyName) {
+            return res.status(400).json({ message: 'Incorrect confirmation phrase' });
+        }
+
+        // Validate backup
+        const validation = validateBackup(backupData, companyId);
+        if (!validation.valid) {
+            return res.status(400).json({ message: validation.error });
+        }
+
+        // Validate modules
+        if (!modulesToRestore || !Array.isArray(modulesToRestore) || modulesToRestore.length === 0) {
+            return res.status(400).json({ message: 'No modules selected for restore' });
+        }
+
+        // Execute restore
+        const result = await restorePartial(companyId, backupData, modulesToRestore, userId);
+
+        res.json({
+            success: true,
+            restored: result.restored
+        });
+    } catch (error) {
+        console.error('Partial restore error:', error);
+        res.status(500).json({ message: 'Failed to restore data', error: error.message });
+    }
+});
+
+/**
+ * Execute full restore (for company import)
+ * POST /api/data-management/restore/full
+ */
+router.post('/restore/full', authenticate, requireOwner, async (req, res) => {
+    try {
+        const companyId = req.user.companyId._id;
+        const userId = req.user._id;
+        const { backupData, confirmationPhrase } = req.body;
+
+        // Validate confirmation phrase
+        const companyName = req.user.companyId.name;
+        if (confirmationPhrase !== companyName) {
+            return res.status(400).json({ message: 'Incorrect confirmation phrase' });
+        }
+
+        // Validate backup
+        const validation = validateBackup(backupData, companyId);
+        if (!validation.valid) {
+            return res.status(400).json({ message: validation.error });
+        }
+
+        // Execute full restore
+        const result = await restoreFull(companyId, backupData, userId);
+
+        res.json({
+            success: true,
+            restored: result.restored
+        });
+    } catch (error) {
+        console.error('Full restore error:', error);
+        res.status(500).json({ message: 'Failed to restore company data', error: error.message });
+    }
+});
+
+/**
+ * Get restore history
+ * GET /api/data-management/restore/history
+ */
+router.get('/restore/history', authenticate, async (req, res) => {
+    try {
+        const companyId = req.user.companyId._id;
+        const restores = await getRestoreHistory(companyId);
+
+        res.json({ restores });
+    } catch (error) {
+        console.error('Restore history error:', error);
+        res.status(500).json({ message: 'Failed to get restore history', error: error.message });
     }
 });
 

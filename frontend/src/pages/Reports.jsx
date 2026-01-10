@@ -12,10 +12,12 @@ import {
     SelectValue
 } from '../components/ui/select';
 import { useToast } from '../hooks/use-toast';
+import { useAuth } from '../contexts/AuthContext';
 import api, { clientAPI, supplierAPI, warehouseAPI } from '../lib/api';
 
 const Reports = () => {
     const { toast } = useToast();
+    const { user } = useAuth();
     const [reportType, setReportType] = useState('sales');
     const [format, setFormat] = useState('pdf');
     const [loading, setLoading] = useState(false);
@@ -291,21 +293,23 @@ const Reports = () => {
                     </div>
                 </Card>
 
-                <Card
-                    className={`p-6 cursor-pointer transition-all hover:shadow-md ${reportType === 'deliveries-out' || reportType === 'deliveries-in' ? 'ring-2 ring-primary' : ''
-                        }`}
-                    onClick={() => setReportType('deliveries-out')}
-                >
-                    <div className="flex items-center gap-4">
-                        <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-                            <FileText className="h-6 w-6 text-primary" />
+                {user?.companyId?.deliveryMode !== 'direct' && (
+                    <Card
+                        className={`p-6 cursor-pointer transition-all hover:shadow-md ${reportType === 'deliveries-out' || reportType === 'deliveries-in' ? 'ring-2 ring-primary' : ''
+                            }`}
+                        onClick={() => setReportType('deliveries-out')}
+                    >
+                        <div className="flex items-center gap-4">
+                            <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+                                <FileText className="h-6 w-6 text-primary" />
+                            </div>
+                            <div>
+                                <h3 className="font-semibold">Delivery Reports</h3>
+                                <p className="text-sm text-muted-foreground">Incoming and outgoing deliveries</p>
+                            </div>
                         </div>
-                        <div>
-                            <h3 className="font-semibold">Delivery Reports</h3>
-                            <p className="text-sm text-muted-foreground">Incoming and outgoing deliveries</p>
-                        </div>
-                    </div>
-                </Card>
+                    </Card>
+                )}
             </div>
 
             {/* Filters Section */}

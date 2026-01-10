@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weekly Inventory Summary</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f3f4f6;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+        }
+
+        .header {
+            padding: 40px 30px 30px;
+            text-align: center;
+            background-color: #ffffff;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: #1f2937;
+            margin-bottom: 10px;
+        }
+
+        .title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #1f2937;
+            margin: 10px 0;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: #6b7280;
+            margin: 5px 0;
+        }
+
+        .content {
+            padding: 0 30px 30px;
+        }
+
+        .intro {
+            font-size: 14px;
+            color: #4b5563;
+            line-height: 1.6;
+            margin-bottom: 30px;
+        }
+
+        .metrics-section {
+            background-color: #f9fafb;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 15px;
+        }
+
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .metric-row:last-child {
+            border-bottom: none;
+        }
+
+        .metric-label {
+            font-size: 14px;
+            color: #6b7280;
+        }
+
+        .metric-value {
+            font-size: 14px;
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .chart-section {
+            margin-bottom: 30px;
+        }
+
+        .chart-image {
+            width: 100%;
+            max-width: 540px;
+            height: auto;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+
+        .insights-section {
+            background-color: #eff6ff;
+            border-left: 4px solid #3b82f6;
+            border-radius: 4px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .insight-item {
+            font-size: 14px;
+            color: #1e40af;
+            line-height: 1.6;
+            margin: 8px 0;
+        }
+
+        .cta-section {
+            text-align: center;
+            margin: 30px 0;
+        }
+
+        .cta-button {
+            display: inline-block;
+            padding: 12px 30px;
+            background-color: #3b82f6;
+            color: #ffffff !important;
+            text-decoration: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .upgrade-section {
+            background-color: #fef3c7;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 30px 0;
+            text-align: center;
+        }
+
+        .upgrade-text {
+            font-size: 14px;
+            color: #92400e;
+            margin-bottom: 15px;
+        }
+
+        .upgrade-button {
+            display: inline-block;
+            padding: 10px 24px;
+            background-color: #f59e0b;
+            color: #ffffff !important;
+            text-decoration: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .footer {
+            padding: 30px;
+            text-align: center;
+            background-color: #f9fafb;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .footer-text {
+            font-size: 12px;
+            color: #6b7280;
+            line-height: 1.6;
+            margin: 5px 0;
+        }
+
+        .footer-link {
+            color: #3b82f6;
+            text-decoration: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo">Stockwise</div>
+            <div class="title">Weekly Inventory Summary</div>
+            <div class="subtitle">{{COMPANY_NAME}}</div>
+            <div class="subtitle">{{DATE_RANGE}}</div>
+        </div>
+
+        <!-- Content -->
+        <div class="content">
+            <div class="intro">
+                Here's a quick overview of your inventory activity for the past week.
+            </div>
+
+            <!-- Key Metrics -->
+            <div class="metrics-section">
+                <div class="section-title">Key Metrics</div>
+                <div class="metric-row">
+                    <span class="metric-label">Total Products</span>
+                    <span class="metric-value">{{TOTAL_PRODUCTS}}</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">Low Stock Items</span>
+                    <span class="metric-value">{{LOW_STOCK_ITEMS}}</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">Out of Stock Items</span>
+                    <span class="metric-value">{{OUT_OF_STOCK_ITEMS}}</span>
+                </div>
+                {{MODE_SPECIFIC_METRICS}}
+                <div class="metric-row">
+                    <span class="metric-label">Stock Movements</span>
+                    <span class="metric-value">{{STOCK_MOVEMENTS}}</span>
+                </div>
+            </div>
+
+            <!-- Charts (if included) -->
+            {{CHARTS_SECTION}}
+
+            <!-- Insights -->
+            {{INSIGHTS_SECTION}}
+
+            <!-- Primary CTA -->
+            <div class="cta-section">
+                <a href="{{DASHBOARD_URL}}" class="cta-button">View Full Report in Stockwise</a>
+            </div>
+
+            <!-- Upgrade Section (Trial users only) -->
+            {{UPGRADE_SECTION}}
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <div class="footer-text">
+                You're receiving this email because you use Stockwise for inventory management.
+            </div>
+            <div class="footer-text">
+                {{COMPANY_NAME}}
+            </div>
+            <div class="footer-text">
+                Questions? Contact us at <a href="mailto:support@stock-wise.in"
+                    class="footer-link">support@stock-wise.in</a>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

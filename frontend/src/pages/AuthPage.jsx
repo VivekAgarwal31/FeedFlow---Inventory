@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { Package, Loader2, Mail } from 'lucide-react'
+import { Loader2, Mail, ChevronLeft } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { authAPI } from '../lib/api'
 import { Button } from '../components/ui/button'
@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { useToast } from '../hooks/use-toast'
 
 const AuthPage = () => {
-  const { login, register } = useAuth()
+  const { login, register, isAuthenticated } = useAuth()
   const navigate = useNavigate()
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
@@ -119,10 +119,22 @@ const AuthPage = () => {
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-accent/10 flex items-center justify-center p-4">
       <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="text-center space-y-4">
-          <div className="flex justify-center">
-            <div className="h-14 w-14 bg-primary rounded-full flex items-center justify-center">
-              <Package className="h-7 w-7 text-primary-foreground" />
-            </div>
+          <div className="flex justify-center items-center relative">
+            {/* Back button on the left */}
+            <button
+              onClick={() => navigate(isAuthenticated ? '/dashboard' : '/')}
+              className="absolute left-0 p-2 hover:bg-gray-100 rounded-full transition-colors"
+              aria-label={isAuthenticated ? 'Back to Dashboard' : 'Back to Home'}
+            >
+              <ChevronLeft className="h-6 w-6 text-gray-600" />
+            </button>
+
+            {/* Logo in center */}
+            <img
+              src="/stockwise black.webp"
+              alt="Stockwise Logo"
+              className="h-16 object-contain"
+            />
           </div>
           <div>
             <CardTitle className="text-2xl font-bold">Stockwise</CardTitle>

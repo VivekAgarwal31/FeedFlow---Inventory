@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 
-const backupMetadataSchema = new mongoose.Schema({
+const restoreLogSchema = new mongoose.Schema({
     companyId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Company',
@@ -9,14 +9,17 @@ const backupMetadataSchema = new mongoose.Schema({
     },
     backupId: {
         type: String,
-        required: true,
-        unique: true
-    },
-    fileName: {
-        type: String,
         required: true
     },
-    recordCounts: {
+    restoreType: {
+        type: String,
+        enum: ['partial', 'full'],
+        required: true
+    },
+    modulesRestored: [{
+        type: String
+    }],
+    recordsRestored: {
         stockItems: { type: Number, default: 0 },
         sales: { type: Number, default: 0 },
         purchases: { type: Number, default: 0 },
@@ -30,29 +33,28 @@ const backupMetadataSchema = new mongoose.Schema({
         deliveryOuts: { type: Number, default: 0 },
         deliveryIns: { type: Number, default: 0 }
     },
-    appVersion: {
+    status: {
         type: String,
-        required: true
+        enum: ['success', 'partial', 'failed'],
+        default: 'success'
     },
-    downloaded: {
-        type: Boolean,
-        default: false
+    errorMessage: {
+        type: String
     },
-    downloadedAt: {
-        type: Date
-    },
-    createdBy: {
+    restoredBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
         required: true
+    },
+    restoredAt: {
+        type: Date,
+        default: Date.now
     }
 }, {
     timestamps: true
 });
 
+// Index for restore history queries
+restoreLogSchema.index({ companyId: 1, restoredAt: -1 });
 
-// Index for backup history queries
-backupMetadataSchema.index({ companyId: 1, createdAt: -1 });
-
-
-export default mongoose.model('BackupMetadata', backupMetadataSchema);
+export default mongoose.model('RestoreLog', restoreLogSchema);

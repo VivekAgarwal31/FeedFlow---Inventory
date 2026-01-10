@@ -190,21 +190,30 @@ export const dataManagementAPI = {
     });
   },
 
-  // Backup
+  // Backup & Restore
   createBackup: () => api.post('/data-management/backup/create'),
-  listBackups: () => api.get('/data-management/backup/list'),
-  downloadBackup: (backupId) => api.get(`/data-management/backup/download/${backupId}`, { responseType: 'blob' }),
-  restoreBackup: (backupId) => api.post('/data-management/backup/restore', { backupId }),
-  deleteBackup: (backupId) => api.delete(`/data-management/backup/${backupId}`),
+  getBackupHistory: () => api.get('/data-management/backup/history'),
+  validateBackup: (file) => {
+    const formData = new FormData();
+    formData.append('backupFile', file);
+    return api.post('/data-management/restore/validate', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+  },
+  restorePartial: (backupData, modulesToRestore, confirmationPhrase) =>
+    api.post('/data-management/restore/partial', { backupData, modulesToRestore, confirmationPhrase }),
+  restoreFull: (backupData, confirmationPhrase) =>
+    api.post('/data-management/restore/full', { backupData, confirmationPhrase }),
+  getRestoreHistory: () => api.get('/data-management/restore/history'),
 
-  // Archive
+  // Archive (keeping for backward compatibility)
   archiveRecords: (entity, cutoffDate) => api.post('/data-management/archive/create', { entity, cutoffDate }),
   getArchivedRecords: (entity, page = 1, limit = 50) => api.get(`/data-management/archive/${entity}?page=${page}&limit=${limit}`),
   restoreFromArchive: (entity, recordIds) => api.post('/data-management/archive/restore', { entity, recordIds }),
   restoreArchive: (entity, cutoffDate) => api.post('/data-management/archive/restore', { entity, cutoffDate }),
   getArchiveStats: () => api.get('/data-management/archive/stats'),
 
-  // Cleanup
+  // Cleanup (keeping for backward compatibility)
   analyzeCleanup: () => api.get('/data-management/cleanup/analyze'),
   executeCleanup: (dryRun = true) => api.post('/data-management/cleanup/execute', { dryRun }),
   optimizeDatabase: () => api.post('/data-management/cleanup/optimize'),

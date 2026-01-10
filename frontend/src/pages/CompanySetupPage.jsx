@@ -69,16 +69,105 @@ const CompanySetupPage = () => {
     setLoading(false)
   }
 
-  const handleImportCompany = async (e) => {
+  // Import state
+  const [backupDownloaded, setBackupDownloaded] = useState(false)
+  const [importFile, setImportFile] = useState(null)
+  const [importData, setImportData] = useState(null)
+  const [importMetadata, setImportMetadata] = useState(null)
+  const [importWarnings, setImportWarnings] = useState([])
+  const [confirmationPhrase, setConfirmationPhrase] = useState('')
+
+  const handleDownloadCurrentBackup = async () => {
+    setLoading(true)
+    setError('')
+
+    try {
+      const { dataManagementAPI } = await import('../lib/api')
+      const response = await dataManagementAPI.createBackup()
+
+      // Download the backup file
+      const blob = new Blob([JSON.stringify(response.data.data, null, 2)],
+        { type: 'application/json' })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = response.data.fileName
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+
+      setBackupDownloaded(true)
+      setError('Backup downloaded successfully. You can now upload a backup file to import.')
+    } catch (error) {
+      setError(error.response?.data?.message || 'Failed to download backup')
+    }
+
+    setLoading(false)
+  }
+
+  const handleImportFileSelect = async (e) => {
     const file = e.target.files[0]
     if (!file) return
 
     setLoading(true)
     setError('')
+    setImportFile(file)
+    setImportData(null)
+    setImportMetadata(null)
+    setImportWarnings([])
+    setConfirmationPhrase('')
 
-    // Placeholder for import functionality
-    setError('Import functionality will be implemented with edge functions')
-    setLoading(false)
+    // Read and parse file
+    const reader = new FileReader()
+    reader.onload = async (event) => {
+      try {
+        const data = JSON.parse(event.target.result)
+        setImportData(data)
+
+        // Validate
+        const { dataManagementAPI } = await import('../lib/api')
+        const response = await dataManagementAPI.validateBackup(file)
+        setImportMetadata(response.data.metadata)
+        setImportWarnings(response.data.warnings || [])
+
+        setError('') // Clear any previous errors
+      } catch (error) {
+        setError(error.response?.data?.message || 'Invalid backup file. Please select a valid JSON backup.')
+        setImportFile(null)
+        setImportData(null)
+      } finally {
+        setLoading(false)
+      }
+    }
+    reader.readAsText(file)
+  }
+
+  const handleImportCompany = async () => {
+    if (!importData || !importMetadata) {
+      setError('Please select a valid backup file first')
+      return
+    }
+
+    if (confirmationPhrase !== importMetadata.companyName) {
+      setError('Incorrect confirmation phrase. Please type the company name exactly.')
+      return
+    }
+
+    setLoading(true)
+    setError('')
+
+    try {
+      const { dataManagementAPI } = await import('../lib/api')
+      await dataManagementAPI.restoreFull(importData, confirmationPhrase)
+
+      // Success - redirect to dashboard
+      alert('Company data imported successfully! The page will now reload.')
+      window.location.href = '/dashboard'
+    } catch (error) {
+      setError(error.response?.data?.message || 'Failed to import company data')
+      setLoading(false)
+    }
   }
 
   const handleSignOut = () => {
@@ -253,47 +342,137 @@ const CompanySetupPage = () => {
 
             <TabsContent value="import" className="space-y-4 mt-4">
               <div className="space-y-4">
-                <div className="text-sm text-muted-foreground">
-                  <p>Import your company data from a previously exported backup file.</p>
-                </div>
-
                 <Alert variant="destructive">
                   <AlertDescription>
-                    <strong>Warning:</strong> If you already have a company, it will be completely replaced with the imported data.
+                    <strong>WARNING:</strong> This will DELETE all current company data and replace it with the backup.
+                    This action CANNOT be undone!
                   </AlertDescription>
                 </Alert>
 
-                <div className="space-y-2">
-                  <Label htmlFor="import-file">Select Backup File</Label>
-                  <div className="flex items-center gap-2">
+                {/* Step 1: Download Current Backup */}
+                {!backupDownloaded && (
+                  <div className="space-y-2">
+                    <Label>Step 1: Download Current Backup (Required)</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Before importing, you must download a backup of your current data as a safety measure.
+                    </p>
                     <Button
                       type="button"
-                      variant="outline"
-                      className="w-full"
+                      onClick={handleDownloadCurrentBackup}
                       disabled={loading}
-                      onClick={() => document.getElementById('import-file').click()}
+                      className="w-full"
                     >
                       {loading ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Importing...
+                          Downloading Backup...
                         </>
                       ) : (
                         <>
                           <Upload className="mr-2 h-4 w-4" />
-                          Select File to Import
+                          Download Current Backup First
                         </>
                       )}
                     </Button>
-                    <input
+                  </div>
+                )}
+
+                {/* Step 2: Upload Backup File */}
+                {backupDownloaded && !importFile && (
+                  <div className="space-y-2">
+                    <Label htmlFor="import-file">Step 2: Upload Backup File</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Select the JSON backup file you want to import.
+                    </p>
+                    <Input
                       id="import-file"
                       type="file"
-                      accept=".zip"
-                      className="hidden"
-                      onChange={handleImportCompany}
+                      accept=".json"
+                      onChange={handleImportFileSelect}
+                      disabled={loading}
                     />
                   </div>
-                </div>
+                )}
+
+                {/* Step 3: Validate & Confirm */}
+                {importFile && loading && !importMetadata && (
+                  <Alert>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <AlertDescription>Validating backup file...</AlertDescription>
+                  </Alert>
+                )}
+
+                {importMetadata && (
+                  <div className="space-y-4">
+                    <Alert>
+                      <AlertDescription>
+                        <p className="font-medium">Backup Information:</p>
+                        <p className="text-sm">Company: {importMetadata.companyName}</p>
+                        <p className="text-sm">Created: {new Date(importMetadata.createdAt).toLocaleString()}</p>
+                        <p className="text-sm">
+                          Records: {importMetadata.recordCounts?.stockItems || 0} items,
+                          {importMetadata.recordCounts?.sales || 0} sales,
+                          {importMetadata.recordCounts?.clients || 0} clients
+                        </p>
+                        {importWarnings.length > 0 && (
+                          <div className="mt-2">
+                            {importWarnings.map((warning, idx) => (
+                              <p key={idx} className="text-xs text-yellow-600">⚠️ {warning}</p>
+                            ))}
+                          </div>
+                        )}
+                      </AlertDescription>
+                    </Alert>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="confirm-phrase">Type company name to confirm</Label>
+                      <Input
+                        id="confirm-phrase"
+                        type="text"
+                        placeholder={importMetadata.companyName}
+                        value={confirmationPhrase}
+                        onChange={(e) => setConfirmationPhrase(e.target.value)}
+                        disabled={loading}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Type "{importMetadata.companyName}" exactly to confirm
+                      </p>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        onClick={handleImportCompany}
+                        disabled={loading || confirmationPhrase !== importMetadata.companyName}
+                        className="flex-1"
+                      >
+                        {loading ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Importing...
+                          </>
+                        ) : (
+                          'Import Company (Replace All Data)'
+                        )}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          setImportFile(null)
+                          setImportData(null)
+                          setImportMetadata(null)
+                          setImportWarnings([])
+                          setConfirmationPhrase('')
+                        }}
+                        disabled={loading}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             </TabsContent>
           </Tabs>

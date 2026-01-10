@@ -32,6 +32,7 @@ import directPurchasesRoutes from './routes/directPurchases.js';
 import { startHttpPing } from './utils/keepAlive.js';
 import { startDbPing } from './utils/dbPing.js';
 import { startTrialExpiryJob } from './jobs/trialExpiryJob.js';
+import { startWeeklyReportJob } from './jobs/weeklyReportJob.js';
 
 // Import models to register them with Mongoose
 import './models/User.js';
@@ -172,6 +173,8 @@ app.listen(PORT, async () => {
   startHttpPing();
   // Start trial expiry background job
   startTrialExpiryJob();
+  // Start weekly report email job
+  startWeeklyReportJob();
 
   // Initialize plans if they don't exist
   try {

@@ -1252,3 +1252,161 @@ router.post('/deliveries-in/excel', authenticate, requirePermission('canViewRepo
         res.status(500).json({ message: 'Error generating delivery in report', error: error.message });
     }
 });
+
+// ========================================
+// WEEKLY REPORT ENDPOINTS
+// ========================================
+
+/**
+ * Preview current week's report
+ * POST /api/reports/weekly/preview
+ */
+router.post('/weekly/preview', authenticate, async (req, res) => {
+    try {
+        const { generateWeeklyReport } = await import('../services/weeklyReportService.js');
+        const companyId = req.user.companyId._id;
+
+        const reportData = await generateWeeklyReport(companyId);
+
+        if (!reportData) {
+            return res.status(404).json({ message: 'No activity this week' });
+        }
+
+        res.json({
+            success: true,
+            report: {
+                company: reportData.company.name,
+                weekRange: {
+                    start: reportData.weekStart,
+                    end: reportData.weekEnd
+                },
+                metrics: reportData.metrics,
+                insights: reportData.insights,
+                deliveryMode: reportData.deliveryMode
+            }
+        });
+    } catch (error) {
+        console.error('Preview error:', error);
+        res.status(500).json({ message: 'Failed to generate preview', error: error.message });
+    }
+});
+
+/**
+ * Download current week's report as PDF (Paid users only)
+ * GET /api/reports/weekly/pdf
+ */
+router.get('/weekly/pdf', authenticate, async (req, res) => {
+    try {
+        const { getUserPlanFeatures } = await import('../utils/subscriptionHelpers.js');
+        const { generateWeeklyReport } = await import('../services/weeklyReportService.js');
+        const { generateDirectModeCharts, generateOrderModeCharts } = await import('../services/chartService.js');
+        const { generateWeeklyReportPDF } = await import('../services/pdfService.js');
+        const { formatDateForFilename } = await import('../utils/dateHelpers.js');
+
+        const companyId = req.user.companyId._id;
+        const userId = req.user._id;
+
+        // Check if user is on Paid plan
+        const planFeatures = await getUserPlanFeatures(userId);
+        if (!planFeatures.backupAccess) {
+            return res.status(403).json({
+                message: 'PDF reports are only available for Paid users. Upgrade your plan to access this feature.',
+                upgradeRequired: true
+            });
+        }
+
+        // Generate report
+        const reportData = await generateWeeklyReport(companyId);
+
+        if (!reportData) {
+            return res.status(404).json({ message: 'No activity this week' });
+        }
+
+        // Generate charts
+        let charts;
+        if (reportData.deliveryMode === 'direct') {
+            charts = await generateDirectModeCharts(reportData.dailyData1, reportData.dailyData2);
+        } else {
+            charts = await generateOrderModeCharts(reportData.dailyData1, reportData.dailyData2);
+        }
+
+        // Generate PDF
+        const pdfBuffer = await generateWeeklyReportPDF({
+            ...reportData,
+            charts,
+            companyName: reportData.company.name
+        });
+
+        // Set response headers
+        const dateRange = `${formatDateForFilename(reportData.weekStart)}_${formatDateForFilename(reportData.weekEnd)}`;
+        const filename = `Stockwise_Weekly_Report_${reportData.company.name.replace(/\s+/g, '_')}_${dateRange}.pdf`;
+
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(pdfBuffer);
+    } catch (error) {
+        console.error('PDF generation error:', error);
+        res.status(500).json({ message: 'Failed to generate PDF', error: error.message });
+    }
+});
+
+/**
+ * Get weekly report history
+ * GET /api/reports/weekly/history
+ */
+router.get('/weekly/history', authenticate, async (req, res) => {
+    try {
+        const WeeklyReportLog = (await import('../models/WeeklyReportLog.js')).default;
+        const companyId = req.user.companyId._id;
+        const { limit = 10 } = req.query;
+
+        const reports = await WeeklyReportLog.find({ companyId })
+            .sort({ weekStartDate: -1 })
+            .limit(parseInt(limit))
+            .lean();
+
+        res.json({
+            success: true,
+            reports: reports.map(r => ({
+                weekRange: {
+                    start: r.weekStartDate,
+                    end: r.weekEndDate
+                },
+                sentAt: r.sentAt,
+                recipientCount: r.recipients.length,
+                metrics: r.metrics,
+                deliveryMode: r.deliveryMode,
+                status: r.status,
+                pdfGenerated: r.pdfGenerated
+            }))
+        });
+    } catch (error) {
+        console.error('History error:', error);
+        res.status(500).json({ message: 'Failed to get report history', error: error.message });
+    }
+});
+
+/**
+ * Manual trigger for weekly reports (Admin/Testing only)
+ * POST /api/reports/weekly/trigger
+ */
+router.post('/weekly/trigger', authenticate, async (req, res) => {
+    try {
+        // Only allow super admin or owner
+        if (req.user.role !== 'owner' && req.user.role !== 'super_admin') {
+            return res.status(403).json({ message: 'Admin access required' });
+        }
+
+        const { triggerWeeklyReportsManually } = await import('../jobs/weeklyReportJob.js');
+        const results = await triggerWeeklyReportsManually();
+
+        res.json({
+            success: true,
+            results
+        });
+    } catch (error) {
+        console.error('Manual trigger error:', error);
+        res.status(500).json({ message: 'Failed to trigger reports', error: error.message });
+    }
+});
+

@@ -83,7 +83,7 @@ planSchema.statics.initializePlans = async function () {
             features: {
                 maxWarehouses: null,
                 maxItems: null,
-                backupAccess: true,
+                backupAccess: false, // Backup is Paid-only
                 reportsAccess: true,
                 accountingAccess: true,
                 advancedInventory: true
