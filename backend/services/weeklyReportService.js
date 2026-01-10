@@ -15,6 +15,11 @@ import {
     getDirectModeMetrics,
     getOrderModeMetrics,
     getCommonMetrics,
+    getTotalInventoryQuantity,
+    getWarehouseBreakdown,
+    getTopSellingItemsDirect,
+    getTopSellingItemsOrder,
+    getLeastSellingItems,
     getDailySalesData,
     getDailyPurchasesData,
     getDailyDeliveriesOutData,
@@ -71,29 +76,54 @@ export const generateWeeklyReport = async (companyId) => {
 
         // Get mode-specific metrics
         let modeMetrics;
-        let dailyData1, dailyData2;
-
         if (company.deliveryMode === 'direct') {
             modeMetrics = await getDirectModeMetrics(companyId, startDate, endDate);
-            dailyData1 = await getDailySalesData(companyId, startDate, endDate);
-            dailyData2 = await getDailyPurchasesData(companyId, startDate, endDate);
         } else {
             modeMetrics = await getOrderModeMetrics(companyId, startDate, endDate);
-            dailyData1 = await getDailyDeliveriesOutData(companyId, startDate, endDate);
-            dailyData2 = await getDailyDeliveriesInData(companyId, startDate, endDate);
+        }
+
+        // Get daily data for charts
+        let dailyData1, dailyData2;
+        if (company.deliveryMode === 'direct') {
+            [dailyData1, dailyData2] = await Promise.all([
+                getDailySalesData(companyId, startDate, endDate),
+                getDailyPurchasesData(companyId, startDate, endDate)
+            ]);
+        } else {
+            [dailyData1, dailyData2] = await Promise.all([
+                getDailyDeliveriesOutData(companyId, startDate, endDate),
+                getDailyDeliveriesInData(companyId, startDate, endDate)
+            ]);
         }
 
         // Combine metrics
         const metrics = { ...commonMetrics, ...modeMetrics };
 
+        // Get enhanced metrics
+        const [totalInventoryQty, warehouseBreakdown, topItems, leastItems] = await Promise.all([
+            getTotalInventoryQuantity(companyId),
+            getWarehouseBreakdown(companyId),
+            company.deliveryMode === 'direct'
+                ? getTopSellingItemsDirect(companyId, startDate, endDate, 3)
+                : getTopSellingItemsOrder(companyId, startDate, endDate, 3),
+            getLeastSellingItems(companyId, startDate, endDate, 3)
+        ]);
+
         // Generate insights
         const insights = await generateInsights(companyId, metrics, company.deliveryMode, startDate, endDate);
 
         return {
-            company,
+            company: {
+                name: company.name,
+                _id: company._id
+            },
             weekStart: startDate,
             weekEnd: endDate,
             metrics,
+            totalInventoryQty,
+            warehouseBreakdown,
+            topSellingItems: topItems,
+            leastSellingItems: leastItems,
             insights,
             dailyData1,
             dailyData2,
@@ -156,75 +186,234 @@ export const sendWeeklyReportEmail = async (companyId) => {
         const templatePath = path.join(__dirname, '../templates/emails/weeklyReport.html');
         let htmlTemplate = await fs.readFile(templatePath, 'utf-8');
 
-        // Build mode-specific metrics HTML
-        let modeMetricsHtml = '';
+        // Build Weekly Activity Section (mode-specific metrics in grid)
+        let activityHtml = '';
         if (reportData.deliveryMode === 'direct') {
-            modeMetricsHtml = `
-                <div class="metric-row">
-                    <span class="metric-label">Direct Sales</span>
-                    <span class="metric-value">${reportData.metrics.directSalesCount}</span>
-                </div>
-                <div class="metric-row">
-                    <span class="metric-label">Direct Purchases</span>
-                    <span class="metric-value">${reportData.metrics.directPurchasesCount}</span>
-                </div>
+            activityHtml = `
+                <tr>
+                    <td style="padding:0 20px 20px;">
+                        <h3 style="margin:0 0 12px;font-size:15px;color:#111;">Weekly Activity</h3>
+                        <table width="100%" cellpadding="10" cellspacing="0" style="border-collapse:collapse;">
+                            <tr>
+                                <td style="border:1px solid #eee;font-size:13px;text-align:center;padding:15px 10px;">
+                                    <div style="color:#666;font-size:11px;margin-bottom:6px;">Direct Sales</div>
+                                    <div style="color:#4caf50;font-size:24px;font-weight:700;">${reportData.metrics.directSalesCount}</div>
+                                </td>
+                                <td style="border:1px solid #eee;font-size:13px;text-align:center;padding:15px 10px;">
+                                    <div style="color:#666;font-size:11px;margin-bottom:6px;">Direct Purchases</div>
+                                    <div style="color:#9c27b0;font-size:24px;font-weight:700;">${reportData.metrics.directPurchasesCount}</div>
+                                </td>
+                                <td style="border:1px solid #eee;font-size:13px;text-align:center;padding:15px 10px;">
+                                    <div style="color:#666;font-size:11px;margin-bottom:6px;">Stock Movements</div>
+                                    <div style="color:#2196f3;font-size:24px;font-weight:700;">${reportData.metrics.stockMovementsCount}</div>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
             `;
         } else {
-            modeMetricsHtml = `
-                <div class="metric-row">
-                    <span class="metric-label">Sales Orders Created</span>
-                    <span class="metric-value">${reportData.metrics.salesOrdersCount}</span>
-                </div>
-                <div class="metric-row">
-                    <span class="metric-label">Purchase Orders Created</span>
-                    <span class="metric-value">${reportData.metrics.purchaseOrdersCount}</span>
-                </div>
-                <div class="metric-row">
-                    <span class="metric-label">Deliveries Out</span>
-                    <span class="metric-value">${reportData.metrics.deliveriesOutCount}</span>
-                </div>
-                <div class="metric-row">
-                    <span class="metric-label">Deliveries In</span>
-                    <span class="metric-value">${reportData.metrics.deliveriesInCount}</span>
-                </div>
+            activityHtml = `
+                <tr>
+                    <td style="padding:0 20px 20px;">
+                        <h3 style="margin:0 0 12px;font-size:15px;color:#111;">Weekly Activity</h3>
+                        <table width="100%" cellpadding="10" cellspacing="0" style="border-collapse:collapse;">
+                            <tr>
+                                <td style="border:1px solid #eee;font-size:13px;text-align:center;padding:15px 10px;">
+                                    <div style="color:#666;font-size:11px;margin-bottom:6px;">Sales Orders</div>
+                                    <div style="color:#4caf50;font-size:24px;font-weight:700;">${reportData.metrics.salesOrdersCount}</div>
+                                </td>
+                                <td style="border:1px solid #eee;font-size:13px;text-align:center;padding:15px 10px;">
+                                    <div style="color:#666;font-size:11px;margin-bottom:6px;">Purchase Orders</div>
+                                    <div style="color:#9c27b0;font-size:24px;font-weight:700;">${reportData.metrics.purchaseOrdersCount}</div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="border:1px solid #eee;font-size:13px;text-align:center;padding:15px 10px;">
+                                    <div style="color:#666;font-size:11px;margin-bottom:6px;">Deliveries Out</div>
+                                    <div style="color:#2196f3;font-size:24px;font-weight:700;">${reportData.metrics.deliveriesOutCount}</div>
+                                </td>
+                                <td style="border:1px solid #eee;font-size:13px;text-align:center;padding:15px 10px;">
+                                    <div style="color:#666;font-size:11px;margin-bottom:6px;">Deliveries In</div>
+                                    <div style="color:#00bcd4;font-size:24px;font-weight:700;">${reportData.metrics.deliveriesInCount}</div>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
             `;
         }
 
-        // Build charts section (if available)
-        let chartsHtml = '';
-        if (charts) {
-            chartsHtml = '<div class="chart-section"><div class="section-title">Activity Trends</div>';
-            // Charts will be embedded as attachments with CID
-            if (reportData.deliveryMode === 'direct') {
-                chartsHtml += '<img src="cid:salesChart" class="chart-image" alt="Daily Sales" />';
-                chartsHtml += '<img src="cid:purchasesChart" class="chart-image" alt="Daily Purchases" />';
-            } else {
-                chartsHtml += '<img src="cid:deliveriesOutChart" class="chart-image" alt="Daily Deliveries Out" />';
-                chartsHtml += '<img src="cid:deliveriesInChart" class="chart-image" alt="Daily Deliveries In" />';
-            }
-            chartsHtml += '</div>';
+        // Build Quick Stats Section (enhanced with new metrics)
+        let quickStatsHtml = `
+            <tr>
+                <td style="padding:0 20px 20px;">
+                    <h3 style="margin:0 0 12px;font-size:15px;color:#111;">Inventory Summary</h3>
+                    <table width="100%" cellpadding="8" cellspacing="0" style="border-collapse:collapse;background:#f9fafb;border:1px solid #eee;border-radius:4px;">
+                        <tr>
+                            <td style="padding:10px;font-size:13px;color:#666;border-bottom:1px solid #eee;">
+                                <strong style="color:#111;">Total Inventory:</strong>
+                            </td>
+                            <td style="padding:10px;font-size:13px;color:#333;text-align:right;border-bottom:1px solid #eee;">
+                                ${reportData.totalInventoryQty} units across all warehouses
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="padding:10px;font-size:13px;color:#666;border-bottom:1px solid #eee;">
+                                <strong style="color:#111;">Stock Health:</strong>
+                            </td>
+                            <td style="padding:10px;font-size:13px;color:#333;text-align:right;border-bottom:1px solid #eee;">
+                                ${reportData.metrics.totalProducts - reportData.metrics.outOfStockItems - reportData.metrics.lowStockItems} items in good stock
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="padding:10px;font-size:13px;color:#666;border-bottom:1px solid #eee;">
+                                <strong style="color:#111;">Attention Needed:</strong>
+                            </td>
+                            <td style="padding:10px;font-size:13px;color:#333;text-align:right;border-bottom:1px solid #eee;">
+                                ${reportData.metrics.lowStockItems + reportData.metrics.outOfStockItems} items need restocking
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="padding:10px;font-size:13px;color:#666;">
+                                <strong style="color:#111;">Weekly Transactions:</strong>
+                            </td>
+                            <td style="padding:10px;font-size:13px;color:#333;text-align:right;">
+                                ${reportData.metrics.stockMovementsCount} movements this week
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        `;
+
+        // Add Warehouse Breakdown if available
+        if (reportData.warehouseBreakdown && reportData.warehouseBreakdown.length > 0) {
+            quickStatsHtml += `
+                <tr>
+                    <td style="padding:0 20px 20px;">
+                        <h3 style="margin:0 0 12px;font-size:15px;color:#111;">Warehouse Breakdown</h3>
+                        <table width="100%" cellpadding="8" cellspacing="0" style="border-collapse:collapse;background:#f9fafb;border:1px solid #eee;border-radius:4px;">
+            `;
+
+            reportData.warehouseBreakdown.forEach((wh, index) => {
+                const borderStyle = index < reportData.warehouseBreakdown.length - 1 ? 'border-bottom:1px solid #eee;' : '';
+                quickStatsHtml += `
+                    <tr>
+                        <td style="padding:10px;font-size:13px;color:#666;${borderStyle}">
+                            <strong style="color:#111;">${wh.warehouseName}:</strong>
+                        </td>
+                        <td style="padding:10px;font-size:13px;color:#333;text-align:right;${borderStyle}">
+                            ${wh.itemCount} items (${wh.totalQuantity} units)
+                        </td>
+                    </tr>
+                `;
+            });
+
+            quickStatsHtml += `
+                        </table>
+                    </td>
+                </tr>
+            `;
         }
+
+        // Add Top Selling Items
+        if (reportData.topSellingItems && reportData.topSellingItems.length > 0) {
+            quickStatsHtml += `
+                <tr>
+                    <td style="padding:0 20px 20px;">
+                        <h3 style="margin:0 0 12px;font-size:15px;color:#111;">🔥 Top Selling Items</h3>
+                        <table width="100%" cellpadding="8" cellspacing="0" style="border-collapse:collapse;background:#e8f5e9;border:1px solid #4caf50;border-radius:4px;">
+            `;
+
+            reportData.topSellingItems.forEach((item, index) => {
+                const borderStyle = index < reportData.topSellingItems.length - 1 ? 'border-bottom:1px solid #c8e6c9;' : '';
+                quickStatsHtml += `
+                    <tr>
+                        <td style="padding:10px;font-size:13px;color:#2e7d32;${borderStyle}">
+                            <strong>${index + 1}. ${item.name}</strong>
+                        </td>
+                        <td style="padding:10px;font-size:13px;color:#2e7d32;text-align:right;${borderStyle}">
+                            ${item.quantity} units sold
+                        </td>
+                    </tr>
+                `;
+            });
+
+            quickStatsHtml += `
+                        </table>
+                    </td>
+                </tr>
+            `;
+        }
+
+        // Add Least Selling Items (Slow Movers)
+        if (reportData.leastSellingItems && reportData.leastSellingItems.length > 0) {
+            quickStatsHtml += `
+                <tr>
+                    <td style="padding:0 20px 20px;">
+                        <h3 style="margin:0 0 12px;font-size:15px;color:#111;">📦 Slow Movers (No Sales This Week)</h3>
+                        <table width="100%" cellpadding="8" cellspacing="0" style="border-collapse:collapse;background:#fff3e0;border:1px solid #ff9800;border-radius:4px;">
+            `;
+
+            reportData.leastSellingItems.forEach((item, index) => {
+                const borderStyle = index < reportData.leastSellingItems.length - 1 ? 'border-bottom:1px solid #ffe0b2;' : '';
+                quickStatsHtml += `
+                    <tr>
+                        <td style="padding:10px;font-size:13px;color:#e65100;${borderStyle}">
+                            ${item.name}
+                        </td>
+                        <td style="padding:10px;font-size:13px;color:#e65100;text-align:right;${borderStyle}">
+                            ${item.quantity} units in stock
+                        </td>
+                    </tr>
+                `;
+            });
+
+            quickStatsHtml += `
+                        </table>
+                    </td>
+                </tr>
+            `;
+        }
+
+        // Charts removed - not included in email template
 
         // Build insights section
         let insightsHtml = '';
         if (reportData.insights.length > 0) {
-            insightsHtml = '<div class="insights-section"><div class="section-title">Insights & Highlights</div>';
-            reportData.insights.forEach((insight, index) => {
-                insightsHtml += `<div class="insight-item">${index + 1}. ${insight}</div>`;
+            insightsHtml = `
+                <tr>
+                    <td style="padding:0 20px 20px;">
+                        <h3 style="margin:0 0 10px;font-size:15px;color:#111;">Highlights</h3>
+                        <ul style="padding-left:20px;margin:0;color:#333;font-size:14px;line-height:1.8;">
+            `;
+            reportData.insights.forEach(insight => {
+                insightsHtml += `<li style="margin:6px 0;">${insight}</li>`;
             });
-            insightsHtml += '</div>';
+            insightsHtml += `
+                        </ul>
+                    </td>
+                </tr>
+            `;
         }
 
         // Build upgrade section (Trial users only)
+        const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
         let upgradeHtml = '';
         if (!isPaid) {
             upgradeHtml = `
-                <div class="upgrade-section">
-                    <div class="upgrade-text">
-                        Unlock detailed reports, backups, and advanced insights by upgrading your plan.
-                    </div>
-                    <a href="${FRONTEND_URL}/settings" class="upgrade-button">Upgrade Now</a>
-                </div>
+                <tr>
+                    <td style="padding:20px;background:#f9fafb;border-top:1px solid #eee;">
+                        <p style="margin:0 0 10px;font-size:14px;color:#333;">
+                            Unlock detailed reports, backups, and advanced insights by upgrading your plan.
+                        </p>
+                        <a href="${FRONTEND_URL}/settings"
+                           style="color:#4a7cff;font-size:14px;font-weight:bold;text-decoration:none;">
+                            Upgrade Now →
+                        </a>
+                    </td>
+                </tr>
             `;
         }
 
@@ -235,9 +424,8 @@ export const sendWeeklyReportEmail = async (companyId) => {
             .replace(/{{TOTAL_PRODUCTS}}/g, reportData.metrics.totalProducts)
             .replace(/{{LOW_STOCK_ITEMS}}/g, reportData.metrics.lowStockItems)
             .replace(/{{OUT_OF_STOCK_ITEMS}}/g, reportData.metrics.outOfStockItems)
-            .replace(/{{STOCK_MOVEMENTS}}/g, reportData.metrics.stockMovementsCount)
-            .replace(/{{MODE_SPECIFIC_METRICS}}/g, modeMetricsHtml)
-            .replace(/{{CHARTS_SECTION}}/g, chartsHtml)
+            .replace(/{{ACTIVITY_SECTION}}/g, activityHtml)
+            .replace(/{{QUICK_STATS}}/g, quickStatsHtml)
             .replace(/{{INSIGHTS_SECTION}}/g, insightsHtml)
             .replace(/{{UPGRADE_SECTION}}/g, upgradeHtml)
             .replace(/{{DASHBOARD_URL}}/g, `${FRONTEND_URL}/reports`);
@@ -245,32 +433,7 @@ export const sendWeeklyReportEmail = async (companyId) => {
         // Prepare email attachments
         const attachments = [];
 
-        // Add charts as inline attachments
-        if (charts) {
-            if (reportData.deliveryMode === 'direct') {
-                attachments.push({
-                    filename: 'sales-chart.png',
-                    content: charts.salesChart,
-                    cid: 'salesChart'
-                });
-                attachments.push({
-                    filename: 'purchases-chart.png',
-                    content: charts.purchasesChart,
-                    cid: 'purchasesChart'
-                });
-            } else {
-                attachments.push({
-                    filename: 'deliveries-out-chart.png',
-                    content: charts.deliveriesOutChart,
-                    cid: 'deliveriesOutChart'
-                });
-                attachments.push({
-                    filename: 'deliveries-in-chart.png',
-                    content: charts.deliveriesInChart,
-                    cid: 'deliveriesInChart'
-                });
-            }
-        }
+        // Charts are now embedded as base64 data URLs in the HTML
 
         // Add PDF attachment (Paid users only)
         if (pdfBuffer) {

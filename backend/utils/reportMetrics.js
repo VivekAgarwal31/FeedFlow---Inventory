@@ -96,6 +96,169 @@ export const getCommonMetrics = async (companyId) => {
 };
 
 /**
+ * Get total inventory quantity across all warehouses
+ */
+export const getTotalInventoryQuantity = async (companyId) => {
+    const result = await StockItem.aggregate([
+        { $match: { companyId } },
+        { $group: { _id: null, totalQuantity: { $sum: '$quantity' } } }
+    ]);
+
+    return result.length > 0 ? result[0].totalQuantity : 0;
+};
+
+/**
+ * Get warehouse breakdown (items per warehouse)
+ */
+export const getWarehouseBreakdown = async (companyId) => {
+    const Warehouse = (await import('../models/Warehouse.js')).default;
+
+    const warehouses = await Warehouse.find({ companyId }).select('name');
+    const breakdown = [];
+
+    for (const warehouse of warehouses) {
+        const result = await StockItem.aggregate([
+            { $match: { companyId, warehouseId: warehouse._id } },
+            {
+                $group: {
+                    _id: null,
+                    itemCount: { $sum: 1 },
+                    totalQuantity: { $sum: '$quantity' }
+                }
+            }
+        ]);
+
+        if (result.length > 0) {
+            breakdown.push({
+                warehouseName: warehouse.name,
+                itemCount: result[0].itemCount,
+                totalQuantity: result[0].totalQuantity
+            });
+        }
+    }
+
+    return breakdown;
+};
+
+/**
+ * Get top selling items for the week (Direct Mode)
+ */
+export const getTopSellingItemsDirect = async (companyId, startDate, endDate, limit = 3) => {
+    const result = await DirectSale.aggregate([
+        {
+            $match: {
+                companyId,
+                createdAt: { $gte: startDate, $lte: endDate }
+            }
+        },
+        { $unwind: '$items' },
+        {
+            $lookup: {
+                from: 'stockitems',
+                localField: 'items.itemId',
+                foreignField: '_id',
+                as: 'itemDetails'
+            }
+        },
+        { $unwind: { path: '$itemDetails', preserveNullAndEmptyArrays: false } },
+        {
+            $group: {
+                _id: '$items.itemId',
+                name: { $first: '$itemDetails.itemName' },
+                totalQuantity: { $sum: '$items.quantity' }
+            }
+        },
+        { $sort: { totalQuantity: -1 } },
+        { $limit: limit }
+    ]);
+
+    return result.map(item => ({
+        name: item.name || 'Unknown Item',
+        quantity: item.totalQuantity
+    }));
+};
+
+/**
+ * Get top selling items for the week (Order Mode)
+ */
+export const getTopSellingItemsOrder = async (companyId, startDate, endDate, limit = 3) => {
+    const result = await DeliveryOut.aggregate([
+        {
+            $match: {
+                companyId,
+                createdAt: { $gte: startDate, $lte: endDate }
+            }
+        },
+        { $unwind: '$items' },
+        {
+            $lookup: {
+                from: 'stockitems',
+                localField: 'items.itemId',
+                foreignField: '_id',
+                as: 'itemDetails'
+            }
+        },
+        { $unwind: { path: '$itemDetails', preserveNullAndEmptyArrays: false } },
+        {
+            $group: {
+                _id: '$items.itemId',
+                name: { $first: '$itemDetails.itemName' },
+                totalQuantity: { $sum: '$items.quantity' }
+            }
+        },
+        { $sort: { totalQuantity: -1 } },
+        { $limit: limit }
+    ]);
+
+    return result.map(item => ({
+        name: item.name || 'Unknown Item',
+        quantity: item.totalQuantity
+    }));
+};
+
+/**
+ * Get least selling items (items with low movement)
+ */
+export const getLeastSellingItems = async (companyId, startDate, endDate, limit = 3) => {
+    // Get all items with stock
+    const allItems = await StockItem.find({
+        companyId,
+        quantity: { $gt: 0 },
+        itemName: { $exists: true, $ne: null, $ne: '' }
+    }).select('itemName quantity').lean();
+
+    if (allItems.length === 0) {
+        return [];
+    }
+
+    // Get items that were sold
+    const soldItemIds = new Set();
+    const sales = await DirectSale.find({
+        companyId,
+        createdAt: { $gte: startDate, $lte: endDate }
+    }).select('items.itemId').lean();
+
+    sales.forEach(sale => {
+        sale.items.forEach(item => {
+            if (item.itemId) {
+                soldItemIds.add(item.itemId.toString());
+            }
+        });
+    });
+
+    // Find items that weren't sold and have valid names
+    const unsoldItems = allItems
+        .filter(item => !soldItemIds.has(item._id.toString()) && item.itemName && item.itemName.trim() !== '')
+        .slice(0, limit)
+        .map(item => ({
+            name: item.itemName,
+            quantity: item.quantity
+        }));
+
+    return unsoldItems;
+};
+
+/**
  * Get daily sales data for Direct Mode
  */
 export const getDailySalesData = async (companyId, startDate, endDate) => {
