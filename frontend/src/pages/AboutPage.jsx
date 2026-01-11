@@ -118,7 +118,7 @@ const AboutPage = () => {
                             <div className="border-l-4 border-primary pl-6">
                                 <h3 className="text-xl font-semibold mb-2">Security</h3>
                                 <p className="text-muted-foreground">
-                                    Your business data is precious. We implement industry-standard encryption, regular backups, and strict access controls to keep your information safe and private.
+                                    Your business data is precious. We implement industry-standard encryption, automated backups with one-click restore, Google OAuth sign-in, email verification, and strict access controls to keep your information safe and private.
                                 </p>
                             </div>
                             <div className="border-l-4 border-primary pl-6">

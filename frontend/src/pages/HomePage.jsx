@@ -334,11 +334,11 @@ const HomePage = () => {
                                 <div className="h-12 w-12 bg-primary/10 rounded-lg flex items-center justify-center mb-4">
                                     <BarChart3 className="h-6 w-6 text-primary" />
                                 </div>
-                                <CardTitle className="text-lg">Reports & Insights</CardTitle>
+                                <CardTitle className="text-lg">Reports & Analytics</CardTitle>
                             </CardHeader>
                             <CardContent>
                                 <p className="text-sm text-muted-foreground">
-                                    Generate detailed reports and gain actionable insights into your business performance.
+                                    Generate detailed reports, weekly email summaries, and gain actionable insights into your business performance.
                                 </p>
                             </CardContent>
                         </Card>
@@ -357,7 +357,7 @@ const HomePage = () => {
                     </div>
 
                     <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-                        {/* Feature 1 */}
+                        {/* Feature 1 - Inventory */}
                         <Card>
                             <CardHeader>
                                 <Warehouse className="h-10 w-10 text-primary mb-4" />
@@ -381,12 +381,12 @@ const HomePage = () => {
                                 </div>
                                 <div className="flex items-start space-x-2">
                                     <CheckCircle2 className="h-4 w-4 text-success mt-0.5 flex-shrink-0" />
-                                    <span className="text-sm">Batch & serial tracking</span>
+                                    <span className="text-sm">Real-time stock tracking</span>
                                 </div>
                             </CardContent>
                         </Card>
 
-                        {/* Feature 2 */}
+                        {/* Feature 2 - Sales & Purchases */}
                         <Card>
                             <CardHeader>
                                 <ShoppingCart className="h-10 w-10 text-primary mb-4" />
@@ -402,7 +402,7 @@ const HomePage = () => {
                                 </div>
                                 <div className="flex items-start space-x-2">
                                     <CheckCircle2 className="h-4 w-4 text-success mt-0.5 flex-shrink-0" />
-                                    <span className="text-sm">Order status management</span>
+                                    <span className="text-sm">Delivery management</span>
                                 </div>
                                 <div className="flex items-start space-x-2">
                                     <CheckCircle2 className="h-4 w-4 text-success mt-0.5 flex-shrink-0" />
@@ -415,36 +415,7 @@ const HomePage = () => {
                             </CardContent>
                         </Card>
 
-                        {/* Feature 3 */}
-                        <Card>
-                            <CardHeader>
-                                <TrendingUp className="h-10 w-10 text-primary mb-4" />
-                                <CardTitle>Delivery In / Delivery Out</CardTitle>
-                                <CardDescription>
-                                    Manage inbound & outbound logistics
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent className="space-y-2">
-                                <div className="flex items-start space-x-2">
-                                    <CheckCircle2 className="h-4 w-4 text-success mt-0.5 flex-shrink-0" />
-                                    <span className="text-sm">Delivery scheduling</span>
-                                </div>
-                                <div className="flex items-start space-x-2">
-                                    <CheckCircle2 className="h-4 w-4 text-success mt-0.5 flex-shrink-0" />
-                                    <span className="text-sm">Shipment tracking</span>
-                                </div>
-                                <div className="flex items-start space-x-2">
-                                    <CheckCircle2 className="h-4 w-4 text-success mt-0.5 flex-shrink-0" />
-                                    <span className="text-sm">Delivery notes & receipts</span>
-                                </div>
-                                <div className="flex items-start space-x-2">
-                                    <CheckCircle2 className="h-4 w-4 text-success mt-0.5 flex-shrink-0" />
-                                    <span className="text-sm">Stock auto-update</span>
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        {/* Feature 4 */}
+                        {/* Feature 3 - Accounting */}
                         <Card>
                             <CardHeader>
                                 <DollarSign className="h-10 w-10 text-primary mb-4" />
@@ -456,7 +427,7 @@ const HomePage = () => {
                             <CardContent className="space-y-2">
                                 <div className="flex items-start space-x-2">
                                     <CheckCircle2 className="h-4 w-4 text-success mt-0.5 flex-shrink-0" />
-                                    <span className="text-sm">Accounts receivable & payable</span>
+                                    <span className="text-sm">Receivables & payables</span>
                                 </div>
                                 <div className="flex items-start space-x-2">
                                     <CheckCircle2 className="h-4 w-4 text-success mt-0.5 flex-shrink-0" />
@@ -473,13 +444,13 @@ const HomePage = () => {
                             </CardContent>
                         </Card>
 
-                        {/* Feature 5 */}
+                        {/* Feature 4 - Reports */}
                         <Card>
                             <CardHeader>
                                 <BarChart3 className="h-10 w-10 text-primary mb-4" />
-                                <CardTitle>Reports & Insights</CardTitle>
+                                <CardTitle>Reports & Analytics</CardTitle>
                                 <CardDescription>
-                                    Data-driven decision making
+                                    Data-driven insights
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-2">
@@ -489,11 +460,11 @@ const HomePage = () => {
                                 </div>
                                 <div className="flex items-start space-x-2">
                                     <CheckCircle2 className="h-4 w-4 text-success mt-0.5 flex-shrink-0" />
-                                    <span className="text-sm">Inventory analytics</span>
+                                    <span className="text-sm">Weekly email reports</span>
                                 </div>
                                 <div className="flex items-start space-x-2">
                                     <CheckCircle2 className="h-4 w-4 text-success mt-0.5 flex-shrink-0" />
-                                    <span className="text-sm">Financial statements</span>
+                                    <span className="text-sm">Inventory analytics</span>
                                 </div>
                                 <div className="flex items-start space-x-2">
                                     <CheckCircle2 className="h-4 w-4 text-success mt-0.5 flex-shrink-0" />
@@ -502,7 +473,7 @@ const HomePage = () => {
                             </CardContent>
                         </Card>
 
-                        {/* Feature 6 */}
+                        {/* Feature 5 - Client & Supplier */}
                         <Card>
                             <CardHeader>
                                 <Users className="h-10 w-10 text-primary mb-4" />
@@ -527,6 +498,35 @@ const HomePage = () => {
                                 <div className="flex items-start space-x-2">
                                     <CheckCircle2 className="h-4 w-4 text-success mt-0.5 flex-shrink-0" />
                                     <span className="text-sm">Payment reminders</span>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        {/* Feature 6 - Data Management */}
+                        <Card>
+                            <CardHeader>
+                                <FileText className="h-10 w-10 text-primary mb-4" />
+                                <CardTitle>Data Management</CardTitle>
+                                <CardDescription>
+                                    Secure backup & restore
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-2">
+                                <div className="flex items-start space-x-2">
+                                    <CheckCircle2 className="h-4 w-4 text-success mt-0.5 flex-shrink-0" />
+                                    <span className="text-sm">Automated backups</span>
+                                </div>
+                                <div className="flex items-start space-x-2">
+                                    <CheckCircle2 className="h-4 w-4 text-success mt-0.5 flex-shrink-0" />
+                                    <span className="text-sm">One-click restore</span>
+                                </div>
+                                <div className="flex items-start space-x-2">
+                                    <CheckCircle2 className="h-4 w-4 text-success mt-0.5 flex-shrink-0" />
+                                    <span className="text-sm">Data export & import</span>
+                                </div>
+                                <div className="flex items-start space-x-2">
+                                    <CheckCircle2 className="h-4 w-4 text-success mt-0.5 flex-shrink-0" />
+                                    <span className="text-sm">Archive management</span>
                                 </div>
                             </CardContent>
                         </Card>

@@ -184,7 +184,7 @@ const FeaturesPage = () => {
                                 </CardHeader>
                                 <CardContent>
                                     <p className="text-muted-foreground text-sm">
-                                        Generate comprehensive reports for sales, purchases, inventory, and finances. Export to PDF or Excel for sharing.
+                                        Generate comprehensive reports for sales, purchases, inventory, and finances. Receive weekly email summaries. Export to PDF or Excel.
                                     </p>
                                 </CardContent>
                             </Card>
@@ -203,12 +203,48 @@ const FeaturesPage = () => {
 
                             <Card>
                                 <CardHeader>
-                                    <Users className="h-10 w-10 text-primary mb-3" />
-                                    <CardTitle>Staff Management</CardTitle>
+                                    <FileText className="h-10 w-10 text-primary mb-3" />
+                                    <CardTitle>Data Management</CardTitle>
                                 </CardHeader>
                                 <CardContent>
                                     <p className="text-muted-foreground text-sm">
-                                        Add team members, assign roles, track user activities, and maintain complete audit trails for all transactions.
+                                        Automated backups, one-click restore, data export/import, and archive management to keep your business data safe and accessible.
+                                    </p>
+                                </CardContent>
+                            </Card>
+
+                            <Card>
+                                <CardHeader>
+                                    <Users className="h-10 w-10 text-primary mb-3" />
+                                    <CardTitle>User Management & Security</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <p className="text-muted-foreground text-sm">
+                                        Add team members, assign roles, Google OAuth sign-in, email verification, and complete audit trails for all transactions.
+                                    </p>
+                                </CardContent>
+                            </Card>
+
+                            <Card>
+                                <CardHeader>
+                                    <BarChart3 className="h-10 w-10 text-primary mb-3" />
+                                    <CardTitle>Admin Panel</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <p className="text-muted-foreground text-sm">
+                                        Super admin dashboard with system-wide settings, user management, subscription tracking, and global feature toggles.
+                                    </p>
+                                </CardContent>
+                            </Card>
+
+                            <Card>
+                                <CardHeader>
+                                    <Package className="h-10 w-10 text-primary mb-3" />
+                                    <CardTitle>Coupons & Discounts</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <p className="text-muted-foreground text-sm">
+                                        Create and manage discount coupons with percentage or fixed amount discounts, validity periods, and usage tracking.
                                     </p>
                                 </CardContent>
                             </Card>
