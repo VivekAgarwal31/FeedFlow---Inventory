@@ -234,12 +234,8 @@ const Settings = () => {
         </Alert>
       )}
 
-      <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5 gap-1">
-          <TabsTrigger value="profile" className="flex items-center justify-center gap-1 px-2">
-            <User className="h-4 w-4 flex-shrink-0" />
-            <span className="hidden sm:inline truncate">Profile</span>
-          </TabsTrigger>
+      <Tabs defaultValue="company" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-4 gap-1">
           <TabsTrigger value="company" className="flex items-center justify-center gap-1 px-2">
             <Building2 className="h-4 w-4 flex-shrink-0" />
             <span className="hidden sm:inline truncate">Company</span>
@@ -257,117 +253,6 @@ const Settings = () => {
             <span className="hidden sm:inline truncate">Notifications</span>
           </TabsTrigger>
         </TabsList>
-
-        {/* Profile Tab */}
-        <TabsContent value="profile">
-          <Card>
-            <CardHeader>
-              <CardTitle>Profile Information</CardTitle>
-              <CardDescription>
-                Update your personal information and change your password
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleProfileUpdate} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Full Name</Label>
-                    <Input
-                      id="name"
-                      type="text"
-                      value={profileForm.name}
-                      onChange={(e) => {
-                        setProfileForm({ ...profileForm, name: e.target.value })
-                        clearMessages()
-                      }}
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email Address</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={profileForm.email}
-                      onChange={(e) => {
-                        setProfileForm({ ...profileForm, email: e.target.value })
-                        clearMessages()
-                      }}
-                      required
-                    />
-                  </div>
-                </div>
-
-                <Separator />
-
-                <div className="space-y-4">
-                  <h3 className="text-lg font-medium">Change Password</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Leave password fields empty if you don't want to change your password
-                  </p>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="currentPassword">Current Password</Label>
-                      <Input
-                        id="currentPassword"
-                        type="password"
-                        value={profileForm.currentPassword}
-                        onChange={(e) => {
-                          setProfileForm({ ...profileForm, currentPassword: e.target.value })
-                          clearMessages()
-                        }}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="newPassword">New Password</Label>
-                      <Input
-                        id="newPassword"
-                        type="password"
-                        value={profileForm.newPassword}
-                        onChange={(e) => {
-                          setProfileForm({ ...profileForm, newPassword: e.target.value })
-                          clearMessages()
-                        }}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="confirmPassword">Confirm New Password</Label>
-                      <Input
-                        id="confirmPassword"
-                        type="password"
-                        value={profileForm.confirmPassword}
-                        onChange={(e) => {
-                          setProfileForm({ ...profileForm, confirmPassword: e.target.value })
-                          clearMessages()
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex gap-3 pt-4">
-                  <Button type="submit" disabled={loading}>
-                    {loading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Updating...
-                      </>
-                    ) : (
-                      <>
-                        <Save className="mr-2 h-4 w-4" />
-                        Update Profile
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-        </TabsContent>
 
         {/* Company Tab */}
         <TabsContent value="company">

@@ -110,12 +110,19 @@ export const AuthProvider = ({ children }) => {
     }
   }
 
+  const setAuthData = (token, userData) => {
+    localStorage.setItem('token', token)
+    localStorage.setItem('user', JSON.stringify(userData))
+    setUser(userData)
+  }
+
   const value = {
     user,
     login,
     register,
     logout,
     updateUser,
+    setAuthData,
     loading,
     isAuthenticated: !!user
   }

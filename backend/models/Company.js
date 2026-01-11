@@ -67,6 +67,14 @@ const companySchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  googleLoginEnabled: {
+    type: Boolean,
+    default: false
+  },
+  googleOneTapEnabled: {
+    type: Boolean,
+    default: false
+  },
   metadata: {
     userCount: { type: Number, default: 0 },
     dataVolume: { type: Number, default: 0 },

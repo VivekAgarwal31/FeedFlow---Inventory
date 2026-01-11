@@ -374,4 +374,119 @@ router.post('/verify-otp', [
   }
 });
 
+// Google OAuth Login
+router.post('/google', [
+  body('token').notEmpty().withMessage('Google token is required')
+], async (req, res) => {
+  try {
+    console.log('Google auth request received');
+    console.log('Request body:', req.body);
+    console.log('Request body type:', typeof req.body);
+    console.log('Token:', req.body.token);
+
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      console.log('Validation errors:', errors.array());
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { token } = req.body;
+
+    // Import Google auth service
+    const { verifyGoogleToken, extractUserInfo } = await import('../services/googleAuthService.js');
+
+    // Verify Google token
+    let payload;
+    try {
+      payload = await verifyGoogleToken(token);
+    } catch (error) {
+      return res.status(401).json({ message: 'Invalid Google token' });
+    }
+
+    // Extract user info from Google payload
+    const { googleId, email, fullName, profilePicture, emailVerified } = extractUserInfo(payload);
+
+    // Check if user exists with this email
+    let user = await User.findOne({ email: email.toLowerCase() }).populate('companyId');
+
+    if (user) {
+      // User exists - link Google account if not already linked
+      if (!user.googleId) {
+        user.googleId = googleId;
+        user.authProvider = user.password ? 'both' : 'google';
+        user.profilePicture = profilePicture || user.profilePicture;
+        user.emailVerified = true; // Google emails are verified
+        await user.save();
+      }
+
+      // Update last login
+      user.lastLoginAt = new Date();
+      await user.save();
+    } else {
+      // Create new user with Google auth
+      user = new User({
+        fullName,
+        email: email.toLowerCase(),
+        googleId,
+        authProvider: 'google',
+        profilePicture,
+        emailVerified: true,
+        role: 'new_joinee'
+      });
+
+      // Set default permissions
+      user.setRolePermissions();
+      await user.save();
+
+      // Create trial subscription for new user
+      try {
+        const trialPlan = await Plan.getByType('trial');
+        if (trialPlan) {
+          await UserSubscription.createTrialSubscription(user._id, trialPlan._id);
+        }
+      } catch (subError) {
+        console.error('Failed to create trial subscription:', subError);
+      }
+    }
+
+    // Generate JWT token
+    const jwtToken = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+    res.json({
+      token: jwtToken,
+      user: {
+        id: user._id,
+        fullName: user.fullName,
+        email: user.email,
+        phone: user.phone,
+        companyId: user.companyId,
+        role: user.role,
+        permissions: user.permissions,
+        profilePicture: user.profilePicture,
+        authProvider: user.authProvider
+      }
+    });
+  } catch (error) {
+    console.error('Google auth error:', error);
+    res.status(500).json({ message: 'Server error during Google authentication' });
+  }
+});
+
+// Get system settings (public - for checking Google auth status)
+router.get('/system-settings', async (req, res) => {
+  try {
+    const SystemSettings = (await import('../models/SystemSettings.js')).default;
+    const settings = await SystemSettings.getSettings();
+
+    // Only return public settings
+    res.json({
+      googleLoginEnabled: settings.googleLoginEnabled,
+      googleOneTapEnabled: settings.googleOneTapEnabled
+    });
+  } catch (error) {
+    console.error('Get system settings error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 export default router;

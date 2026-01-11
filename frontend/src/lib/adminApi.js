@@ -38,5 +38,9 @@ export const adminAPI = {
     deleteUser: (id) => api.delete(`/admin/users/${id}`),
 
     // Analytics
-    getOverview: () => api.get('/admin/analytics/overview')
+    getOverview: () => api.get('/admin/analytics/overview'),
+
+    // System Settings
+    getSystemSettings: () => api.get('/admin/settings'),
+    updateSystemSettings: (data) => api.put('/admin/settings', data)
 };

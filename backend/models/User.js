@@ -16,8 +16,25 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: true,
+    required: function () {
+      // Password required only for local auth (not Google)
+      return this.authProvider === 'local' || !this.authProvider;
+    },
     minlength: 6
+  },
+  googleId: {
+    type: String,
+    unique: true,
+    sparse: true // Allows null values while maintaining uniqueness
+  },
+  authProvider: {
+    type: String,
+    enum: ['local', 'google', 'both'],
+    default: 'local'
+  },
+  profilePicture: {
+    type: String,
+    trim: true
   },
   phone: {
     type: String,
@@ -59,7 +76,8 @@ const userSchema = new mongoose.Schema({
 
 // Hash password before saving
 userSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) return next();
+  // Skip hashing if password is not modified or not provided (Google auth)
+  if (!this.isModified('password') || !this.password) return next();
   this.password = await bcrypt.hash(this.password, 12);
   next();
 });

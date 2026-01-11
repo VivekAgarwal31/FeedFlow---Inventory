@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { Loader2, Mail, ChevronLeft } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Label } from '../components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { useToast } from '../hooks/use-toast'
+import { useGoogleAuth } from '../hooks/useGoogleAuth'
 
 const AuthPage = () => {
   const { login, register, isAuthenticated } = useAuth()
@@ -17,6 +18,8 @@ const AuthPage = () => {
   const [loading, setLoading] = useState(false)
   const [otpLoading, setOtpLoading] = useState(false)
   const [error, setError] = useState('')
+  const { isGoogleLoaded, error: googleError, initializeGoogleButton } = useGoogleAuth()
+  const [googleAuthEnabled, setGoogleAuthEnabled] = useState(false)
 
   const [loginForm, setLoginForm] = useState({
     email: '',
@@ -31,6 +34,42 @@ const AuthPage = () => {
   })
 
   const [acceptedTerms, setAcceptedTerms] = useState(false)
+  const [activeTab, setActiveTab] = useState('login')
+
+  // Fetch system settings to check if Google auth is enabled
+  useEffect(() => {
+    const fetchSystemSettings = async () => {
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/auth/system-settings`)
+        const data = await res.json()
+        setGoogleAuthEnabled(data.googleLoginEnabled || false)
+      } catch (err) {
+        console.error('Failed to fetch system settings:', err)
+      }
+    }
+    fetchSystemSettings()
+  }, [])
+
+  // Initialize Google Sign-In buttons when loaded, enabled, or tab changes
+  useEffect(() => {
+    if (isGoogleLoaded && googleAuthEnabled) {
+      // Small delay to ensure DOM is ready
+      setTimeout(() => {
+        if (activeTab === 'login') {
+          initializeGoogleButton('google-login-button')
+        } else {
+          initializeGoogleButton('google-signup-button')
+        }
+      }, 100)
+    }
+  }, [isGoogleLoaded, googleAuthEnabled, activeTab, initializeGoogleButton])
+
+  // Show Google error if any
+  useEffect(() => {
+    if (googleError) {
+      setError(googleError)
+    }
+  }, [googleError])
 
   const handleLogin = async (e) => {
     e.preventDefault()
@@ -145,7 +184,7 @@ const AuthPage = () => {
         </CardHeader>
 
         <CardContent>
-          <Tabs defaultValue="login" className="w-full">
+          <Tabs defaultValue="login" value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="login">Login</TabsTrigger>
               <TabsTrigger value="signup">Sign Up</TabsTrigger>
@@ -192,6 +231,26 @@ const AuthPage = () => {
                   )}
                 </Button>
               </form>
+
+              {/* Google Sign-In - Only show if enabled by admin */}
+              {googleAuthEnabled && (
+                <>
+                  {/* Divider */}
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-background px-2 text-muted-foreground">
+                        Or continue with
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Google Sign-In Button */}
+                  <div id="google-login-button" className="w-full"></div>
+                </>
+              )}
 
               {/* Divider */}
               <div className="relative">
@@ -306,6 +365,26 @@ const AuthPage = () => {
                     'Create Account'
                   )}
                 </Button>
+
+                {/* Google Sign-In - Only show if enabled by admin */}
+                {googleAuthEnabled && (
+                  <>
+                    {/* Divider */}
+                    <div className="relative">
+                      <div className="absolute inset-0 flex items-center">
+                        <span className="w-full border-t" />
+                      </div>
+                      <div className="relative flex justify-center text-xs uppercase">
+                        <span className="bg-background px-2 text-muted-foreground">
+                          Or continue with
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Google Sign-In Button */}
+                    <div id="google-signup-button" className="w-full"></div>
+                  </>
+                )}
               </form>
             </TabsContent>
           </Tabs>

@@ -11,6 +11,7 @@ import {
   TrendingUp,
   ShoppingCart,
   Users,
+  User,
   Warehouse,
   Building2,
   ChevronDown,
@@ -30,12 +31,14 @@ import {
 import { useAuth } from '../../contexts/AuthContext'
 import { clientAPI, supplierAPI, stockAPI, warehouseAPI } from '../../lib/api'
 import OnboardingModal from '../OnboardingModal'
+import ProfileSettingsDialog from '../ProfileSettingsDialog'
 import { Button } from '../ui/button'
 import { Card } from '../ui/card'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '../ui/dropdown-menu'
 
@@ -56,6 +59,7 @@ const DashboardLayout = ({ children }) => {
     settings: false
   })
   const [showOnboarding, setShowOnboarding] = useState(false)
+  const [showProfileSettings, setShowProfileSettings] = useState(false)
 
   // Check if user needs onboarding
   React.useEffect(() => {
@@ -266,12 +270,37 @@ const DashboardLayout = ({ children }) => {
 
         {/* User Info - Right */}
         <div className="flex items-center gap-3 text-white flex-shrink-0">
-          <span className="text-sm hidden md:block">{user?.fullName}</span>
-          <div className="h-8 w-8 bg-primary rounded-full flex items-center justify-center">
-            <span className="text-sm font-medium">
-              {user?.fullName?.charAt(0)?.toUpperCase() || 'U'}
-            </span>
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center gap-3 hover:opacity-80 transition-opacity cursor-pointer">
+                <span className="text-sm hidden md:block">{user?.fullName}</span>
+                <div className="h-8 w-8 bg-primary rounded-full flex items-center justify-center overflow-hidden">
+                  {user?.profilePicture ? (
+                    <img
+                      src={user.profilePicture}
+                      alt={user.fullName}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-sm font-medium">
+                      {user?.fullName?.charAt(0)?.toUpperCase() || 'U'}
+                    </span>
+                  )}
+                </div>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem onClick={() => setShowProfileSettings(true)}>
+                <User className="mr-2 h-4 w-4" />
+                <span>Account Settings</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleLogout}>
+                <LogOut className="mr-2 h-4 w-4" />
+                <span>Sign Out</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -364,34 +393,7 @@ const DashboardLayout = ({ children }) => {
             </nav>
           </div>
 
-          {/* User Menu */}
-          <div className="p-3 border-t border-gray-200 bg-white">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="w-full justify-start px-3 py-2 h-auto hover:bg-gray-100">
-                  <div className="flex items-center gap-3">
-                    <div className="h-8 w-8 bg-primary rounded-full flex items-center justify-center">
-                      <span className="text-sm font-medium text-primary-foreground">
-                        {user?.fullName?.charAt(0)?.toUpperCase() || 'U'}
-                      </span>
-                    </div>
-                    <div className="text-left">
-                      <p className="text-sm font-medium text-gray-900">{user?.fullName}</p>
-                      <p className="text-xs text-gray-500 capitalize">
-                        {user?.role?.replace('_', ' ')}
-                      </p>
-                    </div>
-                  </div>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuItem onClick={handleLogout}>
-                  <LogOut className="mr-2 h-4 w-4" />
-                  <span>Sign Out</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+
         </div>
       </div>
 
@@ -429,6 +431,12 @@ const DashboardLayout = ({ children }) => {
       <OnboardingModal
         open={showOnboarding}
         onComplete={() => setShowOnboarding(false)}
+      />
+
+      {/* Profile Settings Dialog */}
+      <ProfileSettingsDialog
+        open={showProfileSettings}
+        onOpenChange={setShowProfileSettings}
       />
     </div>
   )

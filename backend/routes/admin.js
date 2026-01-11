@@ -593,4 +593,46 @@ router.delete('/cleanup/orphaned-data', async (req, res) => {
     }
 });
 
+// ============================================
+// SYSTEM SETTINGS ROUTES
+// ============================================
+
+// Get system settings
+router.get('/settings', async (req, res) => {
+    try {
+        const SystemSettings = (await import('../models/SystemSettings.js')).default;
+        const settings = await SystemSettings.getSettings();
+        res.json({ settings });
+    } catch (error) {
+        console.error('Get system settings error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// Update system settings
+router.put('/settings', async (req, res) => {
+    try {
+        const SystemSettings = (await import('../models/SystemSettings.js')).default;
+        const { googleLoginEnabled, googleOneTapEnabled } = req.body;
+
+        const updates = {};
+        if (typeof googleLoginEnabled !== 'undefined') {
+            updates.googleLoginEnabled = googleLoginEnabled;
+        }
+        if (typeof googleOneTapEnabled !== 'undefined') {
+            updates.googleOneTapEnabled = googleOneTapEnabled;
+        }
+
+        const settings = await SystemSettings.updateSettings(updates);
+
+        res.json({
+            message: 'System settings updated successfully',
+            settings
+        });
+    } catch (error) {
+        console.error('Update system settings error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
 export default router;

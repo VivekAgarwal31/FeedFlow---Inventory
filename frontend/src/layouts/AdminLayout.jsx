@@ -1,6 +1,6 @@
 import React, { Suspense } from 'react'
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom'
-import { Building2, Users, BarChart3, LogOut, Shield, Ticket } from 'lucide-react'
+import { Building2, Users, BarChart3, LogOut, Shield, Ticket, Settings } from 'lucide-react'
 import { Button } from '../components/ui/button'
 
 const AdminLayout = () => {
@@ -32,7 +32,8 @@ const AdminLayout = () => {
         { path: '/admin', label: 'Overview', icon: BarChart3 },
         { path: '/admin/companies', label: 'Companies', icon: Building2 },
         { path: '/admin/users', label: 'Users', icon: Users },
-        { path: '/admin/coupons', label: 'Coupons', icon: Ticket }
+        { path: '/admin/coupons', label: 'Coupons', icon: Ticket },
+        { path: '/admin/toggles', label: 'System Settings', icon: Settings }
     ]
 
     return (
