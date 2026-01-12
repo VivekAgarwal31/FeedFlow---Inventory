@@ -158,7 +158,7 @@ const PrivacyPolicy = () => {
                                 <li><strong>Opt-Out:</strong> Unsubscribe from marketing communications at any time</li>
                             </ul>
                             <p className="text-foreground leading-relaxed mt-4">
-                                To exercise these rights, please contact us at <a href="mailto:support@bhagro.site" className="text-primary hover:underline">support@bhagro.site</a>.
+                                To exercise these rights, please contact us at <a href="mailto:support@stock-wise.in" className="text-primary hover:underline">support@stock-wise.in</a>.
                             </p>
                         </div>
 
@@ -202,7 +202,7 @@ const PrivacyPolicy = () => {
                                 If you have any questions, concerns, or requests regarding this Privacy Policy or our data practices, please contact us:
                             </p>
                             <div className="mt-4 p-4 bg-muted rounded-lg">
-                                <p className="text-foreground"><strong>Email:</strong> <a href="mailto:support@bhagro.site" className="text-primary hover:underline">support@bhagro.site</a></p>
+                                <p className="text-foreground"><strong>Email:</strong> <a href="mailto:support@stock-wise.in" className="text-primary hover:underline">support@stock-wise.in</a></p>
                                 <p className="text-foreground mt-2"><strong>Service:</strong> Stockwise - Smart Inventory & Accounting Management</p>
                             </div>
                         </div>

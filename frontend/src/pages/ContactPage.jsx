@@ -21,15 +21,35 @@ const ContactPage = () => {
         e.preventDefault()
         setLoading(true)
 
-        // Simulate form submission
-        setTimeout(() => {
+        try {
+            const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/auth/contact`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(formData)
+            })
+
+            const data = await response.json()
+
+            if (!response.ok) {
+                throw new Error(data.message || 'Failed to send message')
+            }
+
             toast({
                 title: 'Message Sent!',
-                description: 'Thank you for contacting us. We\'ll get back to you soon.'
+                description: data.message || 'Thank you for contacting us. We\'ll get back to you soon.'
             })
             setFormData({ name: '', email: '', message: '' })
+        } catch (error) {
+            toast({
+                title: 'Error',
+                description: error.message || 'Failed to send message. Please try again.',
+                variant: 'destructive'
+            })
+        } finally {
             setLoading(false)
-        }, 1000)
+        }
     }
 
     return (
@@ -139,8 +159,8 @@ const ContactPage = () => {
                                         <Mail className="h-5 w-5 text-primary mt-0.5" />
                                         <div>
                                             <p className="text-foreground font-medium mb-1">General Inquiries</p>
-                                            <a href="mailto:support@bhagro.site" className="text-primary hover:underline">
-                                                support@bhagro.site
+                                            <a href="mailto:support@stock-wise.in" className="text-primary hover:underline">
+                                                support@stock-wise.in
                                             </a>
                                             <p className="text-sm text-muted-foreground mt-2">
                                                 We typically respond within 24-48 hours during business days.

@@ -576,6 +576,35 @@ router.post('/microsoft', [
   }
 });
 
+// Contact form endpoint
+router.post('/contact', async (req, res) => {
+  try {
+    const { name, email, message } = req.body;
+
+    // Validate required fields
+    if (!name || !email || !message) {
+      return res.status(400).json({ message: 'All fields are required' });
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ message: 'Invalid email address' });
+    }
+
+    // Send contact email
+    const { sendContactEmail } = await import('../services/contactEmailService.js');
+    await sendContactEmail({ name, email, message });
+
+    res.json({
+      message: 'Message sent successfully. We\'ll get back to you soon!'
+    });
+  } catch (error) {
+    console.error('Contact form error:', error);
+    res.status(500).json({ message: 'Failed to send message. Please try again later.' });
+  }
+});
+
 // Get system settings (public - for checking Google auth status)
 router.get('/system-settings', async (req, res) => {
   try {

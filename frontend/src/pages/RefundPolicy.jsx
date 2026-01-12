@@ -70,7 +70,7 @@ const RefundPolicy = () => {
 
                             <h3 className="text-xl font-semibold mt-6 mb-3">Cancellation Process</h3>
                             <p className="text-foreground leading-relaxed">
-                                You may cancel your paid subscription at any time through your account settings or by contacting our support team at <a href="mailto:support@bhagro.site" className="text-primary hover:underline">support@bhagro.site</a>.
+                                You may cancel your paid subscription at any time through your account settings or by contacting our support team at <a href="mailto:support@stock-wise.in" className="text-primary hover:underline">support@stock-wise.in</a>.
                             </p>
                             <p className="text-foreground leading-relaxed mt-4">
                                 When you cancel your subscription:
@@ -98,7 +98,7 @@ const RefundPolicy = () => {
 
                             <h3 className="text-xl font-semibold mt-6 mb-3">Refund Request Process</h3>
                             <p className="text-foreground leading-relaxed">
-                                To request a refund, please contact us at <a href="mailto:support@bhagro.site" className="text-primary hover:underline">support@bhagro.site</a> within 7 days of the charge. Your request should include:
+                                To request a refund, please contact us at <a href="mailto:support@stock-wise.in" className="text-primary hover:underline">support@stock-wise.in</a> within 7 days of the charge. Your request should include:
                             </p>
                             <ul className="list-disc pl-6 space-y-2 text-foreground">
                                 <li>Your account email address</li>
@@ -179,7 +179,7 @@ const RefundPolicy = () => {
                                 If you believe you have been incorrectly charged or have questions about your billing:
                             </p>
                             <ol className="list-decimal pl-6 space-y-2 text-foreground">
-                                <li>Contact us immediately at <a href="mailto:support@bhagro.site" className="text-primary hover:underline">support@bhagro.site</a></li>
+                                <li>Contact us immediately at <a href="mailto:support@stock-wise.in" className="text-primary hover:underline">support@stock-wise.in</a></li>
                                 <li>Provide your account details and transaction information</li>
                                 <li>Explain the nature of the dispute</li>
                                 <li>We will investigate and respond within 5-7 business days</li>
@@ -218,7 +218,7 @@ const RefundPolicy = () => {
                                 If you have any questions about this Refund and Cancellation Policy or need assistance with your subscription, please contact us:
                             </p>
                             <div className="mt-4 p-4 bg-muted rounded-lg">
-                                <p className="text-foreground"><strong>Email:</strong> <a href="mailto:support@bhagro.site" className="text-primary hover:underline">support@bhagro.site</a></p>
+                                <p className="text-foreground"><strong>Email:</strong> <a href="mailto:support@stock-wise.in" className="text-primary hover:underline">support@stock-wise.in</a></p>
                                 <p className="text-foreground mt-2"><strong>Service:</strong> Stockwise - Smart Inventory & Accounting Management</p>
                                 <p className="text-foreground mt-2"><strong>Response Time:</strong> We typically respond within 24-48 hours during business days</p>
                             </div>

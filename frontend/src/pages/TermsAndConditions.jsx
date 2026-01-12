@@ -279,7 +279,7 @@ const TermsAndConditions = () => {
                                 If you have any questions about these Terms, please contact us:
                             </p>
                             <div className="mt-4 p-4 bg-muted rounded-lg">
-                                <p className="text-foreground"><strong>Email:</strong> <a href="mailto:support@bhagro.site" className="text-primary hover:underline">support@bhagro.site</a></p>
+                                <p className="text-foreground"><strong>Email:</strong> <a href="mailto:support@stock-wise.in" className="text-primary hover:underline">support@stock-wise.in</a></p>
                                 <p className="text-foreground mt-2"><strong>Service:</strong> Stockwise - Smart Inventory & Accounting Management</p>
                             </div>
                         </div>
