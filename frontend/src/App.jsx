@@ -19,6 +19,7 @@ import SupportPage from './pages/SupportPage'
 import OTPVerification from './pages/OTPVerification'
 import BlogIndex from './pages/BlogIndex'
 import BlogPost from './pages/BlogPost'
+import MicrosoftCallback from './pages/MicrosoftCallback'
 
 // Dashboard pages - lazy load to reduce initial bundle
 const CompanySetupPage = lazy(() => import('./pages/CompanySetupPage'))
@@ -99,6 +100,7 @@ function App() {
         <Route path="/support" element={<SupportPage />} />
         <Route path="/blog" element={<BlogIndex />} />
         <Route path="/blog/:slug" element={<BlogPost />} />
+        <Route path="/auth/microsoft/callback" element={<MicrosoftCallback />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     )

@@ -1,48 +1,41 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 const GOOGLE_CLIENT_ID = '475629048114-hd4q6olqdh7cm6j34m4l39vgu7t4bee4.apps.googleusercontent.com';
+const GOOGLE_REDIRECT_URI = window.location.origin + '/auth/google/callback';
+const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 
 export const useGoogleAuth = () => {
-    const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
     const { setAuthData } = useAuth();
     const navigate = useNavigate();
 
-    // Initialize Google Identity Services
-    useEffect(() => {
-        // Check if Google script is loaded
-        if (window.google?.accounts) {
-            setIsGoogleLoaded(true);
-            return;
-        }
+    /**
+     * Generate Google OAuth authorization URL
+     */
+    const getGoogleAuthUrl = useCallback(() => {
+        const params = new URLSearchParams({
+            client_id: GOOGLE_CLIENT_ID,
+            redirect_uri: GOOGLE_REDIRECT_URI,
+            response_type: 'token',
+            scope: 'openid profile email',
+            prompt: 'select_account'
+        });
 
-        // Wait for script to load
-        const checkGoogle = setInterval(() => {
-            if (window.google?.accounts) {
-                setIsGoogleLoaded(true);
-                clearInterval(checkGoogle);
-            }
-        }, 100);
-
-        // Cleanup
-        return () => clearInterval(checkGoogle);
+        return `${GOOGLE_AUTH_URL}?${params.toString()}`;
     }, []);
 
-    // Handle Google credential response
-    const handleCredentialResponse = useCallback(async (response) => {
+    /**
+     * Handle Google OAuth callback with token
+     */
+    const handleGoogleCallback = useCallback(async (token) => {
         setIsLoading(true);
         setError(null);
 
         try {
-            console.log('Google credential response:', response);
-
-            // Ensure we have a credential
-            if (!response.credential) {
-                throw new Error('No credential received from Google');
-            }
+            console.log('Google token received');
 
             // Send token to backend
             const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/auth/google`, {
@@ -50,7 +43,7 @@ export const useGoogleAuth = () => {
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ token: response.credential })
+                body: JSON.stringify({ token })
             });
 
             const data = await res.json();
@@ -61,11 +54,10 @@ export const useGoogleAuth = () => {
 
             console.log('Google auth success:', data);
 
-            // Set auth data directly (no need for API call since backend already authenticated)
+            // Set auth data directly
             setAuthData(data.token, data.user);
 
             // Navigate based on onboarding status
-            // If user has no company or onboarding not completed, go to company setup
             if (!data.user.companyId || !data.user.companyId.onboardingCompleted) {
                 navigate('/company-setup');
             } else {
@@ -77,69 +69,62 @@ export const useGoogleAuth = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [navigate]);
+    }, [navigate, setAuthData]);
 
-    // Initialize Google Sign-In button
-    const initializeGoogleButton = useCallback((elementId) => {
-        if (!isGoogleLoaded || !window.google?.accounts) {
-            console.warn('Google Identity Services not loaded');
-            return;
-        }
+    /**
+     * Initiate Google login flow with popup
+     */
+    const loginWithGoogle = useCallback(() => {
+        setError(null);
+        const authUrl = getGoogleAuthUrl();
 
-        try {
-            window.google.accounts.id.initialize({
-                client_id: GOOGLE_CLIENT_ID,
-                callback: handleCredentialResponse,
-                auto_select: false,
-                cancel_on_tap_outside: true
-            });
+        // Open Google login in popup
+        const width = 500;
+        const height = 600;
+        const left = window.screen.width / 2 - width / 2;
+        const top = window.screen.height / 2 - height / 2;
 
-            // Render button
-            window.google.accounts.id.renderButton(
-                document.getElementById(elementId),
-                {
-                    theme: 'outline',
-                    size: 'large',
-                    text: 'continue_with',
-                    shape: 'rectangular',
-                    width: 250  // Fixed width to prevent layout shift
+        const popup = window.open(
+            authUrl,
+            'Google Login',
+            `width=${width},height=${height},left=${left},top=${top}`
+        );
+
+        // Listen for callback
+        const checkPopup = setInterval(() => {
+            if (!popup || popup.closed) {
+                clearInterval(checkPopup);
+                return;
+            }
+
+            try {
+                // Check if popup has navigated to our callback URL
+                if (popup.location.href.includes(GOOGLE_REDIRECT_URI)) {
+                    // Extract token from URL hash
+                    const hash = popup.location.hash;
+                    const params = new URLSearchParams(hash.substring(1));
+                    const token = params.get('access_token');
+                    const errorParam = params.get('error');
+
+                    popup.close();
+                    clearInterval(checkPopup);
+
+                    if (errorParam) {
+                        setError('Google authentication was cancelled or failed');
+                    } else if (token) {
+                        handleGoogleCallback(token);
+                    }
                 }
-            );
-        } catch (err) {
-            console.error('Failed to initialize Google button:', err);
-            setError('Failed to load Google Sign-In');
-        }
-    }, [isGoogleLoaded, handleCredentialResponse]);
-
-    // Initialize One Tap
-    const initializeOneTap = useCallback(() => {
-        if (!isGoogleLoaded || !window.google?.accounts) {
-            return;
-        }
-
-        try {
-            window.google.accounts.id.initialize({
-                client_id: GOOGLE_CLIENT_ID,
-                callback: handleCredentialResponse,
-                auto_select: false
-            });
-
-            // Display One Tap prompt
-            window.google.accounts.id.prompt((notification) => {
-                if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-                    console.log('One Tap not displayed:', notification.getNotDisplayedReason());
-                }
-            });
-        } catch (err) {
-            console.error('Failed to initialize One Tap:', err);
-        }
-    }, [isGoogleLoaded, handleCredentialResponse]);
+            } catch (e) {
+                // Cross-origin error - popup is still on Google's domain
+                // This is expected, just continue checking
+            }
+        }, 500);
+    }, [getGoogleAuthUrl, handleGoogleCallback]);
 
     return {
-        isGoogleLoaded,
         isLoading,
         error,
-        initializeGoogleButton,
-        initializeOneTap
+        loginWithGoogle
     };
 };

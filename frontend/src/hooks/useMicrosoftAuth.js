@@ -94,34 +94,31 @@ export const useMicrosoftAuth = () => {
             `width=${width},height=${height},left=${left},top=${top}`
         );
 
-        // Listen for callback
-        const checkPopup = setInterval(() => {
-            if (!popup || popup.closed) {
-                clearInterval(checkPopup);
+        // Listen for postMessage from callback page
+        const handleMessage = (event) => {
+            // Verify origin for security
+            if (event.origin !== window.location.origin) {
                 return;
             }
 
-            try {
-                // Check if popup has navigated to our callback URL
-                if (popup.location.href.includes(MICROSOFT_REDIRECT_URI)) {
-                    const urlParams = new URLSearchParams(popup.location.search);
-                    const code = urlParams.get('code');
-                    const errorParam = urlParams.get('error');
-
-                    popup.close();
-                    clearInterval(checkPopup);
-
-                    if (errorParam) {
-                        setError('Microsoft authentication was cancelled or failed');
-                    } else if (code) {
-                        handleMicrosoftCallback(code);
-                    }
-                }
-            } catch (e) {
-                // Cross-origin error - popup is still on Microsoft's domain
-                // This is expected, just continue checking
+            if (event.data.type === 'MICROSOFT_AUTH_SUCCESS') {
+                window.removeEventListener('message', handleMessage);
+                handleMicrosoftCallback(event.data.code);
+            } else if (event.data.type === 'MICROSOFT_AUTH_ERROR') {
+                window.removeEventListener('message', handleMessage);
+                setError('Microsoft authentication failed');
             }
-        }, 500);
+        };
+
+        window.addEventListener('message', handleMessage);
+
+        // Cleanup if popup is closed without completing auth
+        const checkClosed = setInterval(() => {
+            if (popup && popup.closed) {
+                clearInterval(checkClosed);
+                window.removeEventListener('message', handleMessage);
+            }
+        }, 1000);
     }, [getMicrosoftAuthUrl, handleMicrosoftCallback]);
 
     return {
