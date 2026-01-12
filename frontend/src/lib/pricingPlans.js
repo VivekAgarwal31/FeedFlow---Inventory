@@ -47,11 +47,11 @@ export const pricingPlans = [
         ctaVariant: 'default'
     },
     {
-        id: 'paid',
+        id: 'professional',
         name: 'Professional',
         price: 2499,
-        priceLabel: '₹2,499/month',
-        description: 'For growing businesses with advanced needs',
+        priceLabel: '₹2,499',
+        description: 'One-time payment for lifetime access',
         features: [
             'Unlimited warehouses',
             'Unlimited stock items',
@@ -62,9 +62,10 @@ export const pricingPlans = [
             'Advanced reports & analytics',
             'Backup & restore',
             'Priority email support',
-            'Multi-user access'
+            'Multi-user access',
+            'Lifetime access - pay once, use forever'
         ],
-        highlighted: false,
+        highlighted: true,
         ctaText: 'Upgrade Now',
         ctaVariant: 'default'
     }
