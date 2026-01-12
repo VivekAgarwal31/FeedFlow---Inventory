@@ -100,9 +100,9 @@ export const useGoogleAuth = () => {
                 {
                     theme: 'outline',
                     size: 'large',
-                    width: '100%',
                     text: 'continue_with',
-                    shape: 'rectangular'
+                    shape: 'rectangular',
+                    width: 250  // Fixed width to prevent layout shift
                 }
             );
         } catch (err) {

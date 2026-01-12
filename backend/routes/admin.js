@@ -613,7 +613,7 @@ router.get('/settings', async (req, res) => {
 router.put('/settings', async (req, res) => {
     try {
         const SystemSettings = (await import('../models/SystemSettings.js')).default;
-        const { googleLoginEnabled, googleOneTapEnabled } = req.body;
+        const { googleLoginEnabled, googleOneTapEnabled, microsoftLoginEnabled, microsoftOneTapEnabled } = req.body;
 
         const updates = {};
         if (typeof googleLoginEnabled !== 'undefined') {
@@ -621,6 +621,12 @@ router.put('/settings', async (req, res) => {
         }
         if (typeof googleOneTapEnabled !== 'undefined') {
             updates.googleOneTapEnabled = googleOneTapEnabled;
+        }
+        if (typeof microsoftLoginEnabled !== 'undefined') {
+            updates.microsoftLoginEnabled = microsoftLoginEnabled;
+        }
+        if (typeof microsoftOneTapEnabled !== 'undefined') {
+            updates.microsoftOneTapEnabled = microsoftOneTapEnabled;
         }
 
         const settings = await SystemSettings.updateSettings(updates);

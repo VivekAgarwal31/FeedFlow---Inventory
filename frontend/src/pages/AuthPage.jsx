@@ -10,6 +10,7 @@ import { Label } from '../components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { useToast } from '../hooks/use-toast'
 import { useGoogleAuth } from '../hooks/useGoogleAuth'
+import { useMicrosoftAuth } from '../hooks/useMicrosoftAuth'
 
 const AuthPage = () => {
   const { login, register, isAuthenticated } = useAuth()
@@ -19,7 +20,9 @@ const AuthPage = () => {
   const [otpLoading, setOtpLoading] = useState(false)
   const [error, setError] = useState('')
   const { isGoogleLoaded, error: googleError, initializeGoogleButton } = useGoogleAuth()
+  const { loginWithMicrosoft, isLoading: microsoftLoading, error: microsoftError } = useMicrosoftAuth()
   const [googleAuthEnabled, setGoogleAuthEnabled] = useState(false)
+  const [microsoftAuthEnabled, setMicrosoftAuthEnabled] = useState(false)
 
   const [loginForm, setLoginForm] = useState({
     email: '',
@@ -36,13 +39,14 @@ const AuthPage = () => {
   const [acceptedTerms, setAcceptedTerms] = useState(false)
   const [activeTab, setActiveTab] = useState('login')
 
-  // Fetch system settings to check if Google auth is enabled
+  // Fetch system settings to check if OAuth providers are enabled
   useEffect(() => {
     const fetchSystemSettings = async () => {
       try {
         const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/auth/system-settings`)
         const data = await res.json()
         setGoogleAuthEnabled(data.googleLoginEnabled || false)
+        setMicrosoftAuthEnabled(data.microsoftLoginEnabled || false)
       } catch (err) {
         console.error('Failed to fetch system settings:', err)
       }
@@ -64,12 +68,15 @@ const AuthPage = () => {
     }
   }, [isGoogleLoaded, googleAuthEnabled, activeTab, initializeGoogleButton])
 
-  // Show Google error if any
+  // Show OAuth errors if any
   useEffect(() => {
     if (googleError) {
       setError(googleError)
     }
-  }, [googleError])
+    if (microsoftError) {
+      setError(microsoftError)
+    }
+  }, [googleError, microsoftError])
 
   const handleLogin = async (e) => {
     e.preventDefault()
@@ -232,8 +239,8 @@ const AuthPage = () => {
                 </Button>
               </form>
 
-              {/* Google Sign-In - Only show if enabled by admin */}
-              {googleAuthEnabled && (
+              {/* OAuth Sign-In - Only show if enabled by admin */}
+              {(googleAuthEnabled || microsoftAuthEnabled) && (
                 <>
                   {/* Divider */}
                   <div className="relative">
@@ -247,8 +254,41 @@ const AuthPage = () => {
                     </div>
                   </div>
 
-                  {/* Google Sign-In Button */}
-                  <div id="google-login-button" className="w-full"></div>
+                  {/* OAuth Buttons - Stack vertically for better compatibility */}
+                  <div className="space-y-3">
+                    {/* Google Sign-In Button */}
+                    {googleAuthEnabled && (
+                      <div id="google-login-button" className="flex justify-center"></div>
+                    )}
+
+                    {/* Microsoft Sign-In Button */}
+                    {microsoftAuthEnabled && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full h-10 flex items-center justify-center"
+                        onClick={loginWithMicrosoft}
+                        disabled={loading || otpLoading || microsoftLoading}
+                      >
+                        {microsoftLoading ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Signing in...
+                          </>
+                        ) : (
+                          <>
+                            <svg className="mr-2 h-5 w-5" viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <rect x="1" y="1" width="9" height="9" fill="#F25022" />
+                              <rect x="11" y="1" width="9" height="9" fill="#7FBA00" />
+                              <rect x="1" y="11" width="9" height="9" fill="#00A4EF" />
+                              <rect x="11" y="11" width="9" height="9" fill="#FFB900" />
+                            </svg>
+                            Continue with Microsoft
+                          </>
+                        )}
+                      </Button>
+                    )}
+                  </div>
                 </>
               )}
 
@@ -366,8 +406,8 @@ const AuthPage = () => {
                   )}
                 </Button>
 
-                {/* Google Sign-In - Only show if enabled by admin */}
-                {googleAuthEnabled && (
+                {/* OAuth Sign-In - Only show if enabled by admin */}
+                {(googleAuthEnabled || microsoftAuthEnabled) && (
                   <>
                     {/* Divider */}
                     <div className="relative">
@@ -381,8 +421,41 @@ const AuthPage = () => {
                       </div>
                     </div>
 
-                    {/* Google Sign-In Button */}
-                    <div id="google-signup-button" className="w-full"></div>
+                    {/* OAuth Buttons - Stack vertically for better compatibility */}
+                    <div className="space-y-3">
+                      {/* Google Sign-In Button */}
+                      {googleAuthEnabled && (
+                        <div id="google-signup-button" className="flex justify-center"></div>
+                      )}
+
+                      {/* Microsoft Sign-In Button */}
+                      {microsoftAuthEnabled && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full h-10 flex items-center justify-center"
+                          onClick={loginWithMicrosoft}
+                          disabled={loading || microsoftLoading}
+                        >
+                          {microsoftLoading ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Signing in...
+                            </>
+                          ) : (
+                            <>
+                              <svg className="mr-2 h-5 w-5" viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <rect x="1" y="1" width="9" height="9" fill="#F25022" />
+                                <rect x="11" y="1" width="9" height="9" fill="#7FBA00" />
+                                <rect x="1" y="11" width="9" height="9" fill="#00A4EF" />
+                                <rect x="11" y="11" width="9" height="9" fill="#FFB900" />
+                              </svg>
+                              Continue with Microsoft
+                            </>
+                          )}
+                        </Button>
+                      )}
+                    </div>
                   </>
                 )}
               </form>

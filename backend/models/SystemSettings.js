@@ -15,6 +15,16 @@ const systemSettingsSchema = new mongoose.Schema({
     googleOneTapEnabled: {
         type: Boolean,
         default: false
+    },
+
+    // Microsoft Authentication
+    microsoftLoginEnabled: {
+        type: Boolean,
+        default: false
+    },
+    microsoftOneTapEnabled: {
+        type: Boolean,
+        default: false
     }
 }, {
     timestamps: true

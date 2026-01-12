@@ -27,9 +27,14 @@ const userSchema = new mongoose.Schema({
     unique: true,
     sparse: true // Allows null values while maintaining uniqueness
   },
+  microsoftId: {
+    type: String,
+    unique: true,
+    sparse: true // Allows null values while maintaining uniqueness
+  },
   authProvider: {
     type: String,
-    enum: ['local', 'google', 'both'],
+    enum: ['local', 'google', 'microsoft', 'both'],
     default: 'local'
   },
   profilePicture: {

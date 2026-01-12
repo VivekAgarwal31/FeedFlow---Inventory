@@ -472,6 +472,110 @@ router.post('/google', [
   }
 });
 
+// Microsoft OAuth Login
+router.post('/microsoft', [
+  body('code').notEmpty().withMessage('Authorization code is required')
+], async (req, res) => {
+  try {
+    console.log('Microsoft auth request received');
+    console.log('Request body:', req.body);
+
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      console.log('Validation errors:', errors.array());
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { code } = req.body;
+
+    // Import Microsoft auth service
+    const { exchangeCodeForToken, verifyMicrosoftToken, extractUserInfo } = await import('../services/microsoftAuthService.js');
+
+    // Exchange code for access token
+    let accessToken;
+    try {
+      accessToken = await exchangeCodeForToken(code);
+    } catch (error) {
+      return res.status(401).json({ message: 'Invalid authorization code' });
+    }
+
+    // Verify token and get user info
+    let microsoftUser;
+    try {
+      microsoftUser = await verifyMicrosoftToken(accessToken);
+    } catch (error) {
+      return res.status(401).json({ message: 'Failed to verify Microsoft token' });
+    }
+
+    // Extract user info from Microsoft payload
+    const { microsoftId, email, fullName, profilePicture, emailVerified } = extractUserInfo(microsoftUser);
+
+    // Check if user exists with this email
+    let user = await User.findOne({ email: email.toLowerCase() }).populate('companyId');
+
+    if (user) {
+      // User exists - link Microsoft account if not already linked
+      if (!user.microsoftId) {
+        user.microsoftId = microsoftId;
+        user.authProvider = user.password ? 'both' : 'microsoft';
+        user.profilePicture = profilePicture || user.profilePicture;
+        user.emailVerified = true; // Microsoft emails are verified
+        await user.save();
+      }
+
+      // Update last login
+      user.lastLoginAt = new Date();
+      await user.save();
+    } else {
+      // Create new user with Microsoft auth
+      user = new User({
+        fullName,
+        email: email.toLowerCase(),
+        microsoftId,
+        authProvider: 'microsoft',
+        profilePicture,
+        emailVerified: true,
+        role: 'new_joinee'
+      });
+
+      // Set default permissions
+      user.setRolePermissions();
+      await user.save();
+
+      // Create trial subscription for new user
+      try {
+        const trialPlan = await Plan.getByType('trial');
+        if (trialPlan) {
+          await UserSubscription.createTrialSubscription(user._id, trialPlan._id);
+        }
+      } catch (subError) {
+        console.error('Failed to create trial subscription:', subError);
+      }
+    }
+
+    // Generate JWT token
+    const jwtToken = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+    res.json({
+      token: jwtToken,
+      user: {
+        id: user._id,
+        fullName: user.fullName,
+        email: user.email,
+        phone: user.phone,
+        companyId: user.companyId,
+        role: user.role,
+        permissions: user.permissions,
+        profilePicture: user.profilePicture,
+        authProvider: user.authProvider
+      }
+    });
+  } catch (error) {
+    console.error('Microsoft auth error:', error);
+    res.status(500).json({ message: 'Server error during Microsoft authentication' });
+  }
+});
+
 // Get system settings (public - for checking Google auth status)
 router.get('/system-settings', async (req, res) => {
   try {
@@ -481,7 +585,9 @@ router.get('/system-settings', async (req, res) => {
     // Only return public settings
     res.json({
       googleLoginEnabled: settings.googleLoginEnabled,
-      googleOneTapEnabled: settings.googleOneTapEnabled
+      googleOneTapEnabled: settings.googleOneTapEnabled,
+      microsoftLoginEnabled: settings.microsoftLoginEnabled,
+      microsoftOneTapEnabled: settings.microsoftOneTapEnabled
     });
   } catch (error) {
     console.error('Get system settings error:', error);

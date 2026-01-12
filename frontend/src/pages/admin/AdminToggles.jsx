@@ -12,7 +12,9 @@ const AdminToggles = () => {
     const [saving, setSaving] = useState(false)
     const [settings, setSettings] = useState({
         googleLoginEnabled: false,
-        googleOneTapEnabled: false
+        googleOneTapEnabled: false,
+        microsoftLoginEnabled: false,
+        microsoftOneTapEnabled: false
     })
     const { toast } = useToast()
 
@@ -82,7 +84,8 @@ const AdminToggles = () => {
                 <p className="text-gray-600 mt-2">Manage global system features and authentication</p>
             </div>
 
-            <div className="max-w-3xl">
+            <div className="max-w-3xl space-y-6">
+                {/* Google Authentication */}
                 <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
@@ -131,24 +134,57 @@ const AdminToggles = () => {
                                 />
                             </div>
                         </div>
+                    </CardContent>
+                </Card>
 
-                        <div className="flex justify-end pt-4 border-t">
-                            <Button onClick={handleSave} disabled={saving}>
-                                {saving ? (
-                                    <>
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        Saving...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Save className="mr-2 h-4 w-4" />
-                                        Save Changes
-                                    </>
-                                )}
-                            </Button>
+                {/* Microsoft Authentication */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Settings className="h-5 w-5" />
+                            Microsoft Authentication
+                        </CardTitle>
+                        <CardDescription>
+                            Control Microsoft Sign-In availability for all users across the platform
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between p-4 border rounded-lg">
+                                <div className="space-y-0.5">
+                                    <Label htmlFor="microsoftLogin" className="text-base font-medium">
+                                        Enable Microsoft Sign-In
+                                    </Label>
+                                    <p className="text-sm text-gray-500">
+                                        Allow users to sign in with their Microsoft account. When disabled, the Microsoft Sign-In button will be hidden from login and signup pages.
+                                    </p>
+                                </div>
+                                <Switch
+                                    id="microsoftLogin"
+                                    checked={settings.microsoftLoginEnabled}
+                                    onCheckedChange={(checked) => handleToggle('microsoftLoginEnabled', checked)}
+                                />
+                            </div>
                         </div>
                     </CardContent>
                 </Card>
+
+                {/* Save Button */}
+                <div className="flex justify-end pt-4">
+                    <Button onClick={handleSave} disabled={saving}>
+                        {saving ? (
+                            <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Saving...
+                            </>
+                        ) : (
+                            <>
+                                <Save className="mr-2 h-4 w-4" />
+                                Save Changes
+                            </>
+                        )}
+                    </Button>
+                </div>
             </div>
         </div>
     )
