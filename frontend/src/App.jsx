@@ -20,6 +20,24 @@ import OTPVerification from './pages/OTPVerification'
 import BlogIndex from './pages/BlogIndex'
 import BlogPost from './pages/BlogPost'
 import MicrosoftCallback from './pages/MicrosoftCallback'
+import ResourcesPage from './pages/ResourcesPage'
+
+// SEO Pages - Phase 1: Pillar Pages
+import InventoryManagementPillar from './pages/InventoryManagementPillar'
+import InventoryManagementSoftware from './pages/InventoryManagementSoftware'
+import GodownManagementSoftware from './pages/GodownManagementSoftware'
+import InventorySoftwareForSmallBusiness from './pages/InventorySoftwareForSmallBusiness'
+import InventorySoftwareIndia from './pages/InventorySoftwareIndia'
+
+// SEO Pages - Phase 2: Comparison Pages
+import StockwiseVsZohoInventory from './pages/StockwiseVsZohoInventory'
+import StockwiseVsTally from './pages/StockwiseVsTally'
+import InventorySoftwareComparison from './pages/InventorySoftwareComparison'
+
+// SEO Pages - Phase 3: Feature Pages
+import InventoryReorderManagement from './pages/InventoryReorderManagement'
+import MultiWarehouseInventoryManagement from './pages/MultiWarehouseInventoryManagement'
+import InventoryReportingAnalytics from './pages/InventoryReportingAnalytics'
 
 // Dashboard pages - lazy load to reduce initial bundle
 const CompanySetupPage = lazy(() => import('./pages/CompanySetupPage'))
@@ -101,6 +119,24 @@ function App() {
         <Route path="/blog" element={<BlogIndex />} />
         <Route path="/blog/:slug" element={<BlogPost />} />
         <Route path="/auth/microsoft/callback" element={<MicrosoftCallback />} />
+
+        {/* SEO Pages - Phase 1: Pillar Pages */}
+        <Route path="/inventory-management" element={<InventoryManagementPillar />} />
+        <Route path="/inventory-management-software" element={<InventoryManagementSoftware />} />
+        <Route path="/godown-management-software" element={<GodownManagementSoftware />} />
+        <Route path="/inventory-software-for-small-business" element={<InventorySoftwareForSmallBusiness />} />
+        <Route path="/inventory-software-india" element={<InventorySoftwareIndia />} />
+
+        {/* SEO Pages - Phase 2: Comparison Pages */}
+        <Route path="/stockwise-vs-zoho-inventory" element={<StockwiseVsZohoInventory />} />
+        <Route path="/stockwise-vs-tally" element={<StockwiseVsTally />} />
+        <Route path="/inventory-software-comparison" element={<InventorySoftwareComparison />} />
+
+        {/* SEO Pages - Phase 3: Feature Pages */}
+        <Route path="/inventory-reorder-management" element={<InventoryReorderManagement />} />
+        <Route path="/multi-warehouse-inventory-management" element={<MultiWarehouseInventoryManagement />} />
+        <Route path="/inventory-reporting-analytics" element={<InventoryReportingAnalytics />} />
+
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     )

@@ -9,6 +9,38 @@ const BlogIndex = () => {
     // Blog posts data
     const blogPosts = [
         {
+            slug: 'types-of-inventory-management-systems',
+            title: 'Types of Inventory Management Systems: Complete Guide (2026)',
+            excerpt: 'Explore different types of inventory management systems—manual, perpetual, periodic, barcode, RFID, and cloud-based. Find the right system for your business size and needs.',
+            date: '2026-01-13',
+            readTime: '10 min read',
+            category: 'Inventory Management'
+        },
+        {
+            slug: 'best-inventory-software-for-small-business-india',
+            title: 'Best Inventory Software for Small Business in India (2026)',
+            excerpt: 'Discover the top inventory software for Indian small businesses. Compare features, pricing, GST compliance, and find the perfect solution for your MSME.',
+            date: '2026-01-12',
+            readTime: '12 min read',
+            category: 'Software Reviews'
+        },
+        {
+            slug: 'inventory-reports-guide',
+            title: 'Essential Inventory Reports Every Business Needs',
+            excerpt: 'Learn about critical inventory reports—stock movement, turnover, valuation, and reorder reports. Use data to optimize inventory and boost profitability.',
+            date: '2026-01-11',
+            readTime: '9 min read',
+            category: 'Inventory Management'
+        },
+        {
+            slug: 'warehouse-vs-godown-management',
+            title: 'Warehouse vs Godown Management: Key Differences Explained',
+            excerpt: 'Understand the differences between warehouse and godown management in India. Learn terminology, regulatory requirements, and best practices for Indian businesses.',
+            date: '2026-01-10',
+            readTime: '7 min read',
+            category: 'Warehouse Management'
+        },
+        {
             slug: 'how-to-manage-inventory-for-small-businesses',
             title: 'How to Manage Inventory for Small Businesses (Step-by-Step Guide)',
             excerpt: 'Learn practical strategies to manage inventory effectively without expensive software. Discover common mistakes and actionable steps to improve your inventory management process.',

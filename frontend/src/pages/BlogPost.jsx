@@ -10,13 +10,50 @@ const BlogPost = () => {
 
     // Blog post data
     const blogPosts = {
+        'types-of-inventory-management-systems': {
+            title: 'Types of Inventory Management Systems: Complete Guide (2026)',
+            description: 'Explore different types of inventory management systems—manual, perpetual, periodic, barcode, RFID, and cloud-based. Find the right system for your business size and needs.',
+            date: '2026-01-13',
+            readTime: '10 min read',
+            author: 'Stockwise Team',
+            category: 'Inventory Management',
+            keywords: 'types of inventory systems, inventory management systems, perpetual inventory, periodic inventory, barcode inventory, RFID inventory, cloud inventory software'
+        },
+        'best-inventory-software-for-small-business-india': {
+            title: 'Best Inventory Software for Small Business in India (2026)',
+            description: 'Discover the top inventory software for Indian small businesses. Compare features, pricing, GST compliance, and find the perfect solution for your MSME.',
+            date: '2026-01-12',
+            readTime: '12 min read',
+            author: 'Stockwise Team',
+            category: 'Software Reviews',
+            keywords: 'best inventory software India, inventory software for small business, GST inventory software, MSME software, inventory management India'
+        },
+        'inventory-reports-guide': {
+            title: 'Essential Inventory Reports Every Business Needs',
+            description: 'Learn about critical inventory reports—stock movement, turnover, valuation, and reorder reports. Use data to optimize inventory and boost profitability.',
+            date: '2026-01-11',
+            readTime: '9 min read',
+            author: 'Stockwise Team',
+            category: 'Inventory Management',
+            keywords: 'inventory reports, stock reports, inventory turnover, inventory valuation, reorder reports, inventory analytics'
+        },
+        'warehouse-vs-godown-management': {
+            title: 'Warehouse vs Godown Management: Key Differences Explained',
+            description: 'Understand the differences between warehouse and godown management in India. Learn terminology, regulatory requirements, and best practices for Indian businesses.',
+            date: '2026-01-10',
+            readTime: '7 min read',
+            author: 'Stockwise Team',
+            category: 'Warehouse Management',
+            keywords: 'warehouse vs godown, godown management, warehouse management India, godown software, warehouse terminology'
+        },
         'how-to-manage-inventory-for-small-businesses': {
             title: 'How to Manage Inventory for Small Businesses (Step-by-Step Guide)',
             description: 'Learn practical strategies to manage inventory effectively for small businesses. Discover common mistakes, step-by-step solutions, and best practices to improve cash flow and profitability.',
             date: '2025-12-31',
             readTime: '8 min read',
             author: 'Stockwise Team',
-            category: 'Inventory Management'
+            category: 'Inventory Management',
+            keywords: 'inventory management for small businesses, inventory tracking, stock management, small business inventory, inventory best practices'
         }
     }
 
@@ -58,7 +95,7 @@ const BlogPost = () => {
             <Helmet>
                 <title>{post.title} | Stockwise Blog</title>
                 <meta name="description" content={post.description} />
-                <meta name="keywords" content="inventory management for small businesses, inventory tracking, stock management, small business inventory, inventory best practices" />
+                <meta name="keywords" content={post.keywords} />
                 <link rel="canonical" href={`https://stock-wise.in/blog/${slug}`} />
 
                 {/* Open Graph */}

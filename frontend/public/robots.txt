@@ -39,6 +39,23 @@ Disallow: /admin
 # Disallow API endpoints
 Disallow: /api/
 
+# Allow SEO pages (Phase 1-4)
+Allow: /inventory-management
+Allow: /inventory-management-software
+Allow: /godown-management-software
+Allow: /inventory-software-for-small-business
+Allow: /inventory-software-india
+Allow: /stockwise-vs-zoho-inventory
+Allow: /stockwise-vs-tally
+Allow: /inventory-software-comparison
+Allow: /inventory-reorder-management
+Allow: /multi-warehouse-inventory-management
+Allow: /inventory-reporting-analytics
+Allow: /blog/types-of-inventory-management-systems
+Allow: /blog/best-inventory-software-for-small-business-india
+Allow: /blog/inventory-reports-guide
+Allow: /blog/warehouse-vs-godown-management
+
 # Allow static assets
 Allow: /assets/
 Allow: /*.png
