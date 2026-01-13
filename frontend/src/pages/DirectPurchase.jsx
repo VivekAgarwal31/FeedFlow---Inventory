@@ -159,9 +159,9 @@ const DirectPurchase = () => {
                 updatedItems[index].warehouseName = warehouse.name
             }
         } else if (field === 'quantity') {
-            updatedItems[index].quantity = parseInt(value) || 0
+            updatedItems[index].quantity = value === '' ? 0 : parseInt(value)
         } else if (field === 'costPrice') {
-            updatedItems[index].costPrice = parseFloat(value) || 0
+            updatedItems[index].costPrice = value === '' ? 0 : parseFloat(value)
         }
 
         // Recalculate total
@@ -291,9 +291,9 @@ const DirectPurchase = () => {
         const updatedItems = [...editForm.items]
 
         if (field === 'quantity') {
-            updatedItems[index].quantity = parseInt(value) || 0
+            updatedItems[index].quantity = value === '' ? 0 : parseInt(value)
         } else if (field === 'costPrice') {
-            updatedItems[index].costPrice = parseFloat(value) || 0
+            updatedItems[index].costPrice = value === '' ? 0 : parseFloat(value)
         }
 
         // Recalculate total
@@ -589,10 +589,9 @@ const DirectPurchase = () => {
                                                         <TableCell>
                                                             <Input
                                                                 type="number"
-                                                                min="0"
                                                                 step="0.01"
                                                                 placeholder="0.00"
-                                                                value={item.costPrice || ''}
+                                                                value={item.costPrice === 0 ? '0' : (item.costPrice || '')}
                                                                 onChange={(e) => handleItemChange(index, 'costPrice', e.target.value)}
                                                                 className="w-24"
                                                             />
@@ -903,9 +902,8 @@ const DirectPurchase = () => {
                                                     <TableCell>
                                                         <Input
                                                             type="number"
-                                                            min="0"
                                                             step="0.01"
-                                                            value={item.costPrice}
+                                                            value={item.costPrice === 0 ? '0' : (item.costPrice || '')}
                                                             onChange={(e) => handleEditItemChange(index, 'costPrice', e.target.value)}
                                                             className="w-24"
                                                         />

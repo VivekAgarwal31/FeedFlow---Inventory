@@ -324,9 +324,9 @@ const SalesOrders = () => {
     const handleEditItemChange = (index, field, value) => {
         const updatedItems = [...editForm.items]
         if (field === 'quantity') {
-            updatedItems[index].quantity = parseInt(value) || 0
+            updatedItems[index].quantity = value === '' ? 0 : parseInt(value)
         } else if (field === 'sellingPrice') {
-            updatedItems[index].sellingPrice = parseFloat(value) || 0
+            updatedItems[index].sellingPrice = value === '' ? 0 : parseFloat(value)
         }
         updatedItems[index].total = updatedItems[index].quantity * updatedItems[index].sellingPrice
         setEditForm({ ...editForm, items: updatedItems })
@@ -973,7 +973,7 @@ const SalesOrders = () => {
                                                         type="number"
                                                         min="0"
                                                         step="0.01"
-                                                        value={item.sellingPrice}
+                                                        value={item.sellingPrice === 0 ? '0' : (item.sellingPrice || '')}
                                                         onChange={(e) => handleEditItemChange(index, 'sellingPrice', e.target.value)}
                                                         className="w-28"
                                                     />

@@ -283,8 +283,8 @@ const PurchaseOrders = () => {
 
     const handleEditItemChange = (index, field, value) => {
         const updatedItems = [...editForm.items]
-        if (field === 'quantity') updatedItems[index].quantity = parseInt(value) || 0
-        else if (field === 'costPrice') updatedItems[index].costPrice = parseFloat(value) || 0
+        if (field === 'quantity') updatedItems[index].quantity = value === '' ? 0 : parseInt(value)
+        else if (field === 'costPrice') updatedItems[index].costPrice = value === '' ? 0 : parseFloat(value)
         updatedItems[index].total = updatedItems[index].quantity * updatedItems[index].costPrice
         setEditForm({ ...editForm, items: updatedItems })
     }
@@ -785,7 +785,7 @@ const PurchaseOrders = () => {
                                 <Table>
                                     <TableHeader><TableRow><TableHead>Item</TableHead><TableHead>Quantity</TableHead><TableHead>Cost Price</TableHead><TableHead>Total</TableHead></TableRow></TableHeader>
                                     <TableBody>
-                                        {editForm.items.map((item, idx) => (<TableRow key={idx}><TableCell className="font-medium">{item.itemName}</TableCell><TableCell><Input type="number" min="0" value={item.quantity} onChange={(e) => handleEditItemChange(idx, 'quantity', e.target.value)} className="w-24" /></TableCell><TableCell><Input type="number" min="0" step="0.01" value={item.costPrice} onChange={(e) => handleEditItemChange(idx, 'costPrice', e.target.value)} className="w-28" /></TableCell><TableCell className="font-mono font-medium">{formatCurrency(item.total)}</TableCell></TableRow>))}
+                                        {editForm.items.map((item, idx) => (<TableRow key={idx}><TableCell className="font-medium">{item.itemName}</TableCell><TableCell><Input type="number" min="0" value={item.quantity} onChange={(e) => handleEditItemChange(idx, 'quantity', e.target.value)} className="w-24" /></TableCell><TableCell><Input type="number" min="0" step="0.01" value={item.costPrice === 0 ? '0' : (item.costPrice || '')} onChange={(e) => handleEditItemChange(idx, 'costPrice', e.target.value)} className="w-28" /></TableCell><TableCell className="font-mono font-medium">{formatCurrency(item.total)}</TableCell></TableRow>))}
                                         <TableRow><TableCell colSpan={2} className="font-semibold">Total</TableCell><TableCell className="font-mono font-bold text-lg" colSpan={2}>{formatCurrency(calculateEditTotal())}</TableCell></TableRow>
                                     </TableBody>
                                 </Table>
