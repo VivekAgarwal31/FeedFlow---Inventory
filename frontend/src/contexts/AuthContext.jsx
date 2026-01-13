@@ -22,13 +22,22 @@ export const AuthProvider = ({ children }) => {
 
     if (token && savedUser) {
       setUser(JSON.parse(savedUser))
-      // Verify token is still valid
+
+      // Verify token is still valid with timeout protection
+      const timeoutId = setTimeout(() => {
+        // If backend takes too long (cold start), proceed with cached user
+        console.warn('Auth verification timed out, using cached user data')
+        setLoading(false)
+      }, 10000) // 10 second timeout
+
       authAPI.getMe()
         .then(response => {
+          clearTimeout(timeoutId)
           setUser(response.data.user)
           localStorage.setItem('user', JSON.stringify(response.data.user))
         })
         .catch(() => {
+          clearTimeout(timeoutId)
           logout()
         })
         .finally(() => {
