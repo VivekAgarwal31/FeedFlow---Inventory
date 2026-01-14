@@ -19,11 +19,6 @@ const InventorySoftwareForSmallBusiness = () => {
             "price": "0",
             "priceCurrency": "INR"
         },
-        "aggregateRating": {
-            "@type": "AggregateRating",
-            "ratingValue": "4.8",
-            "ratingCount": "100"
-        },
         "description": "Simple, affordable inventory software for small businesses. Replace Excel with real-time tracking, automated updates, and easy-to-use features. Free plan available."
     }
 

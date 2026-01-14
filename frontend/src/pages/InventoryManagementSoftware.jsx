@@ -20,11 +20,6 @@ const InventoryManagementSoftware = () => {
             "priceCurrency": "INR",
             "priceValidUntil": "2026-12-31"
         },
-        "aggregateRating": {
-            "@type": "AggregateRating",
-            "ratingValue": "4.8",
-            "ratingCount": "100"
-        },
         "description": "Powerful inventory management software with real-time tracking, multi-warehouse support, automated reordering, and seamless accounting integration. Perfect for growing businesses.",
         "featureList": [
             "Real-time inventory tracking",
@@ -96,7 +91,6 @@ const InventoryManagementSoftware = () => {
                 <article className="max-w-5xl mx-auto">
                     {/* Hero Section */}
                     <div className="text-center mb-12">
-                        <Badge className="mb-4">Trusted by 100+ Businesses</Badge>
                         <h1 className="text-4xl sm:text-5xl font-bold mb-6">
                             Best Inventory Management Software for Growing Businesses
                         </h1>
@@ -525,7 +519,7 @@ const InventoryManagementSoftware = () => {
                             <div className="max-w-3xl mx-auto text-center">
                                 <h2 className="text-3xl font-bold mb-4">Ready to Transform Your Inventory Management?</h2>
                                 <p className="text-lg text-muted-foreground mb-6">
-                                    Join 100+ businesses using Stockwise to streamline inventory operations. Start with our free plan—no credit card required.
+                                    Start using Stockwise to streamline inventory operations. Start with our free plan—no credit card required.
                                 </p>
                                 <div className="flex flex-col sm:flex-row gap-4 justify-center mb-6">
                                     <Link to="/auth">

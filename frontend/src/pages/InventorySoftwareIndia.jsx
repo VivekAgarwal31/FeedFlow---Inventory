@@ -19,11 +19,6 @@ const InventorySoftwareIndia = () => {
             "price": "0",
             "priceCurrency": "INR"
         },
-        "aggregateRating": {
-            "@type": "AggregateRating",
-            "ratingValue": "4.8",
-            "ratingCount": "100"
-        },
         "description": "India's trusted inventory software. GST-compliant, affordable pricing, local support. Perfect for MSMEs and growing businesses.",
         "featureList": [
             "GST-compliant invoicing",
