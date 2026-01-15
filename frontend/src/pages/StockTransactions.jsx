@@ -81,12 +81,24 @@ const StockTransactions = () => {
 
     // Filter by search term
     if (searchTerm) {
-      filtered = filtered.filter(transaction =>
-        transaction.itemId?.itemName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        transaction.warehouseId?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        transaction.reference?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        transaction.notes?.toLowerCase().includes(searchTerm.toLowerCase())
-      )
+      filtered = filtered.filter(transaction => {
+        const searchLower = searchTerm.toLowerCase()
+
+        // Check top-level fields
+        const matchesTopLevel =
+          transaction.itemId?.itemName?.toLowerCase().includes(searchLower) ||
+          transaction.warehouseId?.name?.toLowerCase().includes(searchLower) ||
+          transaction.reference?.toLowerCase().includes(searchLower) ||
+          transaction.notes?.toLowerCase().includes(searchLower)
+
+        // Check items array (for consolidated transactions like Direct Sales/Purchases)
+        const matchesItems = transaction.items?.some(item =>
+          item.itemName?.toLowerCase().includes(searchLower) ||
+          item.warehouseName?.toLowerCase().includes(searchLower)
+        )
+
+        return matchesTopLevel || matchesItems
+      })
     }
 
     // Filter by type

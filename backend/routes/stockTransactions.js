@@ -50,6 +50,9 @@ router.get('/', authenticate, async (req, res) => {
 
         const [transactions, total] = await Promise.all([
             StockTransaction.find(query)
+                .populate('itemId', 'itemName bagSize category')
+                .populate('warehouseId', 'name')
+                .populate('toWarehouseId', 'name')
                 .sort({ transactionDate: -1, createdAt: -1 })
                 .skip(skip)
                 .limit(limit)
